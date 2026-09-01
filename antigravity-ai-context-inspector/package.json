@@ -1,0 +1,69 @@
+{
+  "name": "antigravity-ai-context-inspector",
+  "displayName": "AI 上下文檢視器 (AI Context Inspector)",
+  "description": "Google Antigravity IDE 側邊欄擴充套件：即時檢視每次對話 AI 載入之 Rules、Skills、MCP API 與工作區綁定狀態，支援即時配置掃描與對話快照歷史還原",
+  "version": "1.0.0",
+  "publisher": "antigravity-toolkit",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "*"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "antigravity-ai-context-container",
+          "title": "AI 上下文檢視器",
+          "icon": "media/icons/inspector-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "antigravity-ai-context-container": [
+        {
+          "type": "webview",
+          "id": "antigravity.aiContextView",
+          "name": "AI Context"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "antigravity.aiContext.refresh",
+        "title": "重新整理 AI 上下文",
+        "category": "Antigravity",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "antigravity.aiContext.focusView",
+        "title": "聚焦 AI 上下文檢視器",
+        "category": "Antigravity"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "antigravity.aiContext.refresh",
+          "when": "view == antigravity.aiContextView",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "author": "TonyLongGu",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TonyLongGu/antigravity-ai-context-inspector.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TonyLongGu/antigravity-ai-context-inspector/issues"
+  },
+  "homepage": "https://github.com/TonyLongGu/antigravity-ai-context-inspector#readme"
+}

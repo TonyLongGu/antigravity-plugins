@@ -1,0 +1,100 @@
+{
+  "name": "ai-quota-status",
+  "displayName": "AI 模型額度狀態監控",
+  "description": "於 IDE 狀態列常駐呈現 Gemini 與 Claude/GPT 模型的即時剩餘額度與重置倒數 (純文字)",
+  "version": "1.0.1",
+  "publisher": "antigravity-toolkit",
+  "engines": {
+    "vscode": "^1.68.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiQuota.refresh",
+        "title": "重新整理 AI 模型額度"
+      },
+      {
+        "command": "aiQuota.showMenu",
+        "title": "開啟 AI 模型額度選單"
+      },
+      {
+        "command": "aiQuota.toggleDisplayMode",
+        "title": "切換狀態列顯示模式"
+      },
+      {
+        "command": "aiQuota.setBackgroundColor",
+        "title": "設定狀態列背景顏色"
+      },
+      {
+        "command": "aiQuota.setRefreshInterval",
+        "title": "設定背景檢查間隔"
+      }
+    ],
+    "configuration": {
+      "title": "AI 額度狀態監控設定",
+      "properties": {
+        "aiQuota.backgroundColor": {
+          "type": "string",
+          "default": "default",
+          "enum": [
+            "default",
+            "warning",
+            "error"
+          ],
+          "enumDescriptions": [
+            "預設無底色 (與狀態列融為一體)",
+            "警告色 (黃/橘色背景)",
+            "錯誤/危險色 (紅色背景)"
+          ],
+          "description": "狀態列項目的背景顏色樣式"
+        },
+        "aiQuota.displayMode": {
+          "type": "string",
+          "default": "compact",
+          "enum": [
+            "compact",
+            "standard"
+          ],
+          "enumDescriptions": [
+            "極簡雙欄 (例如: 59%, 53% | 7%, 100%)",
+            "標準模式 (例如: Gemini: 59%, 53% | Claude: 7%, 100%)"
+          ],
+          "description": "狀態列上的文字顯示格式"
+        },
+        "aiQuota.refreshIntervalMinutes": {
+          "type": "number",
+          "default": 5,
+          "description": "背景自動檢查與刷新額度的間隔分鐘數 (設為 0 則關閉自動刷新)"
+        },
+        "aiQuota.alignment": {
+          "type": "string",
+          "default": "right",
+          "enum": [
+            "left",
+            "right"
+          ],
+          "description": "狀態列項目對齊方向 (左側或右側)"
+        },
+        "aiQuota.priority": {
+          "type": "number",
+          "default": 30,
+          "description": "狀態列項目的優先順序權重"
+        }
+      }
+    }
+  },
+  "author": "TonyLongGu",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TonyLongGu/antigravity-quota-status.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TonyLongGu/antigravity-quota-status/issues"
+  },
+  "homepage": "https://github.com/TonyLongGu/antigravity-quota-status#readme"
+}

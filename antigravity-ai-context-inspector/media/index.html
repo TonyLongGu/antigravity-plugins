@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Context Inspector</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Sticky Header -->
+  <div class="header-wrapper">
+    <div class="header-title-row">
+      <div class="header-title">
+        <svg class="lucide-icon" viewBox="0 0 24 24"><rect width="18" height="12" x="3" y="6" rx="2"/><path d="M9 14v1"/><path d="M15 14v1"/><path d="M12 2v4"/><path d="M2 10h1"/><path d="M21 10h1"/></svg>
+        <span>AI 上下文檢視器</span>
+      </div>
+      <div class="header-actions">
+        <button id="btn-collapse-all" class="btn-icon" title="摺疊全部卡片">
+          <svg class="lucide-icon" viewBox="0 0 24 24"><path d="m4 14 8-8 8 8"/><path d="m4 20 8-8 8 8"/></svg>
+        </button>
+        <button id="btn-expand-all" class="btn-icon" title="展開全部卡片">
+          <svg class="lucide-icon" viewBox="0 0 24 24"><path d="m4 10 8 8 8-8"/><path d="m4 4 8 8 8-8"/></svg>
+        </button>
+        <button id="btn-copy-summary" class="btn-icon" title="複製當前上下文摘要">
+          <svg class="lucide-icon" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+        </button>
+        <button id="btn-refresh" class="btn-icon" title="重新整理">
+          <svg class="lucide-icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- 模式切換按鈕 -->
+    <div class="mode-switch-grid">
+      <button id="btn-mode-live" class="mode-btn {{LIVE_ACTIVE}}">
+        <svg class="lucide-icon" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>
+        <span>當前環境配置</span>
+      </button>
+      <button id="btn-mode-snapshot" class="mode-btn {{SNAPSHOT_ACTIVE}}">
+        <svg class="lucide-icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+        <span>最近對話快照</span>
+      </button>
+    </div>
+
+    <!-- 歷史對話快照選擇器 (自訂美化 Dropdown Popover) -->
+    <div id="conv-select-wrapper" class="conv-select-wrapper {{CONV_WRAPPER_CLASS}}">
+      <div class="custom-dropdown-container">
+        <!-- 觸發按鈕列 -->
+        <button id="custom-conv-trigger" class="custom-dropdown-trigger" type="button" title="點擊選擇歷史對話快照">
+          <span class="trigger-icon">
+            <svg class="lucide-icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>
+          </span>
+          <div class="trigger-info">
+            <span id="trigger-conv-title" class="trigger-title">載入對話快照中...</span>
+            <span id="trigger-conv-time" class="trigger-time">-</span>
+          </div>
+          <span class="trigger-chevron">
+            <svg class="lucide-icon" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+          </span>
+        </button>
+
+        <!-- 浮層 Popover 選單 -->
+        <div id="custom-conv-popover" class="custom-dropdown-popover" style="display: none;">
+          <!-- 頂部篩選與搜尋列 -->
+          <div class="popover-header">
+            <div class="popover-search-box">
+              <svg class="search-icon lucide-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input type="text" id="conv-search-input" class="popover-search-input" placeholder="搜尋對話主題、關鍵字或短 ID..." autocomplete="off">
+              <button id="btn-clear-search" class="btn-clear-search" title="清除搜尋" style="display: none;">
+                <svg class="lucide-icon" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            </div>
+            <!-- 筆數快切標籤組 -->
+            <div class="popover-limit-pills" id="limit-pills-container">
+              <span class="pills-label">筆數:</span>
+              <button class="limit-pill" data-limit="5">5</button>
+              <button class="limit-pill active" data-limit="10">10</button>
+              <button class="limit-pill" data-limit="20">20</button>
+              <button class="limit-pill" data-limit="50">50</button>
+              <button class="limit-pill" data-limit="500">全</button>
+            </div>
+          </div>
+
+          <!-- 快照對話選項清單 -->
+          <div id="custom-conv-list" class="custom-conv-list">
+            <!-- 動態渲染對話清單項目 -->
+          </div>
+        </div>
+      </div>
+
+      <div id="snapshot-meta-box" class="snapshot-meta-box">
+        <div class="meta-item"><span class="meta-lbl">對話使用模型:</span> <span id="meta-model" class="meta-val">-</span></div>
+      </div>
+    </div>
+
+    <div class="status-bar-info">
+      <span id="status-mode-label">模式：環境即時掃描</span>
+      <span id="status-time-label">-</span>
+    </div>
+  </div>
+
+  <!-- 主要內容卡片清單 -->
+  <div class="container">
+
+    <!-- 1. 常駐規範 -->
+    <details class="card" id="card-rules-active" open>
+      <summary class="card-header">
+        <span class="chevron"><svg class="lucide-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
+        <span class="card-icon"><svg class="lucide-icon" viewBox="0 0 24 24"><line x1="12" x2="12" y1="17" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg></span>
+        <span class="card-title-text">常駐規範 (Always-Active)</span>
+        <div class="card-header-actions">
+          <button id="btn-toggle-rules-active-title" class="item-btn" title="切換標題顯示：中文內文標題 / 檔案名稱">內文標題</button>
+          <span id="badge-rules-active" class="badge cyan">0 項</span>
+        </div>
+      </summary>
+      <div class="card-body">
+        <div id="list-rules-active" class="item-list"></div>
+      </div>
+    </details>
+
+    <!-- 2. 條件式規範 -->
+    <details class="card" id="card-rules-conditional" open>
+      <summary class="card-header">
+        <span class="chevron"><svg class="lucide-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
+        <span class="card-icon"><svg class="lucide-icon" viewBox="0 0 24 24"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></span>
+        <span class="card-title-text">條件式規範 (Conditional)</span>
+        <div class="card-header-actions">
+          <button id="btn-toggle-rules-cond-title" class="item-btn" title="切換標題顯示：中文內文標題 / 檔案名稱">內文標題</button>
+          <span id="badge-rules-conditional" class="badge blue">0 項</span>
+        </div>
+      </summary>
+      <div class="card-body">
+        <div id="list-rules-conditional" class="item-list"></div>
+      </div>
+    </details>
+
+    <!-- 3. 技能清單 -->
+    <details class="card" id="card-skills" open>
+      <summary class="card-header">
+        <span class="chevron"><svg class="lucide-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
+        <span class="card-icon"><svg class="lucide-icon" viewBox="0 0 24 24"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></svg></span>
+        <span class="card-title-text">技能清單 (Skills)</span>
+        <div class="card-header-actions">
+          <button id="btn-toggle-skill-title" class="item-btn" title="切換標題顯示：中文內文標題 / 英文技能名稱">內文標題</button>
+          <span id="badge-skills" class="badge orange">0 項</span>
+        </div>
+      </summary>
+      <div class="card-body">
+        <div id="list-skills" class="item-list"></div>
+      </div>
+    </details>
+
+    <!-- 4. MCP 伺服器與工具 -->
+    <details class="card" id="card-mcp" open>
+      <summary class="card-header">
+        <span class="chevron"><svg class="lucide-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
+        <span class="card-icon"><svg class="lucide-icon" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg></span>
+        <span class="card-title-text">MCP 伺服器與 API</span>
+        <div class="card-header-actions">
+          <button id="btn-open-mcp-dir" class="item-btn" title="開啟 MCP 存放資料夾 (C:\Users\User\.gemini\antigravity-ide\mcp)">開啟</button>
+          <span id="badge-mcp" class="badge purple">0 個</span>
+        </div>
+      </summary>
+      <div class="card-body">
+        <div id="list-mcp" class="item-list"></div>
+      </div>
+    </details>
+
+  </div>
+
+  <!-- Toast 提示容器 -->
+  <div id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,109 @@
+{
+  "name": "antigravity-toolbox",
+  "displayName": "Antigravity 控制中心 (Toolbox)",
+  "description": "Google Antigravity IDE 側邊欄控制中心：整合多專案工作區同名修正、專案腳本執行器 (ps1/bat/cmd)、全域設定/技能/規範目錄直達、Brain 對話歷史紀錄清理與 settings.json 快速編輯",
+  "version": "1.2.0",
+  "publisher": "antigravity-toolkit",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "*"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "antigravity-toolbox-container",
+          "title": "Antigravity 控制中心",
+          "icon": "media/icons/toolbox-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "antigravity-toolbox-container": [
+        {
+          "type": "webview",
+          "id": "antigravity.toolboxView",
+          "name": "快捷控制台"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "antigravity.toolbox.refresh",
+        "title": "重新整理工作區狀態",
+        "category": "Antigravity",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "antigravity.toolbox.fixWorkspace",
+        "title": "自動修正工作區同名專案名稱",
+        "category": "Antigravity",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "antigravity.toolbox.resetWorkspace",
+        "title": "重設工作區專案為預設名稱",
+        "category": "Antigravity",
+        "icon": "$(discard)"
+      },
+      {
+        "command": "antigravity.toolbox.openSettings",
+        "title": "開啟 settings.json",
+        "category": "Antigravity",
+        "icon": "$(gear)"
+      },
+      {
+        "command": "antigravity.toolbox.addScriptToRunner",
+        "title": "加入至專案腳本執行器",
+        "category": "Antigravity"
+      },
+      {
+        "command": "antigravity.toolbox.focusView",
+        "title": "聚焦控制中心側邊欄",
+        "category": "Antigravity"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "antigravity.toolbox.refresh",
+          "when": "view == antigravity.toolboxView",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "antigravity.toolbox.fixWorkspace",
+          "group": "navigation@1",
+          "when": "resourceExtname == .code-workspace"
+        },
+        {
+          "command": "antigravity.toolbox.resetWorkspace",
+          "group": "navigation@2",
+          "when": "resourceExtname == .code-workspace"
+        },
+        {
+          "command": "antigravity.toolbox.addScriptToRunner",
+          "group": "z_antigravity@1",
+          "when": "resourceExtname == .ps1 || resourceExtname == .bat || resourceExtname == .cmd"
+        }
+      ]
+    }
+  },
+  "author": "TonyLongGu",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TonyLongGu/antigravity-toolbox.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TonyLongGu/antigravity-toolbox/issues"
+  },
+  "homepage": "https://github.com/TonyLongGu/antigravity-toolbox#readme"
+}

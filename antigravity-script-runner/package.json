@@ -1,0 +1,134 @@
+{
+  "name": "antigravity-script-runner",
+  "displayName": "腳本右鍵執行工具 (Script Runner)",
+  "description": "在 Antigravity IDE 檔案總管與編輯器為 .bat、.cmd、.ps1、.py 腳本提供右鍵與右上角 ▶ 按鈕執行功能（在內建 PowerShell 終端機安全執行）",
+  "version": "1.2.0",
+  "publisher": "antigravity-toolkit",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "*"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "腳本右鍵執行工具 (Script Runner)",
+      "properties": {
+        "scriptRunner.runAsAdmin": {
+          "type": "boolean",
+          "default": true,
+          "description": "是否預設以系統管理員身分 (Administrator) 提權執行腳本"
+        },
+        "scriptRunner.keepWindowOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "以系統管理員身分執行時，是否在腳本執行完畢後保持視窗開啟以供檢視輸出與報錯"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "scriptRunner.runPy",
+        "title": "執行 Python 腳本",
+        "category": "腳本執行",
+        "icon": "$(play)"
+      },
+      {
+        "command": "scriptRunner.runPs1",
+        "title": "執行 PowerShell 腳本",
+        "category": "腳本執行",
+        "icon": "$(play)"
+      },
+      {
+        "command": "scriptRunner.runBat",
+        "title": "執行批次檔",
+        "category": "腳本執行",
+        "icon": "$(play)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "scriptRunner.runPy",
+          "group": "navigation@1",
+          "when": "editorLangId == python || resourceExtname == .py"
+        },
+        {
+          "command": "scriptRunner.runPs1",
+          "group": "navigation@2",
+          "when": "editorLangId == powershell || resourceExtname == .ps1"
+        },
+        {
+          "command": "scriptRunner.runBat",
+          "group": "navigation@3",
+          "when": "editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "scriptRunner.runPy",
+          "group": "z_script_runner@1",
+          "when": "resourceExtname == .py"
+        },
+        {
+          "command": "scriptRunner.runPs1",
+          "group": "z_script_runner@2",
+          "when": "resourceExtname == .ps1"
+        },
+        {
+          "command": "scriptRunner.runBat",
+          "group": "z_script_runner@3",
+          "when": "resourceExtname == .bat || resourceExtname == .cmd"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "scriptRunner.runPy",
+          "group": "z_script_runner@1",
+          "when": "editorLangId == python || resourceExtname == .py"
+        },
+        {
+          "command": "scriptRunner.runPs1",
+          "group": "z_script_runner@2",
+          "when": "editorLangId == powershell || resourceExtname == .ps1"
+        },
+        {
+          "command": "scriptRunner.runBat",
+          "group": "z_script_runner@3",
+          "when": "editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "scriptRunner.runPy",
+          "group": "z_script_runner@1",
+          "when": "resourceExtname == .py"
+        },
+        {
+          "command": "scriptRunner.runPs1",
+          "group": "z_script_runner@2",
+          "when": "resourceExtname == .ps1"
+        },
+        {
+          "command": "scriptRunner.runBat",
+          "group": "z_script_runner@3",
+          "when": "resourceExtname == .bat || resourceExtname == .cmd"
+        }
+      ]
+    }
+  },
+  "author": "TonyLongGu",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TonyLongGu/antigravity-script-runner.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TonyLongGu/antigravity-script-runner/issues"
+  },
+  "homepage": "https://github.com/TonyLongGu/antigravity-script-runner#readme"
+}
