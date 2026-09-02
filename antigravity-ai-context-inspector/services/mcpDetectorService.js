@@ -56,7 +56,7 @@ class McpDetectorService {
     // 2. 依工作區順序檢查各 Workspace 的 mcp_config.json
     for (let wsIdx = 0; wsIdx < workspaceFolders.length; wsIdx++) {
       const folder = workspaceFolders[wsIdx];
-      const folderPath = typeof folder === 'string' ? folder : (folder.uri ? folder.uri.fsPath : folder);
+      const folderPath = typeof folder === 'string' ? folder : (folder.uri ? folder.uri.fsPath : (folder.path || folder));
       const configCandidates = [
         path.join(folderPath, 'mcp_config.json'),
         path.join(folderPath, '.agents', 'mcp_config.json'),

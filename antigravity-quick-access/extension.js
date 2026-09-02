@@ -127,24 +127,20 @@ function activate(context) {
     }
   });
 
-  // 6. 註冊命令：切換 釘選 / 臨時 (支援多選批次切換)
+  // 6. 註冊命令：切換 釘選 / 臨時 (支援多選批次切換，並相容展開之子項目切換)
   const togglePinCmd = vscode.commands.registerCommand('antigravity.quickAccess.togglePin', async (element, elements) => {
     const selected = getSelectedElements(element, elements);
     if (selected.length === 0) return;
 
-    const targetPaths = selected
-      .map(el => el?.fsPath || (el instanceof vscode.Uri ? el.fsPath : null))
-      .filter(Boolean);
-
-    if (targetPaths.length === 0) return;
-
-    const res = await storageManager.togglePin(targetPaths);
+    const res = await storageManager.togglePin(selected);
     if (res.success) {
       treeDataProvider.refresh();
       const msg = res.toggledCount === 1
         ? (res.isPinned ? '已加入至常規釘選' : '已移至臨時暫存')
         : `已批次切換 ${res.toggledCount} 個項目狀態`;
       showFeedback(msg);
+    } else if (res.message) {
+      vscode.window.showInformationMessage(res.message);
     }
   });
 

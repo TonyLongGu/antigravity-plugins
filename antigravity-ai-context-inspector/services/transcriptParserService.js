@@ -341,7 +341,79 @@ class TranscriptParserService {
   }
 
   /**
-   * 解析指定對話任務的上下文與日誌足跡
+   * 從對話資料庫 .db 中精準提取該 Session 建立時由 Antigravity IDE 靜態注入的全部常駐規範、條件式規範與可用技能
+   */
+  static async _extractSessionMetadataFromDb(convId) {
+    const dbPath = path.join(this.getConversationsDir(), `${convId}.db`);
+    if (!fs.existsSync(dbPath)) {
+      return { alwaysActiveRules: [], conditionalRules: [], availableSkills: [], workspaces: [] };
+    }
+
+    try {
+      const buf = await fsPromises.readFile(dbPath);
+      const str = buf.toString('utf8');
+
+      const alwaysActiveRules = new Set();
+      const conditionalRules = new Set();
+      const availableSkills = new Set();
+      const workspaces = new Set();
+
+      // 1. 提取靜態注入之常駐規範 <RULE[路徑]>
+      const ruleTagMatches = str.matchAll(/<RULE\[([a-zA-Z]:[\\/][^\]\r\n]+)\]>/gi);
+      for (const rm of ruleTagMatches) {
+        const rPath = path.normalize(rm[1].trim());
+        if (fs.existsSync(rPath)) {
+          alwaysActiveRules.add(rPath);
+          const ws = ContextScannerService.findWorkspaceRoot(rPath);
+          if (ws) workspaces.add(ws);
+        }
+      }
+
+      // 2. 提取靜態注入之條件式規範 - file:///D:/.../.agents/rules/...
+      const condRuleMatches = str.matchAll(/-\s+file:\/\/\/([a-zA-Z]:[^\r\n:]+\.agents[\\/]rules[\\/][^\r\n:]+\.md)/gi);
+      for (const crm of condRuleMatches) {
+        const rPath = path.normalize(crm[1].trim());
+        if (fs.existsSync(rPath)) {
+          conditionalRules.add(rPath);
+          const ws = ContextScannerService.findWorkspaceRoot(rPath);
+          if (ws) workspaces.add(ws);
+        }
+      }
+
+      // 3. 提取靜態注入之可用技能清單 - skill-name (D:\.../SKILL.md)
+      const skillMatches = str.matchAll(/-\s+([a-zA-Z0-9_\-]+)\s+\(([a-zA-Z]:[^\r\n\)]+SKILL\.md)\)/gi);
+      for (const sm of skillMatches) {
+        const sPath = path.normalize(sm[2].trim());
+        if (fs.existsSync(sPath)) {
+          availableSkills.add(sPath);
+          const ws = ContextScannerService.findWorkspaceRoot(sPath);
+          if (ws) workspaces.add(ws);
+        }
+      }
+
+      // 4. 提取對話中涉及的工作區路徑
+      const wsMatches = str.matchAll(/file:\/\/\/([a-zA-Z]:[\\/][^`"'\r\n\t\<\>\(\)\*\,\?\:\;]+)/gi);
+      for (const wm of wsMatches) {
+        const raw = wm[1].replace(/\\/g, '/');
+        if (!raw.includes('.agents') && !raw.includes('.gemini') && !raw.includes('AppData') && !raw.includes('node_modules')) {
+          const ws = ContextScannerService.findWorkspaceRoot(raw);
+          if (ws) workspaces.add(ws);
+        }
+      }
+
+      return {
+        alwaysActiveRules: Array.from(alwaysActiveRules),
+        conditionalRules: Array.from(conditionalRules),
+        availableSkills: Array.from(availableSkills),
+        workspaces: Array.from(workspaces)
+      };
+    } catch (err) {
+      return { alwaysActiveRules: [], conditionalRules: [], availableSkills: [], workspaces: [] };
+    }
+  }
+
+  /**
+   * 解析指定對話任務的上下文與日誌足跡（支援跨專案工作區自動溯源、DB 原生 System Prompt 逆向還原與日誌足跡即時補全）
    */
   static async parseConversationSnapshot(conversationId = null, workspaceFolders = []) {
     const convList = await this.getConversationsList();
@@ -354,6 +426,9 @@ class TranscriptParserService {
       const found = convList.find(c => c.id === conversationId);
       if (found) targetConv = found;
     }
+
+    // 1. 最高優先：從官方 Session .db 中提取該對話當初由 Antigravity IDE 靜態注入的全部規範與技能清單
+    const dbSessionMeta = await this._extractSessionMetadataFromDb(targetConv.id);
 
     // 優先讀取輕量版 transcript.jsonl，秒級響應
     const logCandidates = [
@@ -369,13 +444,16 @@ class TranscriptParserService {
       }
     }
 
-    // 1. 分析對話日誌足跡
+    // 2. 分析對話日誌動態足跡
     const invokedSkills = new Set();
     const invokedRules = new Set();
     const invokedTools = new Set();
     const invokedMcpServers = new Set();
     const invokedMcpTools = new Set();
     const touchedFiles = new Set();
+    const discoveredSkillPaths = new Map(); // dirName.toLowerCase() -> fullFilePath
+    const discoveredRulePaths = new Map();  // fileName.toLowerCase() -> fullFilePath
+    const discoveredWorkspaceRoots = new Set(dbSessionMeta.workspaces);
     let activeDoc = '';
     let currentModel = '';
     let stepCount = 0;
@@ -394,11 +472,25 @@ class TranscriptParserService {
           if (obj.content) {
             if (!activeDoc) {
               const docMatch = obj.content.match(/Active Document:\s*([^\r\n(]+)/);
-              if (docMatch) activeDoc = docMatch[1].trim();
+              if (docMatch) {
+                activeDoc = docMatch[1].trim();
+                const wsRoot = ContextScannerService.findWorkspaceRoot(activeDoc);
+                if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
+              }
             }
             if (!currentModel) {
               const modelMatch = obj.content.match(/Model Selection` from (?:None|\w+) to (.+?)\./);
               if (modelMatch) currentModel = modelMatch[1].trim();
+            }
+
+            // 從內容中掃描提及的檔案與專案路徑
+            const fileMatches = obj.content.matchAll(/(?:file:\/\/\/?|[a-zA-Z]:[\\/])(?:PJ[\\/]|Users[\\/])?[^`"'\r\n\t\<\>\(\)]+/gi);
+            for (const fm of fileMatches) {
+              const rawP = fm[0];
+              if (!rawP.includes('AppData') && !rawP.includes('Temp') && !rawP.includes('node_modules')) {
+                const wsRoot = ContextScannerService.findWorkspaceRoot(rawP);
+                if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
+              }
             }
           }
 
@@ -409,6 +501,16 @@ class TranscriptParserService {
               if (tName) {
                 invokedTools.add(tName.toLowerCase());
                 if (tc.name) invokedTools.add(tc.name.toLowerCase());
+              }
+
+              // 檢查 Cwd 或 DirectoryPath 是否指向專案
+              if (tc.args?.Cwd && typeof tc.args.Cwd === 'string') {
+                const wsRoot = ContextScannerService.findWorkspaceRoot(tc.args.Cwd) || (fs.existsSync(tc.args.Cwd) ? path.normalize(tc.args.Cwd) : null);
+                if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
+              }
+              if (tc.args?.DirectoryPath && typeof tc.args.DirectoryPath === 'string') {
+                const wsRoot = ContextScannerService.findWorkspaceRoot(tc.args.DirectoryPath) || (fs.existsSync(tc.args.DirectoryPath) ? path.normalize(tc.args.DirectoryPath) : null);
+                if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
               }
 
               // 1. 支援 Lazy MCP 工具調用 (call_mcp_tool)
@@ -475,10 +577,21 @@ class TranscriptParserService {
                 touchedFiles.add(lowerFp);
                 if (lowerFp.includes('skill.md')) {
                   const skillDir = path.basename(path.dirname(fp));
-                  invokedSkills.add(skillDir.toLowerCase());
+                  const skillKey = skillDir.toLowerCase();
+                  invokedSkills.add(skillKey);
+                  discoveredSkillPaths.set(skillKey, fp);
+                  const wsRoot = ContextScannerService.findWorkspaceRoot(fp);
+                  if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
                 }
-                if (lowerFp.includes('.agents\\rules') || lowerFp.includes('/.agents/rules') || lowerFp.includes('.gemini\\config\\rules')) {
-                  invokedRules.add(path.basename(fp).toLowerCase());
+                if (lowerFp.includes('.agents\\rules') || lowerFp.includes('/.agents/rules') || lowerFp.includes('.gemini\\config\\rules') || lowerFp.includes('/.gemini/config/rules')) {
+                  const ruleKey = path.basename(fp).toLowerCase();
+                  invokedRules.add(ruleKey);
+                  discoveredRulePaths.set(ruleKey, fp);
+                  const wsRoot = ContextScannerService.findWorkspaceRoot(fp);
+                  if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
+                } else {
+                  const wsRoot = ContextScannerService.findWorkspaceRoot(fp);
+                  if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
                 }
               }
             }
@@ -495,10 +608,21 @@ class TranscriptParserService {
                 touchedFiles.add(lowerFp);
                 if (lowerFp.includes('skill.md')) {
                   const skillDir = path.basename(path.dirname(fp));
-                  invokedSkills.add(skillDir.toLowerCase());
+                  const skillKey = skillDir.toLowerCase();
+                  invokedSkills.add(skillKey);
+                  discoveredSkillPaths.set(skillKey, fp);
+                  const wsRoot = ContextScannerService.findWorkspaceRoot(fp);
+                  if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
                 }
-                if (lowerFp.includes('.agents\\rules') || lowerFp.includes('/.agents/rules') || lowerFp.includes('.gemini\\config\\rules')) {
-                  invokedRules.add(path.basename(fp).toLowerCase());
+                if (lowerFp.includes('.agents\\rules') || lowerFp.includes('/.agents/rules') || lowerFp.includes('.gemini\\config\\rules') || lowerFp.includes('/.gemini/config/rules')) {
+                  const ruleKey = path.basename(fp).toLowerCase();
+                  invokedRules.add(ruleKey);
+                  discoveredRulePaths.set(ruleKey, fp);
+                  const wsRoot = ContextScannerService.findWorkspaceRoot(fp);
+                  if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
+                } else {
+                  const wsRoot = ContextScannerService.findWorkspaceRoot(fp);
+                  if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
                 }
               }
             }
@@ -509,14 +633,157 @@ class TranscriptParserService {
       }
     }
 
-    // 2. 透過 ContextScanner 取得完整環境基準
-    const baseEnv = await ContextScannerService.scanLiveEnvironment(workspaceFolders);
+    // 3. 從 targetConv.workspace 補充工作區
+    if (targetConv.workspace) {
+      const wsNorm = targetConv.workspace.replace(/\\/g, '/');
+      const candidatePaths = [
+        `D:/PJ/${wsNorm}`,
+        `D:/PJ/${wsNorm.replace(/^PJ\//i, '')}`,
+        `C:/PJ/${wsNorm}`,
+        `D:/${wsNorm}`,
+        `C:/${wsNorm}`
+      ];
+      for (const cp of candidatePaths) {
+        if (fs.existsSync(cp)) {
+          discoveredWorkspaceRoots.add(path.normalize(cp));
+          break;
+        }
+      }
+    }
 
-    // 3. 標註並過濾 Rules
+    // 4. 建構對話快照專屬的工作區掃描清單
+    const effectiveWsPaths = [];
+    const seenWsPaths = new Set();
+
+    for (const wsRoot of discoveredWorkspaceRoots) {
+      const lower = wsRoot.toLowerCase();
+      if (!seenWsPaths.has(lower) && fs.existsSync(wsRoot)) {
+        seenWsPaths.add(lower);
+        effectiveWsPaths.push(wsRoot);
+      }
+    }
+
+    if (effectiveWsPaths.length === 0) {
+      for (const ws of workspaceFolders) {
+        const wsPath = typeof ws === 'string' ? ws : (ws.uri ? ws.uri.fsPath : (ws.path || ws));
+        if (wsPath && fs.existsSync(wsPath)) {
+          const lower = wsPath.toLowerCase();
+          if (!seenWsPaths.has(lower)) {
+            seenWsPaths.add(lower);
+            effectiveWsPaths.push(path.normalize(wsPath));
+          }
+        }
+      }
+    }
+
+    const effectiveWorkspaceObjects = effectiveWsPaths.map((p, idx) => ({
+      name: ContextScannerService.formatWorkspaceName(p),
+      path: p,
+      index: idx
+    }));
+
+    // 5. 透過 ContextScanner 取得環境基準
+    const baseEnv = await ContextScannerService.scanLiveEnvironment(effectiveWorkspaceObjects);
+
+    // 6. DB 原生 System Prompt 逆向注入與日誌足跡直接補全
+    // 6.1 補全 Always-Active Rules
+    for (const rulePath of dbSessionMeta.alwaysActiveRules) {
+      const exists = baseEnv.rules.alwaysActive.some(r => r.filePath && r.filePath.toLowerCase() === rulePath.toLowerCase());
+      if (!exists) {
+        const parsedRule = await ContextScannerService.parseSingleRuleFile(rulePath);
+        if (parsedRule) {
+          parsedRule.isAlwaysActive = true;
+          baseEnv.rules.alwaysActive.push(parsedRule);
+        }
+      }
+    }
+
+    // 6.2 補全 Conditional Rules
+    for (const rulePath of dbSessionMeta.conditionalRules) {
+      const exists = [...baseEnv.rules.alwaysActive, ...baseEnv.rules.conditional].some(r => r.filePath && r.filePath.toLowerCase() === rulePath.toLowerCase());
+      if (!exists) {
+        const parsedRule = await ContextScannerService.parseSingleRuleFile(rulePath);
+        if (parsedRule) {
+          baseEnv.rules.conditional.push(parsedRule);
+        }
+      }
+    }
+
+    // 6.3 補全 Available Skills
+    for (const skillPath of dbSessionMeta.availableSkills) {
+      const exists = [
+        ...(baseEnv.skills.workspace || []),
+        ...(baseEnv.skills.global || []),
+        ...(baseEnv.skills.builtin || [])
+      ].some(s => s.filePath && s.filePath.toLowerCase() === skillPath.toLowerCase());
+      if (!exists) {
+        const parsedSkill = await ContextScannerService.parseSingleSkillFile(skillPath);
+        if (parsedSkill) {
+          baseEnv.skills.workspace.push(parsedSkill);
+        }
+      }
+    }
+
+    // 6.4 補全動態日誌中的 Skills
+    for (const [skillKey, skillPath] of discoveredSkillPaths.entries()) {
+      const alreadyExists = [
+        ...(baseEnv.skills.workspace || []),
+        ...(baseEnv.skills.global || []),
+        ...(baseEnv.skills.builtin || [])
+      ].some(s => (s.filePath && s.filePath.toLowerCase() === skillPath.toLowerCase()) || 
+                  (s.dirName && s.dirName.toLowerCase() === skillKey) || 
+                  (s.name && s.name.toLowerCase() === skillKey));
+
+      if (!alreadyExists) {
+        const parsedSkill = await ContextScannerService.parseSingleSkillFile(skillPath);
+        if (parsedSkill) {
+          parsedSkill.isInvoked = true;
+          baseEnv.skills.workspace.push(parsedSkill);
+        } else {
+          baseEnv.skills.workspace.push({
+            name: skillKey,
+            displayName: skillKey,
+            dirName: skillKey,
+            description: '此對話調用之技能（檔案未在當前目錄中）',
+            filePath: skillPath,
+            dirPath: path.dirname(skillPath),
+            source: ContextScannerService.formatWorkspaceName(path.resolve(path.dirname(skillPath), '../../..')),
+            type: 'workspace',
+            isInvoked: true,
+            sizeBytes: 0
+          });
+        }
+      }
+    }
+
+    // 6.5 補全動態日誌中的 Rules
+    for (const [ruleKey, rulePath] of discoveredRulePaths.entries()) {
+      const alreadyExists = [
+        ...(baseEnv.rules.alwaysActive || []),
+        ...(baseEnv.rules.conditional || [])
+      ].some(r => (r.filePath && r.filePath.toLowerCase() === rulePath.toLowerCase()) || 
+                  (r.name && r.name.toLowerCase() === ruleKey));
+
+      if (!alreadyExists) {
+        const parsedRule = await ContextScannerService.parseSingleRuleFile(rulePath);
+        if (parsedRule) {
+          parsedRule.isInvoked = true;
+          if (parsedRule.isAlwaysActive) {
+            baseEnv.rules.alwaysActive.push(parsedRule);
+          } else {
+            baseEnv.rules.conditional.push(parsedRule);
+          }
+        }
+      }
+    }
+
+    // 7. 標註並過濾 Rules
     const annotateRule = (r) => {
-      const isInvoked = invokedRules.has(r.name.toLowerCase()) || r.isAlwaysActive;
+      const isAlwaysActive = r.isAlwaysActive || dbSessionMeta.alwaysActiveRules.some(p => p.toLowerCase() === r.filePath?.toLowerCase());
+      const isInvoked = invokedRules.has(r.name.toLowerCase()) || isAlwaysActive;
       return {
         ...r,
+        isAlwaysActive: isAlwaysActive,
         isInvoked: isInvoked
       };
     };
@@ -526,7 +793,7 @@ class TranscriptParserService {
       conditional: baseEnv.rules.conditional.map(annotateRule)
     };
 
-    // 4. 標註 Skills
+    // 8. 標註 Skills
     const annotateSkill = (s) => {
       const isInvoked = invokedSkills.has(s.name.toLowerCase()) || invokedSkills.has(s.dirName?.toLowerCase());
       return {
@@ -541,7 +808,7 @@ class TranscriptParserService {
       builtin: (baseEnv.skills.builtin || []).map(annotateSkill)
     };
 
-    // 5. 精準標註 MCP 伺服器與其個別子工具的調用狀態
+    // 9. 精準標註 MCP 伺服器與其個別子工具的調用狀態
     const annotatedMcp = (baseEnv.mcpServers || []).map(server => {
       const sRawName = server.name.toLowerCase();
       const sNormName = sRawName.replace(/[-_]mcp$/i, '');
@@ -553,7 +820,6 @@ class TranscriptParserService {
 
       const serverTools = (server.tools || []).map(t => {
         const tName = (typeof t === 'string' ? t : t.name).toLowerCase();
-        // 嚴格限制透過所屬伺服器前綴與命名空間比對，避免同名工具跨 MCP 伺服器誤判
         const isToolInvoked = 
           invokedMcpTools.has(`mcp_${sRawName}_${tName}`) ||
           invokedMcpTools.has(`mcp_${sNormName}_${tName}`) ||
@@ -594,7 +860,7 @@ class TranscriptParserService {
       rules: annotatedRules,
       skills: annotatedSkills,
       mcpServers: annotatedMcp,
-      workspaces: baseEnv.workspaces
+      workspaces: effectiveWorkspaceObjects
     };
   }
 }

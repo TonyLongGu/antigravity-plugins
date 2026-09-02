@@ -2,7 +2,7 @@
 
 專為 **Google Antigravity IDE** 開發的原生側邊欄擴充套件（VS Code Extension），提供全域 MCP 伺服器開關控制、狀態監控、即時連線測試與設定檔編輯功能。
 
-本擴充套件遵循 Google Antigravity 原生擴充套件開發規範，採用後端 Services 職責分離架構、極致緊湊 4 層 Spacing Tokens 與前端 `vscode.getState()` 狀態持久化機制。
+本擴充套件遵循 [`ide-extension-workflow`](file:///d:/PJ/AiPj/ai/.agents/skills/ide-extension-workflow/SKILL.md) 規範，採用後端 Services 職責分離架構、極致緊湊 4 層 Spacing Tokens 與前端 `vscode.getState()` 狀態持久化機制。
 
 ---
 

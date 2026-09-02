@@ -15,6 +15,8 @@ class ToolboxViewProvider {
   constructor(extensionUri) {
     this._extensionUri = extensionUri;
     this._view = null;
+    this._panel = null;
+    this._pushTimer = null;
   }
 
   resolveWebviewView(webviewView) {
@@ -27,115 +29,184 @@ class ToolboxViewProvider {
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
 
     // 雙向訊息路由分發 (Action Message Router)
-    webviewView.webview.onDidReceiveMessage(async (msg) => {
-      switch (msg.type) {
-        case 'fetchStatus':
-          this.pushStatus();
-          break;
+    webviewView.webview.onDidReceiveMessage((msg) => this._handleMessage(msg));
 
-        case 'fixWorkspace':
-          workspaceService.fixWorkspaceDuplicates(this);
-          this.pushStatus();
-          break;
-
-        case 'resetWorkspace':
-          workspaceService.resetWorkspaceNames(this);
-          this.pushStatus();
-          break;
-
-        case 'openTarget':
-          await systemService.handleOpenTarget(msg.target, this);
-          break;
-
-        case 'cleanBrain':
-          await brainService.cleanBrainHistory(msg.months || 3, this);
-          this.pushStatus();
-          break;
-
-        case 'toggleExplorerSetting':
-          await systemService.toggleExplorerSetting(msg.key, this);
-          this.pushStatus();
-          break;
-
-        case 'toggleWorkspaceFolder':
-        case 'setWorkspaceFolderEnabled':
-          workspaceService.setWorkspaceFolderEnabled(msg.path, msg.enabled, this);
-          this.pushStatus(60);
-          break;
-
-        case 'showOnlyFirstFolder':
-          workspaceService.showOnlyFirstWorkspaceFolder(this);
-          this.pushStatus(50);
-          break;
-
-        case 'showAllFolders':
-          workspaceService.showAllWorkspaceFolders(this);
-          this.pushStatus(50);
-          break;
-
-        case 'invertFolders':
-          workspaceService.invertWorkspaceFolders(this);
-          this.pushStatus(50);
-          break;
-
-        case 'reorderWorkspaceFolders':
-          workspaceService.reorderWorkspaceFolders(msg.newOrder, this);
-          this.pushStatus();
-          break;
-
-        case 'revealPath':
-          if (msg.path && fs.existsSync(msg.path)) {
-            systemService.openFolderInside(msg.path);
-          }
-          break;
-
-        case 'pickScripts':
-          await scriptService.pickAndAddScripts(this);
-          break;
-
-        case 'runScript':
-          scriptService.runScript(msg.path, false, this);
-          break;
-
-        case 'runScriptAdmin':
-          scriptService.runScript(msg.path, true, this);
-          break;
-
-        case 'removeScript':
-          scriptService.removeScript(msg.path, this);
-          break;
-
-        case 'renameScript':
-          await scriptService.renameScript(msg.path, this);
-          break;
-
-        case 'resetScriptDisplayName':
-          scriptService.resetScriptDisplayName(msg.path, this);
-          break;
-
-        case 'revealScriptInExplorer':
-          await scriptService.revealScriptInExplorer(msg.path, this);
-          break;
-      }
+    webviewView.onDidDispose(() => {
+      this._view = null;
     });
   }
 
   /**
-   * 推送 In-App 浮動通知給前端 Webview
-   * @param {string} message
-   * @param {'info'|'success'|'warning'|'error'} status
+   * 在代碼編輯器分頁 (Editor Tab) 中開啟控制中心 (原生向右分割至 ViewColumn.Beside 並自動鎖定群組)
+   * @param {vscode.ViewColumn} [column=vscode.ViewColumn.Beside]
    */
-  pushToast(message, status = 'info') {
-    if (this._view) {
-      this._view.webview.postMessage({
-        type: 'toast',
-        payload: { message, status },
-      });
+  openInEditor(column = vscode.ViewColumn.Beside) {
+    if (this._panel) {
+      this._panel.reveal(column);
+      this._lockEditorGroup();
+      return;
+    }
+
+    this._panel = vscode.window.createWebviewPanel(
+      'antigravity.toolboxEditor',
+      'Antigravity 控制中心',
+      column,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [this._extensionUri],
+      }
+    );
+
+    this._panel.iconPath = {
+      dark: vscode.Uri.joinPath(this._extensionUri, 'media', 'icons', 'toolbox-icon-dark.svg'),
+      light: vscode.Uri.joinPath(this._extensionUri, 'media', 'icons', 'toolbox-icon-light.svg'),
+    };
+
+    this._panel.webview.html = this._getHtmlForWebview(this._panel.webview);
+
+    this._panel.webview.onDidReceiveMessage((msg) => this._handleMessage(msg));
+
+    this._panel.onDidDispose(() => {
+      this._panel = null;
+    });
+
+    // 立即向新開啟的編輯器分頁推送當前完整狀態
+    this.pushStatus(0);
+
+    // 自動鎖定該編輯器群組 (避免後續點選代碼檔案覆蓋控制中心)
+    this._lockEditorGroup();
+  }
+
+  /**
+   * 鎖定當前編輯器群組
+   */
+  _lockEditorGroup() {
+    setTimeout(async () => {
+      try {
+        await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
+      } catch (err) {
+        // 忽略在特定無 UI 或特殊環境下的例外
+      }
+    }, 100);
+  }
+
+  /**
+   * 統一雙向訊息分發處理器 (支援側邊欄 WebviewView 與編輯區 WebviewPanel)
+   * @param {Object} msg
+   */
+  async _handleMessage(msg) {
+    switch (msg.type) {
+      case 'fetchStatus':
+        this.pushStatus();
+        break;
+
+      case 'fixWorkspace':
+        workspaceService.fixWorkspaceDuplicates(this);
+        this.pushStatus();
+        break;
+
+      case 'resetWorkspace':
+        workspaceService.resetWorkspaceNames(this);
+        this.pushStatus();
+        break;
+
+      case 'openTarget':
+        await systemService.handleOpenTarget(msg.target, this);
+        break;
+
+      case 'cleanBrain':
+        await brainService.cleanBrainHistory(msg.months || 3, this);
+        this.pushStatus();
+        break;
+
+      case 'toggleExplorerSetting':
+        await systemService.toggleExplorerSetting(msg.key, this);
+        this.pushStatus();
+        break;
+
+      case 'toggleWorkspaceFolder':
+      case 'setWorkspaceFolderEnabled':
+        workspaceService.setWorkspaceFolderEnabled(msg.path, msg.enabled, this);
+        this.pushStatus(60);
+        break;
+
+      case 'showOnlyFirstFolder':
+        workspaceService.showOnlyFirstWorkspaceFolder(this);
+        this.pushStatus(50);
+        break;
+
+      case 'showAllFolders':
+        workspaceService.showAllWorkspaceFolders(this);
+        this.pushStatus(50);
+        break;
+
+      case 'invertFolders':
+        workspaceService.invertWorkspaceFolders(this);
+        this.pushStatus(50);
+        break;
+
+      case 'reorderWorkspaceFolders':
+        workspaceService.reorderWorkspaceFolders(msg.newOrder, this);
+        this.pushStatus();
+        break;
+
+      case 'revealPath':
+        if (msg.path && fs.existsSync(msg.path)) {
+          systemService.openFolderInside(msg.path);
+        }
+        break;
+
+      case 'pickScripts':
+        await scriptService.pickAndAddScripts(this);
+        break;
+
+      case 'runScript':
+        scriptService.runScript(msg.path, false, this);
+        break;
+
+      case 'runScriptAdmin':
+        scriptService.runScript(msg.path, true, this);
+        break;
+
+      case 'removeScript':
+        scriptService.removeScript(msg.path, this);
+        break;
+
+      case 'renameScript':
+        await scriptService.renameScript(msg.path, this);
+        break;
+
+      case 'resetScriptDisplayName':
+        scriptService.resetScriptDisplayName(msg.path, this);
+        break;
+
+      case 'revealScriptInExplorer':
+        await scriptService.revealScriptInExplorer(msg.path, this);
+        break;
     }
   }
 
   /**
-   * 推送完整狀態更新給前端 Webview (智慧防抖，合併手動操作與檔案監控事件)
+   * 推送 In-App 浮動通知給前端 Webview (同時支援側邊欄與編輯器分頁)
+   * @param {string} message
+   * @param {'info'|'success'|'warning'|'error'} status
+   */
+  pushToast(message, status = 'info') {
+    const payload = {
+      type: 'toast',
+      payload: { message, status },
+    };
+    if (this._view) {
+      this._view.webview.postMessage(payload);
+    }
+    if (this._panel) {
+      this._panel.webview.postMessage(payload);
+    }
+  }
+
+  /**
+   * 推送完整狀態更新給前端 Webview (智慧防抖，同步更新側邊欄與編輯器分頁)
    * @param {number} [delay=80] 防抖延遲毫秒數
    *   - 80ms：一般操作（fix/reset/refresh）
    *   - 200ms：onDidChangeWorkspaceFolders 事件專用，確保磁碟同步後再讀取
@@ -145,12 +216,12 @@ class ToolboxViewProvider {
       clearTimeout(this._pushTimer);
     }
     this._pushTimer = setTimeout(async () => {
-      if (this._view) {
+      if (this._view || this._panel) {
         const workspaceStatus = workspaceService.analyzeWorkspace();
         const scriptsStatus = scriptService.getWorkspaceScripts();
         const brainStatus = await brainService.getBrainStats();
         const settingsStatus = systemService.getExplorerSettings();
-        this._view.webview.postMessage({
+        const payload = {
           type: 'updateStatus',
           payload: {
             workspace: workspaceStatus,
@@ -158,7 +229,13 @@ class ToolboxViewProvider {
             brain: brainStatus,
             settings: settingsStatus,
           },
-        });
+        };
+        if (this._view) {
+          this._view.webview.postMessage(payload);
+        }
+        if (this._panel) {
+          this._panel.webview.postMessage(payload);
+        }
       }
     }, delay);
   }
@@ -193,6 +270,13 @@ function activate(context) {
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider('antigravity.toolboxView', provider, {
       webviewOptions: { retainContextWhenHidden: true },
+    })
+  );
+
+  // 1.1 註冊 VS Code 命令：在編輯器分頁開啟控制中心
+  context.subscriptions.push(
+    vscode.commands.registerCommand('antigravity.toolbox.openInEditor', () => {
+      provider.openInEditor();
     })
   );
 

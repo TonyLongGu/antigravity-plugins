@@ -328,6 +328,7 @@
     updateToggleButtons();
 
     const isMultiWs = (currentData.workspaces && currentData.workspaces.length > 1);
+    const showSourceTag = isMultiWs || currentMode === 'snapshot';
 
     // 1. 常駐規範
     const activeRules = currentData.rules?.alwaysActive || [];
@@ -347,7 +348,7 @@
                 <span class="item-chevron">${Codicons.chevronRight}</span>
                 <span class="item-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</span>
               </div>
-              ${isMultiWs && r.source ? `<span class="item-source-tag" title="所屬專案：${escapeHtml(r.source)}">${escapeHtml(r.source)}</span>` : ''}
+              ${showSourceTag && r.source ? `<span class="item-source-tag" title="所屬專案：${escapeHtml(r.source)}">${escapeHtml(r.source)}</span>` : ''}
             </summary>
             <div class="item-detail-body">
               <div class="item-action-bar">
@@ -384,7 +385,7 @@
                 <span class="item-chevron">${Codicons.chevronRight}</span>
                 <span class="item-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</span>
               </div>
-              ${isMultiWs && r.source ? `<span class="item-source-tag" title="所屬專案：${escapeHtml(r.source)}">${escapeHtml(r.source)}</span>` : ''}
+              ${showSourceTag && r.source ? `<span class="item-source-tag" title="所屬專案：${escapeHtml(r.source)}">${escapeHtml(r.source)}</span>` : ''}
             </summary>
             <div class="item-detail-body">
               <div class="item-action-bar">
@@ -426,7 +427,7 @@
 
       if (workspace.length > 0) {
         html += `<div class="subgroup-title">${Codicons.folder} 工作區專屬技能 (${workspace.length})</div>`;
-        html += workspace.map(s => renderSkillItem(s, openedKeys, isMultiWs)).join('');
+        html += workspace.map(s => renderSkillItem(s, openedKeys, showSourceTag)).join('');
       }
       if (global.length > 0) {
         html += `<div class="subgroup-title">${Codicons.globe} 全域客製技能 (${global.length})</div>`;

@@ -1,69 +1,65 @@
 {
-  "name": "antigravity-mcp-manager",
-  "displayName": "Antigravity MCP 管理儀表板",
-  "description": "Google Antigravity IDE 原生 MCP 伺服器視覺化管理、開關控制與即時連線測試側邊欄",
-  "version": "1.0.0",
-  "publisher": "antigravity-toolkit",
-  "engines": {
-    "vscode": "^1.80.0"
-  },
-  "categories": [
-    "Other"
-  ],
-  "main": "./extension.js",
-  "activationEvents": [
-    "*"
-  ],
-  "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "mcp-manager-container",
-          "title": "MCP 伺服器管理",
-          "icon": "media/icons/mcp-icon.svg"
-        }
-      ]
-    },
-    "views": {
-      "mcp-manager-container": [
-        {
-          "type": "webview",
-          "id": "antigravity.mcpManagerView",
-          "name": "MCP 控制台"
-        }
-      ]
-    },
-    "commands": [
-      {
-        "command": "antigravity.mcp.refresh",
-        "title": "重新載入 MCP 設定",
-        "category": "MCP",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "antigravity.mcp.focusView",
-        "title": "聚焦 MCP 側邊欄面板",
-        "category": "MCP"
-      }
-    ],
-    "menus": {
-      "view/title": [
-        {
-          "command": "antigravity.mcp.refresh",
-          "when": "view == antigravity.mcpManagerView",
-          "group": "navigation@1"
-        }
-      ]
-    }
-  },
-  "author": "TonyLongGu",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/TonyLongGu/antigravity-mcp-manager.git"
-  },
-  "bugs": {
-    "url": "https://github.com/TonyLongGu/antigravity-mcp-manager/issues"
-  },
-  "homepage": "https://github.com/TonyLongGu/antigravity-mcp-manager#readme"
+	"name": "antigravity-mcp-manager",
+	"displayName": "Antigravity MCP 管理儀表板",
+	"description": "Google Antigravity IDE 原生 MCP 伺服器視覺化管理、開關控制與即時連線測試側邊欄",
+	"version": "1.1.1",
+	"publisher": "antigravity-toolkit",
+	"engines": {
+		"vscode": "^1.80.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"main": "./extension.js",
+	"activationEvents": [
+		"*"
+	],
+	"contributes": {
+		"viewsContainers": {
+			"activitybar": [
+				{
+					"id": "mcp-manager-container",
+					"title": "MCP 伺服器管理",
+					"icon": "media/icons/mcp-icon.svg"
+				}
+			]
+		},
+		"views": {
+			"mcp-manager-container": [
+				{
+					"type": "webview",
+					"id": "antigravity.mcpManagerView",
+					"name": "MCP 控制台"
+				}
+			]
+		},
+		"commands": [
+			{
+				"command": "antigravity.mcp.openInEditor",
+				"title": "在編輯器分頁開啟",
+				"category": "MCP",
+				"icon": "$(split-horizontal)"
+			},
+			{
+				"command": "antigravity.mcp.refresh",
+				"title": "重新載入 MCP 設定",
+				"category": "MCP",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "antigravity.mcp.focusView",
+				"title": "聚焦 MCP 側邊欄面板",
+				"category": "MCP"
+			}
+		],
+		"menus": {
+			"view/title": [
+				{
+					"command": "antigravity.mcp.openInEditor",
+					"when": "view == antigravity.mcpManagerView",
+					"group": "navigation"
+				}
+			]
+		}
+	}
 }

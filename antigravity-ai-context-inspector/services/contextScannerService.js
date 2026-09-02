@@ -196,8 +196,8 @@ class ContextScannerService {
     // 1. 依序處理工作區清單（嚴格依照檔案總管專案由上而下順序）
     for (let wsIndex = 0; wsIndex < workspaceFolders.length; wsIndex++) {
       const ws = workspaceFolders[wsIndex];
-      const wsPath = typeof ws === 'string' ? ws : (ws.uri ? ws.uri.fsPath : ws);
-      const wsName = typeof ws === 'object' && ws.name ? ws.name : path.basename(wsPath);
+      const wsPath = typeof ws === 'string' ? ws : (ws.uri ? ws.uri.fsPath : (ws.path || ws));
+      const wsName = typeof ws === 'object' && ws.name ? ws.name : this.formatWorkspaceName(wsPath);
       result.workspaces.push({
         name: wsName,
         path: wsPath,
@@ -240,6 +240,166 @@ class ContextScannerService {
     result.mcpServers = await McpDetectorService.scanMcpServers(workspaceFolders);
 
     return result;
+  }
+
+  /**
+   * 格式化專案路徑為簡潔優美的顯示名稱 (例如 D:\PJ\ComfyUiPj\ai -> ComfyUiPj \ ai)
+   */
+  static formatWorkspaceName(wsPath) {
+    if (!wsPath || typeof wsPath !== 'string') return '';
+    const norm = wsPath.replace(/\\/g, '/').replace(/\/+$/, '');
+    if (norm.toLowerCase().includes('/pj/')) {
+      const parts = norm.split(/\/pj\//i);
+      if (parts.length > 1 && parts[1]) {
+        return parts[1].replace(/\//g, ' \\ ');
+      }
+    }
+    const segs = norm.split('/').filter(Boolean);
+    if (segs.length >= 2) {
+      return `${segs[segs.length - 2]} \\ ${segs[segs.length - 1]}`;
+    }
+    return segs[segs.length - 1] || wsPath;
+  }
+
+  /**
+   * 依據給定檔案或目錄路徑，向上溯源尋找所屬之工作區根目錄（含有 .agents）
+   */
+  static findWorkspaceRoot(filePath) {
+    if (!filePath || typeof filePath !== 'string') return null;
+    let cleanPath = filePath.replace(/^file:\/\/\/?/i, '').replace(/^["']|["']$/g, '').trim();
+    if (cleanPath.startsWith('/') && process.platform === 'win32' && /^[a-zA-Z]:/.test(cleanPath.slice(1))) {
+      cleanPath = cleanPath.slice(1);
+    }
+    cleanPath = path.normalize(cleanPath).replace(/[\\/]+$/, '');
+
+    // 1. 如果路徑中包含 .agents，直接截取 .agents 前一層作為工作區根目錄
+    const agentsIdx = cleanPath.toLowerCase().indexOf(path.sep + '.agents');
+    if (agentsIdx !== -1) {
+      const candidate = cleanPath.slice(0, agentsIdx);
+      if (fs.existsSync(candidate)) return path.normalize(candidate);
+    }
+
+    // 2. 向上逐層尋找包含 .agents 的目錄（排除使用者家目錄與磁碟根目錄避免誤判）
+    try {
+      const userHomeNorm = path.normalize(this.getUserHome()).toLowerCase();
+      let current = fs.existsSync(cleanPath) && fs.statSync(cleanPath).isDirectory() 
+        ? cleanPath 
+        : path.dirname(cleanPath);
+      
+      const root = path.parse(current).root;
+      while (current && current !== root) {
+        const curNorm = path.normalize(current).toLowerCase();
+        // 避免將 C:\Users\User 或磁碟根目錄誤判為專案工作區
+        if (curNorm === userHomeNorm || curNorm === root.toLowerCase()) break;
+
+        if (fs.existsSync(path.join(current, '.agents'))) {
+          return path.normalize(current);
+        }
+        const parent = path.dirname(current);
+        if (parent === current) break;
+        current = parent;
+      }
+    } catch (e) {}
+
+    return null;
+  }
+
+  /**
+   * 單檔解析單一 Rule (.md)
+   */
+  static async parseSingleRuleFile(filePath, sourceName = '', isGlobal = false, wsIndex = 999) {
+    if (!fs.existsSync(filePath)) return null;
+    try {
+      const stat = await fsPromises.stat(filePath);
+      const content = await fsPromises.readFile(filePath, 'utf-8');
+      const lines = content.split(/\r?\n/);
+      const meta = this.parseFrontmatter(content);
+      const fileName = path.basename(filePath);
+
+      let firstHeader = '';
+      for (const line of lines) {
+        if (line.startsWith('#')) {
+          firstHeader = line.replace(/^#+\s*/, '').trim();
+          break;
+        }
+      }
+
+      const isAlwaysActive = meta.trigger === 'always_on' || fileName.toLowerCase().includes('core-guidelines') || isGlobal;
+
+      let desc = meta.description || '';
+      if (!desc) {
+        const bodyLines = lines.filter(l => !l.startsWith('#') && !l.startsWith('---') && l.trim());
+        if (bodyLines.length > 0) {
+          desc = bodyLines.slice(0, 3).join(' ').trim();
+        }
+      }
+
+      const finalSource = sourceName || (isGlobal ? '全域設定 (Global)' : this.formatWorkspaceName(path.resolve(filePath, '../..')));
+
+      return {
+        name: fileName,
+        displayName: firstHeader || fileName,
+        filePath: filePath,
+        source: finalSource,
+        wsIndex: wsIndex,
+        isGlobal: isGlobal,
+        isAlwaysActive: isAlwaysActive,
+        trigger: meta.trigger || (isAlwaysActive ? 'always_on' : 'model_decision'),
+        description: desc,
+        lineCount: lines.length,
+        sizeBytes: stat.size
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * 單檔解析單一 Skill (SKILL.md)
+   */
+  static async parseSingleSkillFile(skillMdPath, sourceName = '', type = 'workspace', wsIndex = 999) {
+    if (!fs.existsSync(skillMdPath)) return null;
+    try {
+      const content = await fsPromises.readFile(skillMdPath, 'utf-8');
+      const meta = this.parseFrontmatter(content);
+      const stat = await fsPromises.stat(skillMdPath);
+      const lines = content.split(/\r?\n/);
+      const skillDir = path.dirname(skillMdPath);
+      const dirName = path.basename(skillDir);
+
+      let firstHeader = '';
+      let inFrontmatter = false;
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed === '---') {
+          inFrontmatter = !inFrontmatter;
+          continue;
+        }
+        if (!inFrontmatter && trimmed.startsWith('#')) {
+          firstHeader = trimmed.replace(/^#+\s*/, '').trim();
+          break;
+        }
+      }
+
+      const rawName = meta.name || dirName;
+      const displayName = firstHeader || rawName;
+      const finalSource = sourceName || (type === 'global' ? '全域技能 (Global)' : (type === 'builtin' ? 'Antigravity 內建' : this.formatWorkspaceName(path.resolve(skillDir, '../../..'))));
+
+      return {
+        name: rawName,
+        displayName: displayName,
+        dirName: dirName,
+        description: meta.description || '無描述',
+        filePath: skillMdPath,
+        dirPath: skillDir,
+        source: finalSource,
+        wsIndex: wsIndex,
+        type: type,
+        sizeBytes: stat.size
+      };
+    } catch (e) {
+      return null;
+    }
   }
 }
 

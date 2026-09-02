@@ -148,59 +148,106 @@ class StorageManager {
   }
 
   /**
-   * 切換釘選/臨時狀態（支援單一項目或多選批次切換）
-   * @param {string | string[] | Array<{fsPath?: string, path?: string}>} target
+   * 切換釘選/臨時狀態（支援單一項目、多選批次切換，以及資料夾展開之子項目獨立切換）
+   * @param {any | any[]} target
    * @returns {Promise<{ success: boolean, toggledCount: number, isPinned?: boolean, message?: string }>}
    */
   async togglePin(target) {
     const targets = Array.isArray(target) ? target : [target];
-    const normTargets = new Set(
-      targets
-        .map(t => typeof t === 'string' ? t : (t?.fsPath || t?.path))
-        .filter(Boolean)
-        .map(t => this.normalizePath(t).toLowerCase())
-    );
-
-    if (normTargets.size === 0) return { success: false, toggledCount: 0 };
+    if (targets.length === 0) return { success: false, toggledCount: 0 };
 
     const data = this.getRawData();
     let toggledCount = 0;
     let lastIsPinned = false;
 
-    // 處理目前在 pinned 中的項目（移至 scratchpad）
-    const remainingPinned = [];
-    const movingToScratchpad = [];
-    for (const item of data.pinned) {
-      if (normTargets.has(this.normalizePath(item.path).toLowerCase())) {
-        movingToScratchpad.push(item);
+    // 建立現有項目的 Map 方便快速查詢
+    const pinnedMap = new Map();
+    data.pinned.forEach((item, index) => {
+      pinnedMap.set(this.normalizePath(item.path).toLowerCase(), { item, index });
+    });
+
+    const scratchMap = new Map();
+    data.scratchpad.forEach((item, index) => {
+      scratchMap.set(this.normalizePath(item.path).toLowerCase(), { item, index });
+    });
+
+    const itemsToRemoveFromPinned = new Set();
+    const itemsToRemoveFromScratch = new Set();
+    const itemsToAddToPinned = [];
+    const itemsToAddToScratch = [];
+
+    for (const t of targets) {
+      const rawPath = typeof t === 'string' ? t : (t?.fsPath || t?.path);
+      if (!rawPath) continue;
+
+      const normPath = this.normalizePath(rawPath);
+      const normPathLower = normPath.toLowerCase();
+
+      if (!fs.existsSync(normPath)) continue;
+
+      // 1. 若該項目已經存在於 pinned：移至 scratchpad
+      if (pinnedMap.has(normPathLower)) {
+        const { item } = pinnedMap.get(normPathLower);
+        itemsToRemoveFromPinned.add(normPathLower);
+        itemsToAddToScratch.push(item);
         toggledCount++;
         lastIsPinned = false;
-      } else {
-        remainingPinned.push(item);
+        continue;
       }
-    }
 
-    // 處理目前在 scratchpad 中的項目（移至 pinned）
-    const remainingScratchpad = [];
-    const movingToPinned = [];
-    for (const item of data.scratchpad) {
-      if (normTargets.has(this.normalizePath(item.path).toLowerCase())) {
-        movingToPinned.push(item);
+      // 2. 若該項目已經存在於 scratchpad：移至 pinned
+      if (scratchMap.has(normPathLower)) {
+        const { item } = scratchMap.get(normPathLower);
+        itemsToRemoveFromScratch.add(normPathLower);
+        itemsToAddToPinned.push(item);
         toggledCount++;
         lastIsPinned = true;
-      } else {
-        remainingScratchpad.push(item);
+        continue;
       }
+
+      // 3. 若兩者皆不存在（即為展開之 sub-file / sub-folder 等子項目）
+      let isDir = false;
+      try {
+        isDir = fs.statSync(normPath).isDirectory();
+      } catch {}
+
+      const newItem = {
+        path: normPath,
+        name: path.basename(normPath) || normPath,
+        type: isDir ? 'dir' : 'file',
+        addedAt: Date.now()
+      };
+
+      // 判斷來源群組：
+      // 若原所屬父層為 pinned，切換時加入 scratchpad；
+      // 若原所屬父層為 scratchpad（或未指定），切換時加入 pinned
+      const parentIsPinned = t?.groupId === 'pinned' || t?.isPinned === true;
+      if (parentIsPinned) {
+        itemsToAddToScratch.push(newItem);
+        lastIsPinned = false;
+      } else {
+        itemsToAddToPinned.push(newItem);
+        lastIsPinned = true;
+      }
+      toggledCount++;
     }
 
     if (toggledCount > 0) {
-      data.pinned = [...movingToPinned, ...remainingPinned];
-      data.scratchpad = [...movingToScratchpad, ...remainingScratchpad];
+      // 依序更新資料結構
+      data.pinned = [
+        ...itemsToAddToPinned,
+        ...data.pinned.filter(item => !itemsToRemoveFromPinned.has(this.normalizePath(item.path).toLowerCase()))
+      ];
+      data.scratchpad = [
+        ...itemsToAddToScratch,
+        ...data.scratchpad.filter(item => !itemsToRemoveFromScratch.has(this.normalizePath(item.path).toLowerCase()))
+      ];
+
       await this.saveData(data);
       return { success: true, toggledCount, isPinned: lastIsPinned };
     }
 
-    return { success: false, toggledCount: 0, message: '找不到目標項目' };
+    return { success: false, toggledCount: 0, message: '找不到目標項目或路徑無效' };
   }
 
   /**

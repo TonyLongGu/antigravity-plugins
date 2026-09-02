@@ -21,6 +21,7 @@ class MCPManagerViewProvider {
     this._extensionUri = extensionUri;
     this._statusBarItem = statusBarItem;
     this._view = undefined;
+    this._panel = undefined;
   }
 
   async resolveWebviewView(webviewView, _context, _token) {
@@ -35,91 +36,155 @@ class MCPManagerViewProvider {
 
     // 監聽來自 Webview 前端的訊息分發
     webviewView.webview.onDidReceiveMessage(async (message) => {
-      switch (message.type) {
-        case 'getData': {
-          await this.refreshWebviewData();
-          break;
-        }
+      await this._handleMessage(message, webviewView.webview);
+    });
 
-        case 'openGlobalConfig': {
-          await SystemService.openConfigFile(McpConfigService.globalConfigPath);
-          break;
-        }
-
-        case 'toggleGlobalServer': {
-          const { name, disabled } = message;
-          try {
-            await McpConfigService.toggleServer(McpConfigService.globalConfigPath, name, disabled);
-            await this.refreshWebviewData();
-            this.pushToast(`已${disabled ? '停用' : '啟用'} ${name}`, disabled ? 'warning' : 'success');
-            vscode.window.setStatusBarMessage(`全域 MCP: 已${disabled ? '停用' : '啟用'} ${name}`, 3000);
-          } catch (err) {
-            this.pushToast(`切換失敗：${err.message}`, 'danger');
-            await this.refreshWebviewData();
-          }
-          break;
-        }
-
-        case 'batchToggleGlobal': {
-          const { action } = message;
-          try {
-            await McpConfigService.batchToggle(McpConfigService.globalConfigPath, action);
-            await this.refreshWebviewData();
-            const actionText = action === 'enableAll' ? '全部啟用' : action === 'disableAll' ? '全部停用' : '反向切換';
-            this.pushToast(`全域 MCP 伺服器已${actionText}`, 'success');
-            vscode.window.setStatusBarMessage(`全域 MCP 批次操作完成`, 3000);
-          } catch (err) {
-            this.pushToast(`批次操作失敗：${err.message}`, 'danger');
-          }
-          break;
-        }
-
-        case 'testServer': {
-          const { name } = message;
-          try {
-            const globalData = await McpConfigService.getGlobalData();
-            const serverConfig = globalData.config.mcpServers && globalData.config.mcpServers[name];
-
-            if (!serverConfig) {
-              throw new Error(`找不到伺服器設定：${name}`);
-            }
-
-            const result = await ProbeService.testServerConnection(serverConfig);
-            if (this._view) {
-              this._view.webview.postMessage({
-                type: 'testResult',
-                name,
-                result,
-              });
-            }
-          } catch (err) {
-            if (this._view) {
-              this._view.webview.postMessage({
-                type: 'testResult',
-                name,
-                result: { ok: false, message: err.message },
-              });
-            }
-          }
-          break;
-        }
-
-        case 'showInfo': {
-          vscode.window.showInformationMessage(message.message);
-          break;
-        }
-
-        case 'showError': {
-          vscode.window.showErrorMessage(message.message);
-          break;
-        }
-      }
+    webviewView.onDidDispose(() => {
+      this._view = undefined;
     });
   }
 
+  /**
+   * 在編輯器分頁中開啟 MCP 管理儀表板 (向右分割 ViewColumn.Beside 並自動鎖定群組)
+   * @param {vscode.ViewColumn} [column=vscode.ViewColumn.Beside]
+   */
+  async openInEditor(column = vscode.ViewColumn.Beside) {
+    if (this._panel) {
+      this._panel.reveal(column);
+      this._lockEditorGroup();
+      return;
+    }
+
+    this._panel = vscode.window.createWebviewPanel(
+      'antigravity.mcpManagerEditor',
+      'MCP 伺服器管理',
+      column,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [this._extensionUri],
+      }
+    );
+
+    // 雙主題圖示配置 (深色灰白 #CCCCCC，淺色深灰 #424242)
+    this._panel.iconPath = {
+      dark: vscode.Uri.joinPath(this._extensionUri, 'media', 'icons', 'mcp-icon-dark.svg'),
+      light: vscode.Uri.joinPath(this._extensionUri, 'media', 'icons', 'mcp-icon-light.svg'),
+    };
+
+    this._panel.webview.html = await this._getHtmlForWebview(this._panel.webview);
+
+    this._panel.webview.onDidReceiveMessage(async (message) => {
+      await this._handleMessage(message, this._panel.webview);
+    });
+
+    this._panel.onDidDispose(() => {
+      this._panel = undefined;
+    });
+
+    await this.refreshWebviewData();
+
+    // 自動鎖定該編輯器群組 (避免後續點選代碼檔案覆蓋儀表板)
+    this._lockEditorGroup();
+  }
+
+  /**
+   * 鎖定當前編輯器群組
+   */
+  _lockEditorGroup() {
+    setTimeout(async () => {
+      try {
+        await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
+      } catch (err) {
+        // 忽略在特定無 UI 或特殊環境下的例外
+      }
+    }, 100);
+  }
+
+  /**
+   * 統一訊息分發處理器
+   */
+  async _handleMessage(message, senderWebview) {
+    switch (message.type) {
+      case 'getData': {
+        await this.refreshWebviewData();
+        break;
+      }
+
+      case 'openGlobalConfig': {
+        await SystemService.openConfigFile(McpConfigService.globalConfigPath);
+        break;
+      }
+
+      case 'toggleGlobalServer': {
+        const { name, disabled } = message;
+        try {
+          await McpConfigService.toggleServer(McpConfigService.globalConfigPath, name, disabled);
+          await this.refreshWebviewData();
+          this.pushToast(`已${disabled ? '停用' : '啟用'} ${name}`, disabled ? 'warning' : 'success');
+          vscode.window.setStatusBarMessage(`全域 MCP: 已${disabled ? '停用' : '啟用'} ${name}`, 3000);
+        } catch (err) {
+          this.pushToast(`切換失敗：${err.message}`, 'danger');
+          await this.refreshWebviewData();
+        }
+        break;
+      }
+
+      case 'batchToggleGlobal': {
+        const { action } = message;
+        try {
+          await McpConfigService.batchToggle(McpConfigService.globalConfigPath, action);
+          await this.refreshWebviewData();
+          const actionText = action === 'enableAll' ? '全部啟用' : action === 'disableAll' ? '全部停用' : '反向切換';
+          this.pushToast(`全域 MCP 伺服器已${actionText}`, 'success');
+          vscode.window.setStatusBarMessage(`全域 MCP 批次操作完成`, 3000);
+        } catch (err) {
+          this.pushToast(`批次操作失敗：${err.message}`, 'danger');
+        }
+        break;
+      }
+
+      case 'testServer': {
+        const { name } = message;
+        try {
+          const globalData = await McpConfigService.getGlobalData();
+          const serverConfig = globalData.config.mcpServers && globalData.config.mcpServers[name];
+
+          if (!serverConfig) {
+            throw new Error(`找不到伺服器設定：${name}`);
+          }
+
+          const result = await ProbeService.testServerConnection(serverConfig);
+          const responseMsg = { type: 'testResult', name, result };
+          if (this._view) this._view.webview.postMessage(responseMsg);
+          if (this._panel) this._panel.webview.postMessage(responseMsg);
+        } catch (err) {
+          const responseMsg = { type: 'testResult', name, result: { ok: false, message: err.message } };
+          if (this._view) this._view.webview.postMessage(responseMsg);
+          if (this._panel) this._panel.webview.postMessage(responseMsg);
+        }
+        break;
+      }
+
+      case 'showInfo': {
+        vscode.window.showInformationMessage(message.message);
+        break;
+      }
+
+      case 'showError': {
+        vscode.window.showErrorMessage(message.message);
+        break;
+      }
+    }
+  }
+
   pushToast(message, status = 'info') {
+    const payload = { type: 'toast', payload: { message, status } };
     if (this._view) {
-      this._view.webview.postMessage({ type: 'toast', payload: { message, status } });
+      this._view.webview.postMessage(payload);
+    }
+    if (this._panel) {
+      this._panel.webview.postMessage(payload);
     }
   }
 
@@ -151,25 +216,24 @@ class MCPManagerViewProvider {
         this._statusBarItem.show();
       }
 
-      // 推送最新完整資料至 Webview 前端
+      // 推送最新完整資料至 Webview 前端 (同時廣播至側邊欄與編輯分頁)
+      const updatePayload = {
+        type: 'updateAllData',
+        payload: {
+          global: globalData,
+        },
+      };
       if (this._view) {
-        this._view.webview.postMessage({
-          type: 'updateAllData',
-          payload: {
-            global: globalData,
-          },
-        });
+        this._view.webview.postMessage(updatePayload);
+      }
+      if (this._panel) {
+        this._panel.webview.postMessage(updatePayload);
       }
     } catch (err) {
       console.error('MCP Manager Data Refresh Error:', err);
-      if (this._view) {
-        this._view.webview.postMessage({
-          type: 'error',
-          message: err.message,
-        });
-      } else {
-        vscode.window.showErrorMessage(`MCP 狀態更新失敗: ${err.message}`);
-      }
+      const errorPayload = { type: 'error', message: err.message };
+      if (this._view) this._view.webview.postMessage(errorPayload);
+      if (this._panel) this._panel.webview.postMessage(errorPayload);
     }
   }
 
@@ -212,6 +276,9 @@ async function activate(context) {
 
   // 註冊 VS Code 指令
   context.subscriptions.push(
+    vscode.commands.registerCommand('antigravity.mcp.openInEditor', async () => {
+      await provider.openInEditor();
+    }),
     vscode.commands.registerCommand('antigravity.mcp.refresh', async () => {
       await provider.refreshWebviewData();
       provider.pushToast('狀態已重新整理', 'info');

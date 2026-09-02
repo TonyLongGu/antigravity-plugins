@@ -1,170 +1,165 @@
 {
-  "name": "antigravity-quick-access",
-  "displayName": "Antigravity 常用捷徑與暫存清單 (Quick Access)",
-  "description": "Google Antigravity IDE 檔案總管專屬快速存取與暫存視窗：支援滑鼠拖曳引用至 Chat 對話框與編輯器、檔案與資料夾樹狀展開、雙擊開啟、右鍵一鍵加入、工作區隱藏連動過濾與持久化儲存",
-  "version": "1.1.0",
-  "publisher": "antigravity-toolkit",
-  "engines": {
-    "vscode": "^1.80.0"
-  },
-  "categories": [
-    "Other"
-  ],
-  "main": "./extension.js",
-  "activationEvents": [
-    "onView:antigravity.quickAccessView",
-    "onCommand:antigravity.quickAccess.add",
-    "onCommand:antigravity.quickAccess.addPinned",
-    "onCommand:antigravity.quickAccess.addActive"
-  ],
-  "contributes": {
-    "views": {
-      "explorer": [
-        {
-          "id": "antigravity.quickAccessView",
-          "name": "常用捷徑與暫存清單",
-          "type": "tree",
-          "order": 1
-        }
-      ]
-    },
-    "viewsWelcome": [
-      {
-        "view": "antigravity.quickAccessView",
-        "contents": "目前尚未加入任何暫存項目。可於檔案總管對任意檔案或資料夾按右鍵加入暫存清單。"
-      }
-    ],
-    "commands": [
-      {
-        "command": "antigravity.quickAccess.add",
-        "title": "加入暫存清單 (Scratchpad)",
-        "category": "Quick Access",
-        "icon": "$(bookmark)"
-      },
-      {
-        "command": "antigravity.quickAccess.addPinned",
-        "title": "加入常規釘選 (Pinned)",
-        "category": "Quick Access",
-        "icon": "$(pinned)"
-      },
-      {
-        "command": "antigravity.quickAccess.addActive",
-        "title": "加入目前開啟的檔案",
-        "category": "Quick Access",
-        "icon": "$(add)"
-      },
-      {
-        "command": "antigravity.quickAccess.remove",
-        "title": "從清單移除",
-        "category": "Quick Access",
-        "icon": "$(close)"
-      },
-      {
-        "command": "antigravity.quickAccess.togglePin",
-        "title": "切換 釘選 / 臨時",
-        "category": "Quick Access",
-        "icon": "$(pin)"
-      },
-      {
-        "command": "antigravity.quickAccess.clearScratchpad",
-        "title": "清空臨時暫存清單",
-        "category": "Quick Access",
-        "icon": "$(clear-all)"
-      },
-      {
-        "command": "antigravity.quickAccess.refresh",
-        "title": "重新整理",
-        "category": "Quick Access",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "antigravity.quickAccess.revealInExplorer",
-        "title": "在檔案總管中標示",
-        "category": "Quick Access",
-        "icon": "$(list-tree)"
-      },
-      {
-        "command": "antigravity.quickAccess.revealInOS",
-        "title": "在系統檔案總管開啟",
-        "category": "Quick Access",
-        "icon": "$(folder-opened)"
-      }
-    ],
-    "menus": {
-      "view/title": [
-        {
-          "command": "antigravity.quickAccess.addActive",
-          "when": "view == antigravity.quickAccessView",
-          "group": "navigation@1"
-        },
-        {
-          "command": "antigravity.quickAccess.clearScratchpad",
-          "when": "view == antigravity.quickAccessView",
-          "group": "navigation@2"
-        },
-        {
-          "command": "antigravity.quickAccess.refresh",
-          "when": "view == antigravity.quickAccessView",
-          "group": "navigation@3"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "antigravity.quickAccess.togglePin",
-          "when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder)/",
-          "group": "inline@1"
-        },
-        {
-          "command": "antigravity.quickAccess.remove",
-          "when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder)/",
-          "group": "inline@2"
-        },
-        {
-          "command": "antigravity.quickAccess.revealInExplorer",
-          "when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/",
-          "group": "1_reveal@1"
-        },
-        {
-          "command": "antigravity.quickAccess.revealInOS",
-          "when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/",
-          "group": "1_reveal@2"
-        },
-        {
-          "command": "antigravity.quickAccess.remove",
-          "when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder)/",
-          "group": "2_manage@1"
-        }
-      ],
-      "explorer/context": [
-        {
-          "command": "antigravity.quickAccess.add",
-          "group": "zzz_quickaccess@1"
-        },
-        {
-          "command": "antigravity.quickAccess.addPinned",
-          "group": "zzz_quickaccess@2"
-        }
-      ],
-      "editor/title/context": [
-        {
-          "command": "antigravity.quickAccess.add",
-          "group": "zzz_quickaccess@1"
-        },
-        {
-          "command": "antigravity.quickAccess.addPinned",
-          "group": "zzz_quickaccess@2"
-        }
-      ]
-    }
-  },
-  "author": "TonyLongGu",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/TonyLongGu/antigravity-quick-access.git"
-  },
-  "bugs": {
-    "url": "https://github.com/TonyLongGu/antigravity-quick-access/issues"
-  },
-  "homepage": "https://github.com/TonyLongGu/antigravity-quick-access#readme"
+	"name": "antigravity-quick-access",
+	"displayName": "Antigravity 常用捷徑與暫存清單 (Quick Access)",
+	"description": "Google Antigravity IDE 檔案總管專屬快速存取與暫存視窗：支援滑鼠拖曳引用至 Chat 對話框與編輯器、檔案與資料夾樹狀展開、雙擊開啟、右鍵一鍵加入、工作區隱藏連動過濾與持久化儲存",
+	"version": "1.2.0",
+	"publisher": "antigravity-toolkit",
+	"engines": {
+		"vscode": "^1.80.0"
+	},
+	"categories": [
+		"Other"
+	],
+	"main": "./extension.js",
+	"activationEvents": [
+		"onView:antigravity.quickAccessView",
+		"onCommand:antigravity.quickAccess.add",
+		"onCommand:antigravity.quickAccess.addPinned",
+		"onCommand:antigravity.quickAccess.addActive"
+	],
+	"contributes": {
+		"views": {
+			"explorer": [
+				{
+					"id": "antigravity.quickAccessView",
+					"name": "常用捷徑與暫存清單",
+					"type": "tree",
+					"order": 1
+				}
+			]
+		},
+		"viewsWelcome": [
+			{
+				"view": "antigravity.quickAccessView",
+				"contents": "目前尚未加入任何暫存項目。可於檔案總管對任意檔案或資料夾按右鍵加入暫存清單。"
+			}
+		],
+		"commands": [
+			{
+				"command": "antigravity.quickAccess.add",
+				"title": "加入暫存清單 (Scratchpad)",
+				"category": "Quick Access",
+				"icon": "$(bookmark)"
+			},
+			{
+				"command": "antigravity.quickAccess.addPinned",
+				"title": "加入常規釘選 (Pinned)",
+				"category": "Quick Access",
+				"icon": "$(pinned)"
+			},
+			{
+				"command": "antigravity.quickAccess.addActive",
+				"title": "加入目前開啟的檔案",
+				"category": "Quick Access",
+				"icon": "$(add)"
+			},
+			{
+				"command": "antigravity.quickAccess.remove",
+				"title": "從清單移除",
+				"category": "Quick Access",
+				"icon": "$(close)"
+			},
+			{
+				"command": "antigravity.quickAccess.togglePin",
+				"title": "切換 釘選 / 臨時",
+				"category": "Quick Access",
+				"icon": "$(pin)"
+			},
+			{
+				"command": "antigravity.quickAccess.clearScratchpad",
+				"title": "清空臨時暫存清單",
+				"category": "Quick Access",
+				"icon": "$(clear-all)"
+			},
+			{
+				"command": "antigravity.quickAccess.refresh",
+				"title": "重新整理",
+				"category": "Quick Access",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "antigravity.quickAccess.revealInExplorer",
+				"title": "在檔案總管中標示",
+				"category": "Quick Access",
+				"icon": "$(list-tree)"
+			},
+			{
+				"command": "antigravity.quickAccess.revealInOS",
+				"title": "在系統檔案總管開啟",
+				"category": "Quick Access",
+				"icon": "$(folder-opened)"
+			}
+		],
+		"menus": {
+			"view/title": [
+				{
+					"command": "antigravity.quickAccess.addActive",
+					"when": "view == antigravity.quickAccessView",
+					"group": "navigation@1"
+				},
+				{
+					"command": "antigravity.quickAccess.clearScratchpad",
+					"when": "view == antigravity.quickAccessView",
+					"group": "navigation@2"
+				},
+				{
+					"command": "antigravity.quickAccess.refresh",
+					"when": "view == antigravity.quickAccessView",
+					"group": "navigation@3"
+				}
+			],
+			"view/item/context": [
+				{
+					"command": "antigravity.quickAccess.togglePin",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/",
+					"group": "inline@1"
+				},
+				{
+					"command": "antigravity.quickAccess.remove",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder)/",
+					"group": "inline@2"
+				},
+				{
+					"command": "antigravity.quickAccess.revealInExplorer",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/",
+					"group": "1_reveal@1"
+				},
+				{
+					"command": "antigravity.quickAccess.revealInOS",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/",
+					"group": "1_reveal@2"
+				},
+				{
+					"command": "antigravity.quickAccess.togglePin",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/",
+					"group": "2_manage@1"
+				},
+				{
+					"command": "antigravity.quickAccess.remove",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder)/",
+					"group": "2_manage@2"
+				}
+			],
+			"explorer/context": [
+				{
+					"command": "antigravity.quickAccess.add",
+					"group": "zzz_quickaccess@1"
+				},
+				{
+					"command": "antigravity.quickAccess.addPinned",
+					"group": "zzz_quickaccess@2"
+				}
+			],
+			"editor/title/context": [
+				{
+					"command": "antigravity.quickAccess.add",
+					"group": "zzz_quickaccess@1"
+				},
+				{
+					"command": "antigravity.quickAccess.addPinned",
+					"group": "zzz_quickaccess@2"
+				}
+			]
+		}
+	}
 }

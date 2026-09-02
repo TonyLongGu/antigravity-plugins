@@ -190,11 +190,12 @@ async function toggleExplorerSetting(settingKey, provider) {
   try {
     if (settingKey === 'hideGitignore') {
       const current = { ...(filesConfig.get('exclude') || {}) };
-      const nextVal = !current['**/.gitignore'];
+      const isCurrentlyHidden = !!current['**/.gitignore'];
+      const nextVal = !isCurrentlyHidden;
       if (nextVal) {
         current['**/.gitignore'] = true;
       } else {
-        delete current['**/.gitignore'];
+        current['**/.gitignore'] = false;
       }
       await filesConfig.update('exclude', current, vscode.ConfigurationTarget.Global);
       if (provider) provider.pushToast(nextVal ? '已在檔案總管中隱藏 .gitignore' : '已在檔案總管中顯示 .gitignore', 'info');
@@ -205,27 +206,29 @@ async function toggleExplorerSetting(settingKey, provider) {
       if (provider) provider.pushToast(nextVal ? '已隱藏 Git 忽略之檔案' : '已顯示 Git 忽略之檔案', 'info');
     } else if (settingKey === 'hideSystemJunk') {
       const current = { ...(filesConfig.get('exclude') || {}) };
-      const nextVal = !(current['**/Thumbs.db'] && current['**/.DS_Store']);
+      const isCurrentlyHidden = !!(current['**/Thumbs.db'] || current['**/.DS_Store']);
+      const nextVal = !isCurrentlyHidden;
       if (nextVal) {
         current['**/Thumbs.db'] = true;
         current['**/.DS_Store'] = true;
         current['**/desktop.ini'] = true;
       } else {
-        delete current['**/Thumbs.db'];
-        delete current['**/.DS_Store'];
-        delete current['**/desktop.ini'];
+        current['**/Thumbs.db'] = false;
+        current['**/.DS_Store'] = false;
+        current['**/desktop.ini'] = false;
       }
       await filesConfig.update('exclude', current, vscode.ConfigurationTarget.Global);
       if (provider) provider.pushToast(nextVal ? '已隱藏系統雜項 (Thumbs.db, .DS_Store)' : '已顯示系統雜項', 'info');
     } else if (settingKey === 'hidePythonCache') {
       const current = { ...(filesConfig.get('exclude') || {}) };
-      const nextVal = !(current['**/__pycache__'] && current['**/*.pyc']);
+      const isCurrentlyHidden = !!(current['**/__pycache__'] || current['**/*.pyc']);
+      const nextVal = !isCurrentlyHidden;
       if (nextVal) {
         current['**/__pycache__'] = true;
         current['**/*.pyc'] = true;
       } else {
-        delete current['**/__pycache__'];
-        delete current['**/*.pyc'];
+        current['**/__pycache__'] = false;
+        current['**/*.pyc'] = false;
       }
       await filesConfig.update('exclude', current, vscode.ConfigurationTarget.Global);
       if (provider) provider.pushToast(nextVal ? '已隱藏 Python 快取 (__pycache__)' : '已顯示 Python 快取', 'info');
