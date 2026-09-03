@@ -375,6 +375,16 @@ function activate(context) {
       }
     })
   );
+
+  // 11. 監聽 IDE 視窗聚焦狀態變更 (例如外部拖曳排序或切換視窗後返回)
+  context.subscriptions.push(
+    vscode.window.onDidChangeWindowState((state) => {
+      if (state.focused) {
+        workspaceService.invalidateWorkspaceCache();
+        provider.pushStatus(100);
+      }
+    })
+  );
 }
 
 function deactivate() {}

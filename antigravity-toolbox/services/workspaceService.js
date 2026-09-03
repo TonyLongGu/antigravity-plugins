@@ -30,12 +30,18 @@ function loadWorkspaceContext(provider = null, forceReload = false) {
   const wsDir = path.dirname(wsPath);
   const wsName = path.basename(wsPath);
 
-  // 若記憶體中有快取且未要求強制重讀，直接回傳最新記憶體快照
-  if (!forceReload && cachedWorkspaceContext && cachedWorkspaceContext.wsPath === wsPath) {
-    return cachedWorkspaceContext;
-  }
-
   try {
+    const stat = fs.statSync(wsPath);
+    // 若記憶體中有快取且檔案未被外部修改 (mtimeMs 一致) 且未要求強制重讀，直接回傳最新記憶體快照
+    if (
+      !forceReload &&
+      cachedWorkspaceContext &&
+      cachedWorkspaceContext.wsPath === wsPath &&
+      cachedWorkspaceContext.mtimeMs === stat.mtimeMs
+    ) {
+      return cachedWorkspaceContext;
+    }
+
     const raw = fs.readFileSync(wsPath, 'utf-8');
     const json = safeJsonParse(raw, null);
     if (!json || typeof json !== 'object') {
@@ -45,7 +51,7 @@ function loadWorkspaceContext(provider = null, forceReload = false) {
     if (!Array.isArray(json.folders)) json.folders = [];
     if (!Array.isArray(json.disabledFolders)) json.disabledFolders = [];
 
-    cachedWorkspaceContext = { wsPath, wsDir, wsName, json };
+    cachedWorkspaceContext = { wsPath, wsDir, wsName, json, mtimeMs: stat.mtimeMs };
     return cachedWorkspaceContext;
   } catch (err) {
     if (provider?.pushToast) provider.pushToast(`讀取工作區失敗：${err.message}`, 'error');
@@ -67,6 +73,12 @@ function saveWorkspaceJson(wsPath, json, immediate = false) {
   const doWrite = () => {
     try {
       fs.writeFileSync(wsPath, JSON.stringify(json, null, 2), 'utf-8');
+      try {
+        const stat = fs.statSync(wsPath);
+        if (cachedWorkspaceContext && cachedWorkspaceContext.wsPath === wsPath) {
+          cachedWorkspaceContext.mtimeMs = stat.mtimeMs;
+        }
+      } catch {}
     } catch (err) {
       console.error('寫入 .code-workspace 失敗:', err);
     }
@@ -90,13 +102,16 @@ function saveWorkspaceJson(wsPath, json, immediate = false) {
 }
 
 /**
- * 同步與維護工作區專案的原始順序列表 (自動過濾已移除的幽靈路徑)
+ * 同步與維護工作區專案的原始順序列表 (自動過濾已移除的幽靈路徑，並與檔案總管最新順序雙向對齊)
  * @param {object} json .code-workspace JSON 物件
  * @param {string} wsDir 工作區目錄路徑
- * @returns {string[]} 標準化專案路徑順序陣列
+ * @returns {string[] & { hasChanged: boolean }} 標準化專案路徑順序陣列與變更狀態
  */
 function syncFolderOrder(json, wsDir) {
-  const existingItems = [...json.folders, ...json.disabledFolders];
+  const folders = Array.isArray(json.folders) ? json.folders : [];
+  const disabledFolders = Array.isArray(json.disabledFolders) ? json.disabledFolders : [];
+  const existingItems = [...folders, ...disabledFolders];
+
   const activeCanonSet = new Set(
     existingItems.map((item) => getCanonicalPath(item.path || '', wsDir).toLowerCase())
   );
@@ -104,6 +119,7 @@ function syncFolderOrder(json, wsDir) {
   const rawOrder = Array.isArray(json.folderOrder) ? json.folderOrder : [];
   const orderList = [];
   const recordedCanon = new Set();
+  let hasPrunedOrAdded = false;
 
   // 1. 保留依然存在於工作區中的既有排序項目（過濾幽靈路徑）
   rawOrder.forEach((p) => {
@@ -111,6 +127,8 @@ function syncFolderOrder(json, wsDir) {
     if (activeCanonSet.has(canon) && !recordedCanon.has(canon)) {
       orderList.push(p);
       recordedCanon.add(canon);
+    } else {
+      hasPrunedOrAdded = true;
     }
   });
 
@@ -121,9 +139,53 @@ function syncFolderOrder(json, wsDir) {
     if (!recordedCanon.has(canon)) {
       orderList.push(p);
       recordedCanon.add(canon);
+      hasPrunedOrAdded = true;
     }
   });
 
+  // 3. 雙向動態對齊：檢測並同步外部（如 VS Code 檔案總管拖曳）對啟用中專案 (folders) 順序的變更
+  const activeFoldersCanonMap = new Map();
+  const activeFoldersCanons = [];
+  folders.forEach((f) => {
+    const canon = getCanonicalPath(f.path || '', wsDir).toLowerCase();
+    activeFoldersCanonMap.set(canon, f.path || '');
+    activeFoldersCanons.push(canon);
+  });
+
+  // 找出 orderList 中所有屬於啟用中專案的槽位索引與其當前順序
+  const activeIndicesInOrder = [];
+  const activeCanonsInOrder = [];
+  orderList.forEach((p, idx) => {
+    const canon = getCanonicalPath(p || '', wsDir).toLowerCase();
+    if (activeFoldersCanonMap.has(canon)) {
+      activeIndicesInOrder.push(idx);
+      activeCanonsInOrder.push(canon);
+    }
+  });
+
+  // 比對 orderList 內的啟用專案子序列是否與 folders 的順序一致
+  let hasSequenceDiff = false;
+  if (activeCanonsInOrder.length === activeFoldersCanons.length) {
+    for (let i = 0; i < activeFoldersCanons.length; i++) {
+      if (activeCanonsInOrder[i] !== activeFoldersCanons[i]) {
+        hasSequenceDiff = true;
+        break;
+      }
+    }
+  } else {
+    hasSequenceDiff = true;
+  }
+
+  // 若發現外部檔案總管調整了啟用中專案的順序，將這些專案的槽位重新對齊為 folders 的最新排列
+  if (hasSequenceDiff && activeIndicesInOrder.length === activeFoldersCanons.length) {
+    activeIndicesInOrder.forEach((slotIdx, i) => {
+      const canon = activeFoldersCanons[i];
+      orderList[slotIdx] = activeFoldersCanonMap.get(canon);
+    });
+  }
+
+  const hasChanged = hasPrunedOrAdded || hasSequenceDiff;
+  orderList.hasChanged = hasChanged;
   json.folderOrder = orderList;
   return orderList;
 }
@@ -219,6 +281,9 @@ function analyzeWorkspace() {
 
   const { wsPath, wsDir, wsName, json } = ctx;
   const orderList = syncFolderOrder(json, wsDir);
+  if (orderList.hasChanged) {
+    saveWorkspaceJson(wsPath, json);
+  }
   const comparator = createFolderComparator(orderList, wsDir);
 
   const parseFolderList = (list, isEnabled, source) => {

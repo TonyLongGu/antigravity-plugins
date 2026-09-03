@@ -1031,6 +1031,11 @@
         }
       });
 
+      // 6.1 視窗聚焦時自動校驗並刷新狀態 (確保在 IDE 檔案總管拖曳排序後切換至控制中心時即刻同步)
+      window.addEventListener('focus', () => {
+        vscode.postMessage({ type: 'fetchStatus' });
+      });
+
       // 7. 初次載入請求狀態
       vscode.postMessage({ type: 'fetchStatus' });
     },
