@@ -826,7 +826,131 @@
   };
 
   // ============================================================================
-  // 5. 頂部通用控制與訊息轉發分發器 (App Core Orchestrator)
+  // 6. 全域滑鼠右鍵平滑拖曳滾動模組 (RMB Drag Scroll Module)
+  // ============================================================================
+  const DragScrollModule = {
+    init() {
+      let isRmbDown = false;
+      let hasDragged = false;
+      let startY = 0;
+      let lastY = 0;
+      let accumulatedDeltaY = 0;
+      let rafId = null;
+      // 移動距離調整為 3 倍（由基準 1.2x 提升至 3.6x，極速大跨度捲動）
+      const speed = 3.6;
+
+      const flushScroll = () => {
+        if (accumulatedDeltaY !== 0) {
+          const curScroll = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+          // 抓手平移模式：滑鼠往上推 (accumulatedDeltaY < 0) -> 頁面向下捲動 (nextScroll 增加)
+          const nextScroll = curScroll - accumulatedDeltaY * speed;
+          window.scrollTo(0, nextScroll);
+          if (document.documentElement) document.documentElement.scrollTop = nextScroll;
+          if (document.body) document.body.scrollTop = nextScroll;
+          accumulatedDeltaY = 0;
+        }
+        rafId = null;
+      };
+
+      const endDrag = () => {
+        if (isRmbDown) {
+          isRmbDown = false;
+          if (rafId) {
+            cancelAnimationFrame(rafId);
+            flushScroll();
+          }
+          document.body.classList.remove('is-rmb-dragging');
+        }
+      };
+
+      // 1. 監聽滑鼠按下 (mousedown)
+      window.addEventListener('mousedown', (e) => {
+        // 僅響應滑鼠右鍵 (button === 2)
+        if (e.button !== 2) return;
+
+        // 防禦性檢查：若點擊在輸入框或文字編輯區，保留原生右鍵行為（避免 target 非 Element 引發報錯）
+        if (e.target && typeof e.target.closest === 'function' && e.target.closest('input, textarea, select, [contenteditable="true"]')) {
+          return;
+        }
+
+        isRmbDown = true;
+        hasDragged = false;
+        startY = e.clientY;
+        lastY = e.clientY;
+        accumulatedDeltaY = 0;
+      });
+
+      // 2. 監聽滑鼠移動 (mousemove)
+      window.addEventListener('mousemove', (e) => {
+        if (!isRmbDown) return;
+
+        // 檢查右鍵是否仍在按壓狀態（防呆：游標在外部放開後移回）
+        if ((e.buttons & 2) === 0) {
+          endDrag();
+          return;
+        }
+
+        const currentY = e.clientY;
+        const totalDeltaFromStart = currentY - startY;
+
+        // 移動超過 3px 視為拖曳意圖，防止原地右鍵點擊誤觸
+        if (!hasDragged && Math.abs(totalDeltaFromStart) > 3) {
+          hasDragged = true;
+          document.body.classList.add('is-rmb-dragging');
+          lastY = currentY;
+        }
+
+        if (hasDragged) {
+          e.preventDefault();
+          const stepDelta = currentY - lastY;
+          lastY = currentY;
+
+          accumulatedDeltaY += stepDelta;
+          if (!rafId) {
+            rafId = requestAnimationFrame(flushScroll);
+          }
+        }
+      });
+
+      // 3. 監聽滑鼠放開 (mouseup)
+      window.addEventListener('mouseup', (e) => {
+        if (e.button === 2) {
+          endDrag();
+          // 防禦性超時重設：若極端情況下 contextmenu 未能觸發，確保 hasDragged 在 150ms 內安全解除
+          if (hasDragged) {
+            setTimeout(() => {
+              hasDragged = false;
+            }, 150);
+          }
+        }
+      });
+
+      // 4. 視窗失去焦點時重設狀態
+      window.addEventListener('blur', () => {
+        endDrag();
+        hasDragged = false;
+      });
+
+      // 5. 攔截右鍵選單 (contextmenu)
+      // 若曾經發生拖曳，立即阻止彈出右鍵選單；若為原地單擊則不干擾
+      window.addEventListener(
+        'contextmenu',
+        (e) => {
+          if (hasDragged) {
+            e.preventDefault();
+            e.stopPropagation();
+            setTimeout(() => {
+              hasDragged = false;
+            }, 50);
+          }
+        },
+        true
+      );
+    },
+  };
+
+  // ============================================================================
+  // 7. 頂部通用控制與訊息轉發分發器 (App Core Orchestrator)
   // ============================================================================
   const App = {
     init() {
@@ -880,6 +1004,7 @@
       NavigationModule.init();
       SettingsModule.init();
       BrainModule.init();
+      DragScrollModule.init();
 
       // 6. 監聽後端 Extension Host 推送訊息
       window.addEventListener('message', (event) => {
