@@ -40,7 +40,7 @@
 ### 方式二：本機手動雙擊安裝
 
 1. 下載或 Clone 本倉庫至本地任意目錄（例如 `D:\antigravity-plugins`）。
-2. **安裝全部套件**：雙擊根目錄下的 `雙擊一鍵安裝.bat`。
+2. **安裝全部套件**：雙擊根目錄下的 `install-all.bat`（或以 PowerShell 執行 `install-all.ps1`）。
 3. **單獨安裝特定套件**：進入該套件資料夾（例如 `antigravity-toolbox/`），雙擊其內部的 `install-extension.bat`。
 4. 在 Antigravity IDE 中按 `Ctrl + Shift + P`，輸入並執行 **`Developer: Reload Window`** 即可立即生效！
 
@@ -48,7 +48,7 @@
 
 ## 🧹 解除安裝
 
-- **全套一鍵卸載**：雙擊根目錄下的 `雙擊一鍵卸載.bat`。
+- **全套一鍵卸載**：雙擊根目錄下的 `uninstall-all.bat`（或以 PowerShell 執行 `uninstall-all.ps1`）。
 - **單獨卸載**：進入特定套件目錄雙擊 `uninstall-extension.bat`。
 - 卸載後執行 `Developer: Reload Window` 即可乾淨無痕移除。
 
