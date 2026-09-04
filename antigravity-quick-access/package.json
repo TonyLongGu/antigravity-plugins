@@ -2,7 +2,7 @@
 	"name": "antigravity-quick-access",
 	"displayName": "Antigravity 常用捷徑與暫存清單 (Quick Access)",
 	"description": "Google Antigravity IDE 檔案總管專屬快速存取與暫存視窗：支援滑鼠拖曳引用至 Chat 對話框與編輯器、檔案與資料夾樹狀展開、雙擊開啟、右鍵一鍵加入、工作區隱藏連動過濾與持久化儲存",
-	"version": "1.2.0",
+	"version": "1.2.2",
 	"publisher": "antigravity-toolkit",
 	"engines": {
 		"vscode": "^1.80.0"
@@ -88,76 +88,199 @@
 				"title": "在系統檔案總管開啟",
 				"category": "Quick Access",
 				"icon": "$(folder-opened)"
+			},
+			{
+				"command": "antigravity.quickAccess.add.en",
+				"title": "Add to Scratchpad",
+				"category": "Quick Access",
+				"icon": "$(bookmark)"
+			},
+			{
+				"command": "antigravity.quickAccess.addPinned.en",
+				"title": "Add to Pinned",
+				"category": "Quick Access",
+				"icon": "$(pinned)"
+			},
+			{
+				"command": "antigravity.quickAccess.addActive.en",
+				"title": "Add Active File",
+				"category": "Quick Access",
+				"icon": "$(add)"
+			},
+			{
+				"command": "antigravity.quickAccess.remove.en",
+				"title": "Remove from List",
+				"category": "Quick Access",
+				"icon": "$(close)"
+			},
+			{
+				"command": "antigravity.quickAccess.togglePin.en",
+				"title": "Toggle Pinned / Scratchpad",
+				"category": "Quick Access",
+				"icon": "$(pin)"
+			},
+			{
+				"command": "antigravity.quickAccess.clearScratchpad.en",
+				"title": "Clear Scratchpad",
+				"category": "Quick Access",
+				"icon": "$(clear-all)"
+			},
+			{
+				"command": "antigravity.quickAccess.refresh.en",
+				"title": "Refresh",
+				"category": "Quick Access",
+				"icon": "$(refresh)"
+			},
+			{
+				"command": "antigravity.quickAccess.revealInExplorer.en",
+				"title": "Reveal in Explorer",
+				"category": "Quick Access",
+				"icon": "$(list-tree)"
+			},
+			{
+				"command": "antigravity.quickAccess.revealInOS.en",
+				"title": "Reveal in File Explorer",
+				"category": "Quick Access",
+				"icon": "$(folder-opened)"
 			}
 		],
 		"menus": {
 			"view/title": [
 				{
 					"command": "antigravity.quickAccess.addActive",
-					"when": "view == antigravity.quickAccessView",
+					"when": "view == antigravity.quickAccessView && config.antigravity.locale != 'en'",
+					"group": "navigation@1"
+				},
+				{
+					"command": "antigravity.quickAccess.addActive.en",
+					"when": "view == antigravity.quickAccessView && config.antigravity.locale == 'en'",
 					"group": "navigation@1"
 				},
 				{
 					"command": "antigravity.quickAccess.clearScratchpad",
-					"when": "view == antigravity.quickAccessView",
+					"when": "view == antigravity.quickAccessView && config.antigravity.locale != 'en'",
+					"group": "navigation@2"
+				},
+				{
+					"command": "antigravity.quickAccess.clearScratchpad.en",
+					"when": "view == antigravity.quickAccessView && config.antigravity.locale == 'en'",
 					"group": "navigation@2"
 				},
 				{
 					"command": "antigravity.quickAccess.refresh",
-					"when": "view == antigravity.quickAccessView",
+					"when": "view == antigravity.quickAccessView && config.antigravity.locale != 'en'",
+					"group": "navigation@3"
+				},
+				{
+					"command": "antigravity.quickAccess.refresh.en",
+					"when": "view == antigravity.quickAccessView && config.antigravity.locale == 'en'",
 					"group": "navigation@3"
 				}
 			],
 			"view/item/context": [
 				{
 					"command": "antigravity.quickAccess.togglePin",
-					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale != 'en'",
+					"group": "inline@1"
+				},
+				{
+					"command": "antigravity.quickAccess.togglePin.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale == 'en'",
 					"group": "inline@1"
 				},
 				{
 					"command": "antigravity.quickAccess.remove",
-					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder)/",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder)/ && config.antigravity.locale != 'en'",
+					"group": "inline@2"
+				},
+				{
+					"command": "antigravity.quickAccess.remove.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder)/ && config.antigravity.locale == 'en'",
 					"group": "inline@2"
 				},
 				{
 					"command": "antigravity.quickAccess.revealInExplorer",
-					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale != 'en'",
+					"group": "1_reveal@1"
+				},
+				{
+					"command": "antigravity.quickAccess.revealInExplorer.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale == 'en'",
 					"group": "1_reveal@1"
 				},
 				{
 					"command": "antigravity.quickAccess.revealInOS",
-					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale != 'en'",
+					"group": "1_reveal@2"
+				},
+				{
+					"command": "antigravity.quickAccess.revealInOS.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale == 'en'",
 					"group": "1_reveal@2"
 				},
 				{
 					"command": "antigravity.quickAccess.togglePin",
-					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale != 'en'",
+					"group": "2_manage@1"
+				},
+				{
+					"command": "antigravity.quickAccess.togglePin.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale == 'en'",
 					"group": "2_manage@1"
 				},
 				{
 					"command": "antigravity.quickAccess.remove",
-					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder)/",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder)/ && config.antigravity.locale != 'en'",
+					"group": "2_manage@2"
+				},
+				{
+					"command": "antigravity.quickAccess.remove.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder)/ && config.antigravity.locale == 'en'",
 					"group": "2_manage@2"
 				}
 			],
 			"explorer/context": [
 				{
 					"command": "antigravity.quickAccess.add",
-					"group": "zzz_quickaccess@1"
+					"group": "zzz_quickaccess@1",
+					"when": "config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "antigravity.quickAccess.add.en",
+					"group": "zzz_quickaccess@1",
+					"when": "config.antigravity.locale == 'en'"
 				},
 				{
 					"command": "antigravity.quickAccess.addPinned",
-					"group": "zzz_quickaccess@2"
+					"group": "zzz_quickaccess@2",
+					"when": "config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "antigravity.quickAccess.addPinned.en",
+					"group": "zzz_quickaccess@2",
+					"when": "config.antigravity.locale == 'en'"
 				}
 			],
 			"editor/title/context": [
 				{
 					"command": "antigravity.quickAccess.add",
-					"group": "zzz_quickaccess@1"
+					"group": "zzz_quickaccess@1",
+					"when": "config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "antigravity.quickAccess.add.en",
+					"group": "zzz_quickaccess@1",
+					"when": "config.antigravity.locale == 'en'"
 				},
 				{
 					"command": "antigravity.quickAccess.addPinned",
-					"group": "zzz_quickaccess@2"
+					"group": "zzz_quickaccess@2",
+					"when": "config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "antigravity.quickAccess.addPinned.en",
+					"group": "zzz_quickaccess@2",
+					"when": "config.antigravity.locale == 'en'"
 				}
 			]
 		}

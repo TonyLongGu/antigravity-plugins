@@ -3,6 +3,7 @@ const quotaService = require('./services/quotaService');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const I18n = require('./i18n');
 
 const UNLIMITED = -1; // 與 quotaService.js 一致：付費版 Gemini 無限額度
 const STATUS_ICON = '$(sparkle)'; // 狀態列前綴圖示，可自由改為 $(flame)、$(zap)、$(sparkle)、$(plug)、$(chip) 等
@@ -25,6 +26,7 @@ let extContext = null;
 let statusBarItem = null;
 let pollTimer = null;
 let sentinelWatcher = null;
+let i18n = null;
 
 // Sentinel 檔案路徑（由全域 hooks.json Stop Hook 寫入）
 const SENTINEL_FILE = path.join(os.homedir(), '.gemini', 'antigravity-ide', 'quota-refresh.trigger');
@@ -35,6 +37,8 @@ const SENTINEL_FILE = path.join(os.homedir(), '.gemini', 'antigravity-ide', 'quo
  */
 function activate(context) {
   extContext = context;
+  i18n = new I18n(context.extensionUri);
+
   // 1. 建立狀態列項目
   const config = vscode.workspace.getConfiguration('aiQuota');
   const alignment = config.get('alignment', 'right') === 'left'
@@ -46,7 +50,7 @@ function activate(context) {
   statusBarItem.command = 'aiQuota.showMenu';
   statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
   statusBarItem.color = undefined;
-  statusBarItem.text = `${STATUS_ICON} AI 額度: 檢測中...`;
+  statusBarItem.text = `${STATUS_ICON} ${i18n.t('status_checking')}`;
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
@@ -54,9 +58,9 @@ function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand('aiQuota.refresh', async () => {
       statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-      statusBarItem.text = `${STATUS_ICON} AI 額度: 刷新中...`;
+      statusBarItem.text = `${STATUS_ICON} ${i18n.t('status_refreshing')}`;
       await updateStatusBar(true);
-      vscode.window.setStatusBarMessage('已重新整理 AI 模型額度狀態。', 2500);
+      vscode.window.setStatusBarMessage(i18n.t('toast_refreshed'), 2500);
     })
   );
 
@@ -102,11 +106,14 @@ function activate(context) {
     })
   );
 
-  // 5. 監聽使用者設定變更
+  // 5. 監聽使用者設定變更與全域語言變更 (即時聯動)
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('aiQuota')) {
         setupTimer();
+        updateStatusBar(false);
+      }
+      if (e.affectsConfiguration('antigravity.locale')) {
         updateStatusBar(false);
       }
     })
@@ -158,6 +165,64 @@ function setupSentinelWatcher(context) {
     // sentinel watcher 失敗不影響主要功能，仍有背景輪詢兜底
     console.warn('[AI 額度] sentinel watcher 初始化失敗:', err.message);
   }
+}
+
+/**
+ * 格式化重置倒數時間 (支援多國語言)
+ * @param {string|null} resetTimeIso
+ * @param {boolean} isUnlimited
+ * @param {string} [fallbackText]
+ * @returns {string}
+ */
+function formatResetTime(resetTimeIso, isUnlimited = false, fallbackText = null) {
+  if (isUnlimited) return i18n.t('unlimited');
+  if (!resetTimeIso) return fallbackText || i18n.t('plenty');
+
+  try {
+    const targetTime = new Date(resetTimeIso).getTime();
+    if (isNaN(targetTime)) {
+      return fallbackText || i18n.t('plenty');
+    }
+    const now = Date.now();
+    const diffMs = targetTime - now;
+
+    if (diffMs <= 0) {
+      return i18n.t('resets_soon');
+    }
+
+    const totalMinutes = Math.floor(diffMs / (1000 * 60));
+    const days = Math.floor(totalMinutes / (60 * 24));
+    const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const minutes = totalMinutes % 60;
+
+    if (days > 0) {
+      return i18n.t('resets_in_days_hours', { days, hours });
+    } else if (hours > 0) {
+      return i18n.t('resets_in_hours_minutes', { hours, minutes });
+    } else {
+      return i18n.t('resets_in_minutes', { minutes });
+    }
+  } catch (_) {
+    return i18n.t('calculating');
+  }
+}
+
+/**
+ * 格式化預算或偏差值顯示文字 (支援多國語言)
+ * @param {Object} item
+ * @param {number} percent
+ * @returns {string}
+ */
+function formatCalculatedText(item, percent) {
+  if (percent === UNLIMITED) return i18n.t('unlimited');
+  if (!item) return i18n.t('calculating');
+  if (item.isUnlimited) return i18n.t('unlimited');
+  if (item.displayText) {
+    if (item.displayText === '無限制') return i18n.t('unlimited');
+    if (item.displayText === '計算中') return i18n.t('calculating');
+    return item.displayText;
+  }
+  return i18n.t('calculating');
 }
 
 /**
@@ -217,38 +282,39 @@ async function updateStatusBar(forceRefresh = false) {
     // 建立純文字 Markdown Tooltip (詳細資訊在懸停時查看)
     const md = new vscode.MarkdownString();
     md.isTrusted = true;
-    md.appendMarkdown('### AI 模型額度狀態\n\n');
+    md.appendMarkdown(i18n.t('tooltip_title'));
 
-    const gWkRefresh = data?.gemini?.weekly?.refreshText || '無限制';
-    const g5hRefresh = data?.gemini?.fiveHour?.refreshText || '額度充足';
-    const gDaily = data?.gemini?.weekly?.dailyBudget?.displayText || '無限制';
-    const gDev = data?.gemini?.weekly?.deviation?.displayText || '無限制';
+    const gWkRefresh = formatResetTime(data?.gemini?.weekly?.resetTime, gWk === UNLIMITED, i18n.t('unlimited'));
+    const g5hRefresh = formatResetTime(data?.gemini?.fiveHour?.resetTime, g5h === UNLIMITED, i18n.t('plenty'));
+    const gDaily = formatCalculatedText(data?.gemini?.weekly?.dailyBudget, gWk);
+    const gDev = formatCalculatedText(data?.gemini?.weekly?.deviation, gWk);
 
-    const cWkRefresh = data?.claude?.weekly?.refreshText || '額度充足';
-    const c5hRefresh = data?.claude?.fiveHour?.refreshText || '無限制';
-    const cDaily = data?.claude?.weekly?.dailyBudget?.displayText || '計算中';
-    const cDev = data?.claude?.weekly?.deviation?.displayText || '計算中';
+    const cWkRefresh = formatResetTime(data?.claude?.weekly?.resetTime, cWk === UNLIMITED, i18n.t('plenty'));
+    const c5hRefresh = formatResetTime(data?.claude?.fiveHour?.resetTime, c5h === UNLIMITED, i18n.t('unlimited'));
+    const cDaily = formatCalculatedText(data?.claude?.weekly?.dailyBudget, cWk);
+    const cDev = formatCalculatedText(data?.claude?.weekly?.deviation, cWk);
 
-    md.appendMarkdown(`#### Gemini Models\n`);
-    md.appendMarkdown(`- Weekly Limit: \`${fmtPct(gWk)}\` (${gWkRefresh})\n`);
-    md.appendMarkdown(`- Five Hour Limit: \`${fmtPct(g5h)}\` (${g5hRefresh})\n`);
-    md.appendMarkdown(`- 建議今日餘額: \`${gDaily}\`\n`);
-    md.appendMarkdown(`- 偏差值: \`${gDev}\`\n\n`);
+    md.appendMarkdown(i18n.t('tooltip_gemini_header'));
+    md.appendMarkdown(i18n.t('tooltip_weekly_limit', { value: fmtPct(gWk), refresh: gWkRefresh }));
+    md.appendMarkdown(i18n.t('tooltip_five_hour_limit', { value: fmtPct(g5h), refresh: g5hRefresh }));
+    md.appendMarkdown(i18n.t('tooltip_daily_budget', { value: gDaily }));
+    md.appendMarkdown(i18n.t('tooltip_deviation', { value: gDev }));
 
-    md.appendMarkdown(`#### Claude and GPT models\n`);
-    md.appendMarkdown(`- Weekly Limit: \`${fmtPct(cWk)}\` (${cWkRefresh})\n`);
-    md.appendMarkdown(`- Five Hour Limit: \`${fmtPct(c5h)}\` (${c5hRefresh})\n`);
-    md.appendMarkdown(`- 建議今日餘額: \`${cDaily}\`\n`);
-    md.appendMarkdown(`- 偏差值: \`${cDev}\`\n\n`);
+    md.appendMarkdown(i18n.t('tooltip_claude_header'));
+    md.appendMarkdown(i18n.t('tooltip_weekly_limit', { value: fmtPct(cWk), refresh: cWkRefresh }));
+    md.appendMarkdown(i18n.t('tooltip_five_hour_limit', { value: fmtPct(c5h), refresh: c5hRefresh }));
+    md.appendMarkdown(i18n.t('tooltip_daily_budget', { value: cDaily }));
+    md.appendMarkdown(i18n.t('tooltip_deviation', { value: cDev }));
 
     md.appendMarkdown(`---\n`);
-    md.appendMarkdown(`*最後同步時間: ${data?.lastUpdated || '剛剛'}*\n\n`);
-    md.appendMarkdown(`[點擊開啟管理選單](command:aiQuota.showMenu)`);
+    const updatedTime = new Date().toLocaleTimeString(i18n.getLocale() === 'en' ? 'en-US' : 'zh-TW', { hour12: false });
+    md.appendMarkdown(i18n.t('tooltip_last_updated', { time: updatedTime }));
+    md.appendMarkdown(i18n.t('tooltip_click_menu'));
 
     statusBarItem.tooltip = md;
   } catch (err) {
-    statusBarItem.text = `${STATUS_ICON} [錯誤] 額度讀取失敗`;
-    statusBarItem.tooltip = `無法獲取模型額度: ${err.message}`;
+    statusBarItem.text = `${STATUS_ICON} ${i18n.t('status_error')}`;
+    statusBarItem.tooltip = i18n.t('status_error_tooltip', { error: err.message });
     statusBarItem.backgroundColor = undefined;
     statusBarItem.color = undefined;
   }
@@ -261,29 +327,29 @@ async function showActionMenu() {
   const data = await quotaService.getQuotaStatus(false);
   const items = [
     {
-      label: '重新整理額度',
-      description: '立即向本地服務端查詢最新即時配額',
+      label: i18n.t('menu_refresh_label'),
+      description: i18n.t('menu_refresh_desc'),
       action: 'refresh'
     },
     {
-      label: '切換顯示格式',
-      description: '選擇標準或極簡雙欄格式',
+      label: i18n.t('menu_mode_label'),
+      description: i18n.t('menu_mode_desc'),
       action: 'toggleMode'
     },
     {
-      label: '設定背景顏色',
-      description: '選擇狀態列項目底色樣式 (預設無底色、警告黃/橘、危險紅)',
+      label: i18n.t('menu_bg_label'),
+      description: i18n.t('menu_bg_desc'),
       action: 'setBackground'
     },
     {
-      label: '設定背景檢查間隔',
-      description: '修改背景自動輪詢分鐘數 (設為 0 關閉)',
+      label: i18n.t('menu_interval_label'),
+      description: i18n.t('menu_interval_desc'),
       action: 'setInterval'
     }
   ];
 
   const selected = await vscode.window.showQuickPick(items, {
-    placeHolder: '請選擇 AI 模型額度管理操作'
+    placeHolder: i18n.t('menu_placeholder')
   });
 
   if (!selected) return;
@@ -291,7 +357,7 @@ async function showActionMenu() {
   switch (selected.action) {
     case 'refresh':
       await updateStatusBar(true);
-      vscode.window.setStatusBarMessage('已完成額度重新整理。', 2500);
+      vscode.window.setStatusBarMessage(i18n.t('toast_refresh_done'), 2500);
       break;
     case 'toggleMode':
       await promptChangeDisplayMode();
@@ -313,19 +379,19 @@ async function promptSetBackgroundColor() {
   const current = config.get('backgroundColor', 'default');
 
   const options = [
-    { label: 'default', description: '無底色 (與狀態列融為一體，預設)', picked: current === 'default' },
-    { label: 'warning', description: '警告色 (黃/橘色背景)', picked: current === 'warning' },
-    { label: 'error', description: '錯誤/危險色 (紅色背景)', picked: current === 'error' }
+    { label: 'default', description: i18n.t('bg_default_desc'), picked: current === 'default' },
+    { label: 'warning', description: i18n.t('bg_warning_desc'), picked: current === 'warning' },
+    { label: 'error', description: i18n.t('bg_error_desc'), picked: current === 'error' }
   ];
 
   const selected = await vscode.window.showQuickPick(options, {
-    placeHolder: '請選擇狀態列背景顏色樣式'
+    placeHolder: i18n.t('bg_placeholder')
   });
 
   if (selected) {
     await config.update('backgroundColor', selected.label, vscode.ConfigurationTarget.Global);
     await updateStatusBar(false);
-    vscode.window.setStatusBarMessage(`已將狀態列背景顏色設定為: ${selected.label}`, 2500);
+    vscode.window.setStatusBarMessage(i18n.t('status_bg_updated', { mode: selected.label }), 2500);
   }
 }
 
@@ -337,18 +403,18 @@ async function promptChangeDisplayMode() {
   const current = config.get('displayMode', 'compact');
 
   const modes = [
-    { label: 'compact', description: '極簡雙欄 (例如: 59%, 53% | 7%, 100%，預設)', picked: current === 'compact' },
-    { label: 'standard', description: '標準模式 (例如: Gemini: 59%, 53% | Claude: 7%, 100%)', picked: current === 'standard' }
+    { label: 'compact', description: i18n.t('mode_compact_desc'), picked: current === 'compact' },
+    { label: 'standard', description: i18n.t('mode_standard_desc'), picked: current === 'standard' }
   ];
 
   const selected = await vscode.window.showQuickPick(modes, {
-    placeHolder: '請選擇狀態列顯示模式'
+    placeHolder: i18n.t('mode_placeholder')
   });
 
   if (selected) {
     await config.update('displayMode', selected.label, vscode.ConfigurationTarget.Global);
     await updateStatusBar(false);
-    vscode.window.setStatusBarMessage(`已將狀態列格式切換為: ${selected.label}`, 2500);
+    vscode.window.setStatusBarMessage(i18n.t('status_mode_updated', { mode: selected.label }), 2500);
   }
 }
 
@@ -361,12 +427,12 @@ async function promptSetRefreshInterval() {
   const current = config.get('refreshIntervalMinutes', 5);
 
   const input = await vscode.window.showInputBox({
-    prompt: '請輸入背景自動檢查間隔分鐘數 (設為 0 則關閉自動輪詢)',
+    prompt: i18n.t('interval_prompt'),
     value: current.toString(),
     validateInput: (val) => {
       const num = parseInt(val, 10);
       if (isNaN(num) || num < 0) {
-        return '請輸入大於或等於 0 的有效整數';
+        return i18n.t('interval_invalid');
       }
       return null;
     }
@@ -376,7 +442,7 @@ async function promptSetRefreshInterval() {
     const val = parseInt(input, 10);
     await config.update('refreshIntervalMinutes', val, vscode.ConfigurationTarget.Global);
     setupTimer();
-    const msg = val === 0 ? '已關閉背景自動檢查' : `背景自動檢查間隔已更新為: 每 ${val} 分鐘`;
+    const msg = val === 0 ? i18n.t('interval_disabled') : i18n.t('interval_updated', { val });
     vscode.window.setStatusBarMessage(msg, 2500);
   }
 }

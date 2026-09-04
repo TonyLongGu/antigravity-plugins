@@ -2,7 +2,7 @@
 	"name": "antigravity-toolbox",
 	"displayName": "Antigravity 控制中心 (Toolbox)",
 	"description": "Google Antigravity IDE 側邊欄控制中心：整合多專案工作區同名修正、專案腳本執行器 (ps1/bat/cmd)、全域設定/技能/規範目錄直達、Brain 對話歷史紀錄清理與 settings.json 快速編輯",
-	"version": "1.3.2",
+	"version": "1.3.5",
 	"publisher": "antigravity-toolkit",
 	"engines": {
 		"vscode": "^1.80.0"
@@ -15,6 +15,24 @@
 		"*"
 	],
 	"contributes": {
+		"configuration": {
+			"title": "Antigravity",
+			"properties": {
+				"antigravity.locale": {
+					"type": "string",
+					"default": "zh-TW",
+					"enum": [
+						"zh-TW",
+						"en"
+					],
+					"enumDescriptions": [
+						"繁體中文 (Traditional Chinese)",
+						"English"
+					],
+					"description": "Antigravity 外掛全域介面語言 (Global Interface Language for Antigravity Plugins)"
+				}
+			}
+		},
 		"viewsContainers": {
 			"activitybar": [
 				{
@@ -73,13 +91,41 @@
 				"command": "antigravity.toolbox.focusView",
 				"title": "聚焦控制中心側邊欄",
 				"category": "Antigravity"
+			},
+			{
+				"command": "antigravity.toolbox.openInEditor.en",
+				"title": "Open in Editor Tab",
+				"category": "Antigravity",
+				"icon": "$(split-horizontal)"
+			},
+			{
+				"command": "antigravity.toolbox.fixWorkspace.en",
+				"title": "Auto Fix Duplicate Workspace Project Names",
+				"category": "Antigravity",
+				"icon": "$(edit)"
+			},
+			{
+				"command": "antigravity.toolbox.resetWorkspace.en",
+				"title": "Reset Workspace Projects to Default Names",
+				"category": "Antigravity",
+				"icon": "$(discard)"
+			},
+			{
+				"command": "antigravity.toolbox.addScriptToRunner.en",
+				"title": "Add to Project Script Runner",
+				"category": "Antigravity"
 			}
 		],
 		"menus": {
 			"view/title": [
 				{
 					"command": "antigravity.toolbox.openInEditor",
-					"when": "view == antigravity.toolboxView",
+					"when": "view == antigravity.toolboxView && config.antigravity.locale != 'en'",
+					"group": "navigation@1"
+				},
+				{
+					"command": "antigravity.toolbox.openInEditor.en",
+					"when": "view == antigravity.toolboxView && config.antigravity.locale == 'en'",
 					"group": "navigation@1"
 				}
 			],
@@ -87,17 +133,32 @@
 				{
 					"command": "antigravity.toolbox.fixWorkspace",
 					"group": "navigation@1",
-					"when": "resourceExtname == .code-workspace"
+					"when": "resourceExtname == .code-workspace && config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "antigravity.toolbox.fixWorkspace.en",
+					"group": "navigation@1",
+					"when": "resourceExtname == .code-workspace && config.antigravity.locale == 'en'"
 				},
 				{
 					"command": "antigravity.toolbox.resetWorkspace",
 					"group": "navigation@2",
-					"when": "resourceExtname == .code-workspace"
+					"when": "resourceExtname == .code-workspace && config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "antigravity.toolbox.resetWorkspace.en",
+					"group": "navigation@2",
+					"when": "resourceExtname == .code-workspace && config.antigravity.locale == 'en'"
 				},
 				{
 					"command": "antigravity.toolbox.addScriptToRunner",
 					"group": "z_antigravity@1",
-					"when": "resourceExtname == .ps1 || resourceExtname == .bat || resourceExtname == .cmd"
+					"when": "(resourceExtname == .ps1 || resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "antigravity.toolbox.addScriptToRunner.en",
+					"group": "z_antigravity@1",
+					"when": "(resourceExtname == .ps1 || resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale == 'en'"
 				}
 			]
 		}

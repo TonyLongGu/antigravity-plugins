@@ -203,6 +203,55 @@ body {
   transform: scale(0.95);
 }
 
+.btn-lang {
+  width: auto;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 6px;
+  font-family: var(--font-mono, Consolas, Monaco, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 22px;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.14));
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  white-space: nowrap;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-lang:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.btn-lang:active {
+  transform: scale(0.95);
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+}
+
+#lang-indicator {
+  pointer-events: none;
+  user-select: none;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+  line-height: 1;
+}
+
 /* ==============================================================================
    主容器與模組化卡片 (Modular Feature Card Architecture)
    ============================================================================== */

@@ -29,7 +29,123 @@
   };
 
   // ============================================================================
-  // 1. 通用工具與 Toast 模組 (Toast & Utils Module)
+  // 1. 國際化核心模組 (I18n Module)
+  // ============================================================================
+  const I18nModule = {
+    currentLang: 'zh-TW',
+
+    init() {
+      const initial = (typeof window !== 'undefined' && window.INITIAL_LOCALE) || null;
+      let saved = null;
+      try {
+        saved = localStorage.getItem('antigravity_locale');
+      } catch (e) {}
+
+      if (initial === 'zh-TW' || initial === 'en') {
+        this.currentLang = initial;
+      } else if (saved === 'zh-TW' || saved === 'en') {
+        this.currentLang = saved;
+      } else {
+        this.currentLang = 'zh-TW';
+      }
+
+      this.applyLanguage(this.currentLang, false);
+
+      const btnLang = document.getElementById('btn-lang-toggle');
+      if (btnLang) {
+        btnLang.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.toggle();
+        });
+      }
+    },
+
+    t(key, params = {}) {
+      const locales = window.LOCALES || (typeof globalThis !== 'undefined' ? globalThis.LOCALES : null) || {};
+      const dict = locales[this.currentLang] || locales['zh-TW'] || {};
+      let text = dict[key] !== undefined ? dict[key] : key;
+      if (typeof text === 'string') {
+        Object.keys(params).forEach((p) => {
+          text = text.replace(new RegExp(`\\{${p}\\}`, 'g'), params[p]);
+        });
+      }
+      return text;
+    },
+
+    toggle() {
+      const next = this.currentLang === 'zh-TW' ? 'en' : 'zh-TW';
+      this.applyLanguage(next, true);
+      vscode.postMessage({ type: 'setGlobalLocale', locale: next });
+      ToastModule.show(
+        next === 'en' ? 'Switched to English' : '已切換為繁體中文',
+        'info',
+        1800
+      );
+    },
+
+    applyLanguage(lang, save = true) {
+      this.currentLang = lang;
+      if (save) {
+        try {
+          localStorage.setItem('antigravity_locale', lang);
+        } catch (e) {}
+      }
+
+      document.documentElement.lang = lang === 'zh-TW' ? 'zh-Hant' : 'en';
+
+      const langIndicator = document.getElementById('lang-indicator');
+      const btnLang = document.getElementById('btn-lang-toggle');
+      if (langIndicator) {
+        langIndicator.textContent = this.t('btn_lang_indicator');
+      }
+      if (btnLang) {
+        btnLang.title = this.t('btn_lang_toggle_title');
+      }
+
+      // 遍歷靜態 data-i18n
+      document.querySelectorAll('[data-i18n]').forEach((el) => {
+        const key = el.getAttribute('data-i18n');
+        if (key) {
+          const trans = this.t(key);
+          if (trans !== undefined) {
+            if (typeof trans === 'string' && trans.includes('<') && trans.includes('>')) {
+              el.innerHTML = trans;
+            } else {
+              el.textContent = trans;
+            }
+          }
+        }
+      });
+
+      // 遍歷靜態 data-i18n-title
+      document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+        const key = el.getAttribute('data-i18n-title');
+        if (key) {
+          const trans = this.t(key);
+          if (trans !== undefined) el.title = trans;
+        }
+      });
+
+      // 刷新動態渲染內容 (保持目前所有狀態不變)
+      const curState = vscode.getState() || {};
+      if (curState.workspace && typeof WorkspaceModule !== 'undefined' && typeof WorkspaceModule.render === 'function') {
+        WorkspaceModule.render(curState.workspace);
+      }
+      if (curState.scripts && typeof ScriptsModule !== 'undefined' && typeof ScriptsModule.render === 'function') {
+        ScriptsModule.render(curState.scripts);
+      }
+      if (curState.brain && typeof BrainModule !== 'undefined' && typeof BrainModule.render === 'function') {
+        BrainModule.render(curState.brain);
+      }
+      if (typeof BrainModule !== 'undefined' && BrainModule.dom && BrainModule.dom.slider) {
+        BrainModule.updateSliderUi(parseInt(BrainModule.dom.slider.value, 10));
+      }
+    },
+  };
+
+  // ============================================================================
+  // 1.5 通用工具與 Toast 模組 (Toast & Utils Module)
   // ============================================================================
   const ToastModule = {
     container: document.getElementById('toast-container'),
@@ -46,9 +162,23 @@
 
     show(message, type = 'info', duration = 2200) {
       if (!this.container) return;
+      let displayMsg = message;
+      if (I18nModule && I18nModule.currentLang === 'en' && window.LOCALES) {
+        const zh = window.LOCALES['zh-TW'];
+        const en = window.LOCALES['en'];
+        if (zh && en) {
+          for (const k of Object.keys(zh)) {
+            if (zh[k] === message && en[k]) {
+              displayMsg = en[k];
+              break;
+            }
+          }
+        }
+      }
+
       const toast = document.createElement('div');
       toast.className = `toast toast-${type}`;
-      toast.innerHTML = `<span>${this.escapeHtml(message)}</span>`;
+      toast.innerHTML = `<span>${this.escapeHtml(displayMsg)}</span>`;
 
       this.container.appendChild(toast);
       setTimeout(() => {
@@ -110,7 +240,8 @@
     const switchEl = item.querySelector('.folder-switch');
     if (switchEl) {
       switchEl.classList.toggle('is-checked', nextActive);
-      switchEl.title = `點擊切換為「${nextActive ? '已隱藏' : '顯示中'}」`;
+      const nextStatus = nextActive ? I18nModule.t('status_hidden') : I18nModule.t('status_visible');
+      switchEl.title = I18nModule.t('switch_title', { nextStatus });
     }
 
     // 4. 立即更新快照與頂部計數文字
@@ -124,7 +255,7 @@
       vscode.setState(curState);
 
       if (WorkspaceModule.dom.count) {
-        WorkspaceModule.dom.count.textContent = `${actCount} / ${totCount} 個`;
+        WorkspaceModule.dom.count.textContent = I18nModule.t('unit_items_ratio', { active: actCount, total: totCount });
       }
       if (WorkspaceModule.dom.folderListCount) {
         WorkspaceModule.dom.folderListCount.textContent = `${actCount}/${totCount}`;
@@ -331,7 +462,8 @@
         const switchEl = item.querySelector('.folder-switch');
         if (switchEl) {
           switchEl.classList.toggle('is-checked', nextActive);
-          switchEl.title = `點擊切換為「${nextActive ? '已隱藏' : '顯示中'}」`;
+          const nextStatus = nextActive ? I18nModule.t('status_hidden') : I18nModule.t('status_visible');
+          switchEl.title = I18nModule.t('switch_title', { nextStatus });
         }
 
         // 3. 更新快照物件
@@ -350,7 +482,7 @@
       }
 
       if (this.dom.count) {
-        this.dom.count.textContent = `${actCount} / ${totalCount} 個`;
+        this.dom.count.textContent = I18nModule.t('unit_items_ratio', { active: actCount, total: totalCount });
       }
       if (this.dom.folderListCount) {
         this.dom.folderListCount.textContent = `${actCount}/${totalCount}`;
@@ -400,12 +532,12 @@
         });
       }
 
-      this.dom.name.textContent = workspace.workspaceName || '未開啟工作區';
+      this.dom.name.textContent = workspace.workspaceName || I18nModule.t('no_workspace_opened');
       const activeCount = effectiveActiveCount;
       const totalCount = workspace.folderCount || (workspace.folders ? workspace.folders.length : 0);
-      this.dom.count.textContent = `${activeCount} / ${totalCount} 個`;
+      this.dom.count.textContent = I18nModule.t('unit_items_ratio', { active: activeCount, total: totalCount });
       if (this.dom.customCount) {
-        this.dom.customCount.textContent = `${workspace.customNameCount || 0} 個`;
+        this.dom.customCount.textContent = I18nModule.t('unit_items', { count: workspace.customNameCount || 0 });
       }
       if (this.dom.folderListCount) {
         this.dom.folderListCount.textContent = `${activeCount}/${totalCount}`;
@@ -416,19 +548,19 @@
 
         if (workspace.duplicateCount > 0) {
           // 有待修正狀態：修正同名專案為黃色 (btn-amber)，還原預設名稱為原色灰色 (btn-secondary)
-          this.dom.badge.textContent = `${workspace.duplicateCount} 個待修正`;
+          this.dom.badge.textContent = I18nModule.t('badge_dup_count', { count: workspace.duplicateCount });
           this.dom.badge.className = 'badge warning';
           this.dom.duplicateBanner.classList.remove('hidden');
-          this.dom.duplicateText.textContent = `發現 ${workspace.duplicateCount} 個專案需加上「父資料夾 \\ 專案名」`;
+          this.dom.duplicateText.textContent = I18nModule.t('dup_text_template', { count: workspace.duplicateCount });
           if (this.dom.btnFix) this.dom.btnFix.className = 'btn btn-amber';
           if (this.dom.btnReset) this.dom.btnReset.className = 'btn btn-secondary';
         } else {
           // 無衝突/無待修狀態：修正同名專案為原色灰色 (btn-secondary)，還原預設名稱為藍色 (btn-cyan)
           if (workspace.customNameCount > 0) {
-            this.dom.badge.textContent = `已自訂 ${workspace.customNameCount} 個名稱`;
+            this.dom.badge.textContent = I18nModule.t('badge_custom_count', { count: workspace.customNameCount });
             this.dom.badge.className = 'badge info';
           } else {
-            this.dom.badge.textContent = '狀態良好 (預設)';
+            this.dom.badge.textContent = I18nModule.t('badge_status_good');
             this.dom.badge.className = 'badge success';
           }
           this.dom.duplicateBanner.classList.add('hidden');
@@ -436,7 +568,7 @@
           if (this.dom.btnReset) this.dom.btnReset.className = 'btn btn-cyan';
         }
       } else {
-        this.dom.badge.textContent = '單一資料夾';
+        this.dom.badge.textContent = I18nModule.t('badge_single_folder');
         this.dom.badge.className = 'badge';
         this.dom.duplicateBanner.classList.add('hidden');
         if (this.dom.actions) this.dom.actions.classList.add('hidden');
@@ -444,7 +576,7 @@
 
       // 智慧比對渲染清單（精準屬性更新，絕不銷毀重建 DOM，徹底消除閃爍）
       if (!workspace.folders || workspace.folders.length === 0) {
-        this.dom.folderList.innerHTML = '<div class="folder-path" style="padding: 4px;">無專案資料夾</div>';
+        this.dom.folderList.innerHTML = `<div class="folder-path" style="padding: 4px;">${I18nModule.t('no_projects')}</div>`;
         return;
       }
 
@@ -468,7 +600,15 @@
         const hasDup = Boolean(f.needsFix && isEnabled);
         const targetClass = `folder-item ${isEnabled ? 'is-active' : 'is-inactive'} ${hasDup ? 'has-dup' : (isCustom ? 'has-custom' : '')}`;
 
-        const targetTitle = `專案：${f.name}${isCustom ? ' (已自訂名稱)' : ''}\n路徑：${f.path}\n狀態：${isEnabled ? '顯示中' : '已隱藏'}\n(可按住卡片直接拖曳排序，點擊右側開關切換顯示/隱藏)`;
+        const customSuffix = isCustom ? I18nModule.t('custom_name_suffix') : '';
+        const statusText = isEnabled ? I18nModule.t('status_visible') : I18nModule.t('status_hidden');
+        const nextStatus = isEnabled ? I18nModule.t('status_hidden') : I18nModule.t('status_visible');
+        const targetTitle = I18nModule.t('folder_item_title', {
+          name: f.name,
+          custom: customSuffix,
+          path: f.path,
+          status: statusText,
+        });
 
         let item = existingMap.get(f.path);
         if (item) {
@@ -484,7 +624,7 @@
           const switchEl = item.querySelector('.folder-switch');
           if (switchEl) {
             switchEl.classList.toggle('is-checked', isEnabled);
-            switchEl.title = `點擊切換為「${isEnabled ? '已隱藏' : '顯示中'}」`;
+            switchEl.title = I18nModule.t('switch_title', { nextStatus });
           }
         } else {
           // 初次載入：建立標準結構 DOM (單行緊湊：Pointer 拖曳卡片 + 專案名 + Toggle Switch 滑動開關)
@@ -509,7 +649,7 @@
           // 專屬的滑動開關 (Toggle Switch 放於標題右側)
           const toggleSwitch = document.createElement('button');
           toggleSwitch.className = `folder-switch ${isEnabled ? 'is-checked' : ''}`;
-          toggleSwitch.title = `點擊切換為「${isEnabled ? '已隱藏' : '顯示中'}」`;
+          toggleSwitch.title = I18nModule.t('switch_title', { nextStatus });
           toggleSwitch.innerHTML = '<span class="switch-thumb"></span>';
           toggleSwitch.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -599,7 +739,7 @@
                 this.dom.emptyHint.classList.toggle('hidden', remaining > 0);
               }
               if (this.dom.badge) {
-                this.dom.badge.textContent = `${remaining} 個`;
+                this.dom.badge.textContent = I18nModule.t('unit_items', { count: remaining });
               }
             }, 180);
 
@@ -623,7 +763,7 @@
       const { scripts, count } = scriptsData;
 
       if (this.dom.badge) {
-        this.dom.badge.textContent = `${count} 個`;
+        this.dom.badge.textContent = I18nModule.t('unit_items', { count });
         this.dom.badge.className = 'badge purple';
       }
 
@@ -641,7 +781,7 @@
       // 1. 依所屬專案分組 (Group by workspaceName)
       const groups = new Map();
       scripts.forEach((s) => {
-        const wsName = s.workspaceName || '未指定專案';
+        const wsName = s.workspaceName || I18nModule.t('unspecified_project');
         if (!groups.has(wsName)) {
           groups.set(wsName, []);
         }
@@ -656,35 +796,41 @@
           .map((s) => {
             const missingClass = !s.exists ? 'is-missing' : '';
             const missingBadge = !s.exists
-              ? `<span class="badge badge-danger" title="找不到磁碟實體檔案">缺失</span>`
+              ? `<span class="badge badge-danger" title="${I18nModule.t('badge_missing_script_title')}">${I18nModule.t('badge_missing_script')}</span>`
               : '';
 
+            const customInfo = s.hasCustomName ? I18nModule.t('script_custom_info', { fileName: ToastModule.escapeHtml(s.fileName) }) : '';
+            const scriptInfoTitle = I18nModule.t('script_info_title', {
+              fullPath: ToastModule.escapeHtml(s.fullPath),
+              customInfo,
+            });
+
             return `
-              <div class="script-item ${missingClass}" data-path="${ToastModule.escapeHtml(s.fullPath || s.rawPath)}" data-raw-path="${ToastModule.escapeHtml(s.rawPath || s.fullPath)}" title="點擊在左側檔案總管中定位此檔案">
+              <div class="script-item ${missingClass}" data-path="${ToastModule.escapeHtml(s.fullPath || s.rawPath)}" data-raw-path="${ToastModule.escapeHtml(s.rawPath || s.fullPath)}" title="${I18nModule.t('script_item_title')}">
                 <div class="script-main-row">
-                  <div class="script-file-info" title="完整路徑：${ToastModule.escapeHtml(s.fullPath)}${s.hasCustomName ? ` (實體檔名：${ToastModule.escapeHtml(s.fileName)})` : ''}">
+                  <div class="script-file-info" title="${scriptInfoTitle}">
                     <span class="script-file-name">${ToastModule.escapeHtml(s.name || s.fileName)}</span>
                   </div>
                   <div class="script-name-actions">
-                    <button type="button" class="btn-micro-action btn-script-rename" title="自訂此腳本在工具中的顯示名稱 (不修改實體檔名)">
-                      <span>命名</span>
+                    <button type="button" class="btn-micro-action btn-script-rename" title="${I18nModule.t('btn_script_rename_title')}">
+                      <span>${I18nModule.t('btn_script_rename')}</span>
                     </button>
                     ${s.hasCustomName ? `
-                    <button type="button" class="btn-micro-action btn-script-reset-name" title="恢復為預設檔案名稱">
-                      <span>恢復</span>
+                    <button type="button" class="btn-micro-action btn-script-reset-name" title="${I18nModule.t('btn_script_reset_name_title')}">
+                      <span>${I18nModule.t('btn_script_reset_name')}</span>
                     </button>` : ''}
                     ${missingBadge}
                   </div>
                 </div>
                 <div class="script-actions-grid">
-                  <button type="button" class="btn-script-action btn-script-run" title="在 VS Code 整合終端機中運行此腳本">
-                    <span>執行</span>
+                  <button type="button" class="btn-script-action btn-script-run" title="${I18nModule.t('btn_script_run_title')}">
+                    <span>${I18nModule.t('btn_script_run')}</span>
                   </button>
-                  <button type="button" class="btn-script-action btn-script-admin" title="以 Windows 系統管理員身分 (UAC 提權) 運行">
-                    <span>執行(管理員)</span>
+                  <button type="button" class="btn-script-action btn-script-admin" title="${I18nModule.t('btn_script_admin_title')}">
+                    <span>${I18nModule.t('btn_script_admin')}</span>
                   </button>
-                  <button type="button" class="btn-script-action btn-script-delete" title="自執行器清單移除該腳本 (不會刪除實體檔案)">
-                    <span>刪除</span>
+                  <button type="button" class="btn-script-action btn-script-delete" title="${I18nModule.t('btn_script_delete_title')}">
+                    <span>${I18nModule.t('btn_script_delete')}</span>
                   </button>
                 </div>
               </div>
@@ -779,6 +925,7 @@
       size: document.getElementById('brain-size'),
       count: document.getElementById('brain-count'),
       slider: document.getElementById('brain-slider'),
+      sliderLabel: document.getElementById('brain-slider-label'),
       monthsVal: document.getElementById('brain-months-val'),
       daysHint: document.getElementById('brain-days-hint'),
       btnClean: document.getElementById('btn-clean-brain'),
@@ -788,10 +935,11 @@
     init() {
       // 讀取已保存的前端狀態 (State Persistence)
       const savedState = vscode.getState() || {};
-      if (savedState.brainMonths && this.dom.slider) {
-        this.dom.slider.value = savedState.brainMonths;
-        this.updateSliderUi(savedState.brainMonths);
+      const initialMonths = savedState.brainMonths || (this.dom.slider ? parseInt(this.dom.slider.value, 10) : 3);
+      if (this.dom.slider) {
+        this.dom.slider.value = initialMonths;
       }
+      this.updateSliderUi(initialMonths);
 
       if (this.dom.slider) {
         this.dom.slider.addEventListener('input', (e) => {
@@ -813,15 +961,20 @@
 
     updateSliderUi(months) {
       const days = months * 30;
-      if (this.dom.monthsVal) this.dom.monthsVal.textContent = months;
-      if (this.dom.daysHint) this.dom.daysHint.textContent = `(清理 ${days} 天前舊檔)`;
-      if (this.dom.cleanBtnText) this.dom.cleanBtnText.textContent = `清理 ${months} 個月前的舊紀錄`;
+      if (this.dom.sliderLabel) {
+        this.dom.sliderLabel.innerHTML = I18nModule.t('label_keep_range', { months });
+        this.dom.monthsVal = document.getElementById('brain-months-val');
+      } else if (this.dom.monthsVal) {
+        this.dom.monthsVal.textContent = months;
+      }
+      if (this.dom.daysHint) this.dom.daysHint.textContent = I18nModule.t('hint_clean_days', { days });
+      if (this.dom.cleanBtnText) this.dom.cleanBtnText.textContent = I18nModule.t('btn_clean_brain', { months });
     },
 
     render(brain) {
       if (!brain) return;
       if (this.dom.size) this.dom.size.textContent = `${brain.totalMB || '0.0'} MB`;
-      if (this.dom.count) this.dom.count.textContent = `${brain.folderCount || 0} 個`;
+      if (this.dom.count) this.dom.count.textContent = I18nModule.t('unit_items', { count: brain.folderCount || 0 });
     },
   };
 
@@ -954,6 +1107,9 @@
   // ============================================================================
   const App = {
     init() {
+      // 0. 初始化國際化模組
+      I18nModule.init();
+
       // 1. 全部摺疊卡片 (靜默執行)
       const btnCollapseAll = document.getElementById('btn-collapse-all');
       if (btnCollapseAll) {
@@ -979,7 +1135,7 @@
       if (btnRefresh) {
         btnRefresh.addEventListener('click', () => {
           vscode.postMessage({ type: 'fetchStatus' });
-          ToastModule.show('已重新整理控制中心狀態', 'info');
+          ToastModule.show(I18nModule.t('toast_refreshed'), 'info');
         });
       }
 
@@ -1027,6 +1183,11 @@
             break;
           case 'toast':
             ToastModule.show(payload.message, payload.status || 'info');
+            break;
+          case 'localeChanged':
+            if (event.data.locale && event.data.locale !== I18nModule.currentLang) {
+              I18nModule.applyLanguage(event.data.locale, true);
+            }
             break;
         }
       });

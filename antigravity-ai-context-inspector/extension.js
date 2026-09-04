@@ -177,6 +177,16 @@ class AiContextViewProvider {
         await this.pushData();
         this.pushToast('狀態已重新整理', 'info');
         break;
+
+      case 'setGlobalLocale': {
+        const { locale } = msg.payload || msg;
+        try {
+          await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
+        } catch (err) {
+          console.error('Failed to update global locale in context inspector:', err);
+        }
+        break;
+      }
     }
   }
 
@@ -207,6 +217,16 @@ class AiContextViewProvider {
       type: 'toast',
       payload: { message, status }
     };
+    if (this._view) {
+      this._view.webview.postMessage(payload);
+    }
+    if (this._panel) {
+      this._panel.webview.postMessage(payload);
+    }
+  }
+
+  broadcastLocale(locale) {
+    const payload = { type: 'localeChanged', locale };
     if (this._view) {
       this._view.webview.postMessage(payload);
     }
@@ -267,11 +287,19 @@ class AiContextViewProvider {
     const htmlPath = path.join(this._extensionUri.fsPath, 'media', 'index.html');
     let html = fs.readFileSync(htmlPath, 'utf-8');
 
+    const localesPath = path.join(this._extensionUri.fsPath, 'media', 'locales.js');
+    let localesJs = '';
+    if (fs.existsSync(localesPath)) {
+      localesJs = fs.readFileSync(localesPath, 'utf-8');
+    }
+
+    const currentLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
     const isSnapshot = this._currentMode === 'snapshot';
 
     return html
       .replace(/href="style\.css"/g, `href="${styleUri}"`)
       .replace(/src="app\.js"/g, `src="${scriptUri}"`)
+      .replace(/<script src="locales\.js"><\/script>/g, `<script>window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)};</script><script>${localesJs}</script>`)
       .replace(/\{\{LIVE_ACTIVE\}\}/g, isSnapshot ? '' : 'active')
       .replace(/\{\{SNAPSHOT_ACTIVE\}\}/g, isSnapshot ? 'active' : '')
       .replace(/\{\{CONV_WRAPPER_CLASS\}\}/g, isSnapshot ? '' : 'is-hidden');
@@ -341,6 +369,11 @@ function activate(context) {
         activeProvider.openInEditor();
       }
     }),
+    vscode.commands.registerCommand('antigravity.aiContext.openInEditor.en', () => {
+      if (activeProvider) {
+        activeProvider.openInEditor();
+      }
+    }),
     vscode.commands.registerCommand('antigravity.aiContext.refresh', () => {
       if (activeProvider) {
         activeProvider.pushData(0);
@@ -349,6 +382,16 @@ function activate(context) {
     }),
     vscode.commands.registerCommand('antigravity.aiContext.focusView', () => {
       vscode.commands.executeCommand('antigravity.aiContextView.focus');
+    })
+  );
+
+  // 5. 監聽全域語言變動 (跨外掛即時聯動廣播)
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('antigravity.locale')) {
+        const newLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
+        activeProvider?.broadcastLocale(newLocale);
+      }
     })
   );
 }

@@ -76,6 +76,8 @@
     btnExpandAll: document.getElementById('btn-expand-all'),
     btnRefresh: document.getElementById('btn-refresh'),
     btnCopy: document.getElementById('btn-copy-summary'),
+    btnLangToggle: document.getElementById('btn-lang-toggle'),
+    langIndicator: document.getElementById('lang-indicator'),
     modeLabel: document.getElementById('status-mode-label'),
     timeLabel: document.getElementById('status-time-label'),
 
@@ -111,6 +113,118 @@
     });
   }
 
+  // ============================================================================
+  // 3. 國際化核心模組 (I18n Module)
+  // ============================================================================
+  const I18nModule = {
+    currentLang: 'zh-TW',
+
+    init() {
+      const initial = (typeof window !== 'undefined' && window.INITIAL_LOCALE) || null;
+      let saved = null;
+      try {
+        saved = localStorage.getItem('antigravity_locale');
+      } catch (e) {}
+
+      if (initial === 'zh-TW' || initial === 'en') {
+        this.currentLang = initial;
+      } else if (saved === 'zh-TW' || saved === 'en') {
+        this.currentLang = saved;
+      } else {
+        this.currentLang = 'zh-TW';
+      }
+
+      this.applyLanguage(this.currentLang, false);
+
+      if (dom.btnLangToggle) {
+        dom.btnLangToggle.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.toggle();
+        });
+      }
+    },
+
+    t(key, params = {}) {
+      const locales = window.LOCALES || (typeof globalThis !== 'undefined' ? globalThis.LOCALES : null) || {};
+      const dict = locales[this.currentLang] || locales['zh-TW'] || {};
+      let text = dict[key] !== undefined ? dict[key] : key;
+      if (typeof text === 'string') {
+        Object.keys(params).forEach((p) => {
+          text = text.replace(new RegExp(`\\{${p}\\}`, 'g'), params[p]);
+        });
+      }
+      return text;
+    },
+
+    toggle() {
+      const next = this.currentLang === 'zh-TW' ? 'en' : 'zh-TW';
+      this.applyLanguage(next, true);
+      vscode.postMessage({ type: 'setGlobalLocale', payload: { locale: next } });
+      Toast.show(this.t('toast_lang_switched'), 'info', 1800);
+    },
+
+    applyLanguage(lang, save = true) {
+      this.currentLang = lang;
+      if (save) {
+        try {
+          localStorage.setItem('antigravity_locale', lang);
+        } catch (e) {}
+      }
+
+      document.documentElement.lang = lang === 'zh-TW' ? 'zh-TW' : 'en';
+
+      if (dom.langIndicator) {
+        dom.langIndicator.textContent = this.t('btn_lang_indicator');
+      }
+      if (dom.btnLangToggle) {
+        dom.btnLangToggle.title = this.t('btn_lang_toggle_title');
+      }
+
+      // 遍歷靜態 data-i18n
+      document.querySelectorAll('[data-i18n]').forEach((el) => {
+        const key = el.getAttribute('data-i18n');
+        if (key) {
+          const trans = this.t(key);
+          if (trans !== undefined) {
+            if (typeof trans === 'string' && trans.includes('<') && trans.includes('>')) {
+              el.innerHTML = trans;
+            } else {
+              el.textContent = trans;
+            }
+          }
+        }
+      });
+
+      // 遍歷靜態 data-i18n-title
+      document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+        const key = el.getAttribute('data-i18n-title');
+        if (key) {
+          el.title = this.t(key);
+        }
+      });
+
+      // 遍歷靜態 data-i18n-placeholder
+      document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (key) {
+          el.placeholder = this.t(key);
+        }
+      });
+
+      // 同步動態介面
+      syncModeUI();
+      updateToggleButtons();
+      updateTriggerDisplay();
+      if (dom.customConvPopover && dom.customConvPopover.style.display === 'block') {
+        renderCustomConvList();
+      }
+      if (currentData) {
+        renderAll();
+      }
+    }
+  };
+
   function syncModeUI() {
     if (currentMode === 'snapshot') {
       dom.btnSnapshot?.classList.add('active');
@@ -130,36 +244,36 @@
       closeConvPopover();
     }
     if (dom.modeLabel) {
-      dom.modeLabel.textContent = currentMode === 'live' ? '模式：環境即時掃描' : '模式：對話已調用快照';
+      dom.modeLabel.textContent = currentMode === 'live' ? I18nModule.t('status_mode_live') : I18nModule.t('status_mode_snapshot');
     }
   }
 
   function updateToggleButtons() {
     if (dom.btnToggleRulesActiveTitle) {
       if (ruleActiveTitleMode === 'title') {
-        dom.btnToggleRulesActiveTitle.textContent = '內文標題';
-        dom.btnToggleRulesActiveTitle.title = '目前顯示：內文標題（點擊切換為：檔案名稱）';
+        dom.btnToggleRulesActiveTitle.textContent = I18nModule.t('btn_title_mode_title');
+        dom.btnToggleRulesActiveTitle.title = I18nModule.t('btn_title_mode_title_tooltip');
       } else {
-        dom.btnToggleRulesActiveTitle.textContent = '檔案名稱';
-        dom.btnToggleRulesActiveTitle.title = '目前顯示：檔案名稱（點擊切換為：內文標題）';
+        dom.btnToggleRulesActiveTitle.textContent = I18nModule.t('btn_title_mode_name');
+        dom.btnToggleRulesActiveTitle.title = I18nModule.t('btn_title_mode_name_tooltip');
       }
     }
     if (dom.btnToggleRulesCondTitle) {
       if (ruleCondTitleMode === 'title') {
-        dom.btnToggleRulesCondTitle.textContent = '內文標題';
-        dom.btnToggleRulesCondTitle.title = '目前顯示：內文標題（點擊切換為：檔案名稱）';
+        dom.btnToggleRulesCondTitle.textContent = I18nModule.t('btn_title_mode_title');
+        dom.btnToggleRulesCondTitle.title = I18nModule.t('btn_title_mode_title_tooltip');
       } else {
-        dom.btnToggleRulesCondTitle.textContent = '檔案名稱';
-        dom.btnToggleRulesCondTitle.title = '目前顯示：檔案名稱（點擊切換為：內文標題）';
+        dom.btnToggleRulesCondTitle.textContent = I18nModule.t('btn_title_mode_name');
+        dom.btnToggleRulesCondTitle.title = I18nModule.t('btn_title_mode_name_tooltip');
       }
     }
     if (dom.btnToggleSkillTitle) {
       if (skillTitleMode === 'title') {
-        dom.btnToggleSkillTitle.textContent = '內文標題';
-        dom.btnToggleSkillTitle.title = '目前顯示：內文標題（點擊切換為：技能名稱）';
+        dom.btnToggleSkillTitle.textContent = I18nModule.t('btn_title_mode_title');
+        dom.btnToggleSkillTitle.title = I18nModule.t('btn_title_mode_skill_title_tooltip');
       } else {
-        dom.btnToggleSkillTitle.textContent = '技能名稱';
-        dom.btnToggleSkillTitle.title = '目前顯示：技能名稱（點擊切換為：內文標題）';
+        dom.btnToggleSkillTitle.textContent = I18nModule.t('btn_title_mode_skill_name');
+        dom.btnToggleSkillTitle.title = I18nModule.t('btn_title_mode_skill_name_tooltip');
       }
     }
   }
@@ -173,7 +287,7 @@
       const isToday = d.toDateString() === now.toDateString();
       const timePart = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       if (isToday) {
-        return `今天 ${timePart}`;
+        return I18nModule.t('time_today', { time: timePart });
       }
       return `${d.getMonth() + 1}/${d.getDate()} ${timePart}`;
     } catch (e) {
@@ -185,7 +299,7 @@
   function updateTriggerDisplay() {
     if (!dom.triggerConvTitle) return;
     if (!allConversations || allConversations.length === 0) {
-      dom.triggerConvTitle.textContent = '無對話任務記錄';
+      dom.triggerConvTitle.textContent = I18nModule.t('conv_empty_no_tasks');
       dom.triggerConvTime.textContent = '-';
       return;
     }
@@ -197,7 +311,7 @@
       selectedConvId = target.id;
     }
 
-    dom.triggerConvTitle.textContent = target.title || `對話快照 (${target.id.slice(0, 8)})`;
+    dom.triggerConvTitle.textContent = target.title || I18nModule.t('conv_snapshot_fallback', { id: target.id.slice(0, 8) });
     dom.triggerConvTitle.title = `${target.title}\nID: ${target.id}`;
     dom.triggerConvTime.textContent = formatShortTime(target.mtimeStr, target.mtime);
   }
@@ -219,7 +333,7 @@
     }
 
     if (!allConversations || allConversations.length === 0) {
-      dom.customConvList.innerHTML = '<div class="conv-empty-hint">無任何歷史對話記錄</div>';
+      dom.customConvList.innerHTML = `<div class="conv-empty-hint">${I18nModule.t('conv_empty_none')}</div>`;
       return;
     }
 
@@ -240,11 +354,12 @@
     const visibleList = filtered.slice(0, limit);
 
     if (visibleList.length === 0) {
-      dom.customConvList.innerHTML = '<div class="conv-empty-hint">找不到符合的歷史對話快照</div>';
+      dom.customConvList.innerHTML = `<div class="conv-empty-hint">${I18nModule.t('conv_empty_search')}</div>`;
       return;
     }
 
     const currentId = selectedConvId || currentData?.conversationId;
+    const wsPrefix = I18nModule.t('conv_item_ws_prefix');
 
     dom.customConvList.innerHTML = visibleList.map(item => {
       const isSelected = item.id === currentId;
@@ -255,7 +370,7 @@
           <div class="conv-item-main">
             <div class="conv-item-title-group">
               <span class="conv-item-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</span>
-              ${item.workspace ? `<span class="conv-item-ws" title="工作區：${escapeHtml(item.workspace)}">${escapeHtml(item.workspace)}</span>` : ''}
+              ${item.workspace ? `<span class="conv-item-ws" title="${wsPrefix}${escapeHtml(item.workspace)}">${escapeHtml(item.workspace)}</span>` : ''}
             </div>
             ${isSelected ? `<span class="conv-item-check">${Icons.check}</span>` : ''}
           </div>
@@ -324,7 +439,7 @@
     });
 
     dom.timeLabel.textContent = currentData.timestamp ? new Date(currentData.timestamp).toLocaleTimeString() : '';
-    dom.modeLabel.textContent = currentMode === 'live' ? '模式：環境即時掃描' : '模式：對話已調用快照';
+    dom.modeLabel.textContent = currentMode === 'live' ? I18nModule.t('status_mode_live') : I18nModule.t('status_mode_snapshot');
     updateToggleButtons();
 
     const isMultiWs = (currentData.workspaces && currentData.workspaces.length > 1);
@@ -332,15 +447,20 @@
 
     // 1. 常駐規範
     const activeRules = currentData.rules?.alwaysActive || [];
-    dom.badgeRulesActive.textContent = `${activeRules.length} 項`;
+    dom.badgeRulesActive.textContent = I18nModule.t('unit_items', { count: activeRules.length });
     if (activeRules.length === 0) {
-      dom.listRulesActive.innerHTML = `<div class="empty-state">${currentMode === 'snapshot' ? '此對話無常駐規範' : '無常駐規範'}</div>`;
+      dom.listRulesActive.innerHTML = `<div class="empty-state">${currentMode === 'snapshot' ? I18nModule.t('empty_rules_active_snapshot') : I18nModule.t('empty_rules_active_live')}</div>`;
     } else {
       dom.listRulesActive.innerHTML = activeRules.map(r => {
         const baseName = (r.name || '').replace(/\.md$/i, '');
         const displayName = (ruleActiveTitleMode === 'name') ? (r.name || baseName) : (r.displayName || r.name || baseName);
         const itemKey = r.filePath || r.name;
         const isOpen = openedKeys.has(itemKey);
+        const btnCopyTitle = I18nModule.t('btn_copy_rule_name_title', { name: baseName });
+        const btnRevealTitle = I18nModule.t('btn_reveal_rule_title');
+        const btnOpenTitle = I18nModule.t('btn_open_rule_title');
+        const sourceTitle = I18nModule.t('tag_source_title', { source: r.source || '' });
+
         return `
           <details class="context-item-details ${r.isInvoked ? 'highlight-invoked' : ''}" data-item-key="${escapeHtml(itemKey)}" ${isOpen ? 'open' : ''}>
             <summary class="item-summary">
@@ -348,15 +468,15 @@
                 <span class="item-chevron">${Codicons.chevronRight}</span>
                 <span class="item-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</span>
               </div>
-              ${showSourceTag && r.source ? `<span class="item-source-tag" title="所屬專案：${escapeHtml(r.source)}">${escapeHtml(r.source)}</span>` : ''}
+              ${showSourceTag && r.source ? `<span class="item-source-tag" title="${escapeHtml(sourceTitle)}">${escapeHtml(r.source)}</span>` : ''}
             </summary>
             <div class="item-detail-body">
               <div class="item-action-bar">
-                <button class="action-btn btn-copy-name" data-copy="${escapeHtml(baseName)}" title="複製規範名稱：${escapeHtml(baseName)}">複製名稱</button>
-                <button class="action-btn btn-reveal-path" data-path="${escapeHtml(r.filePath)}" title="在檔案總管中選取此檔案">跳轉</button>
-                ${r.filePath ? `<button class="action-btn btn-open-file" data-path="${escapeHtml(r.filePath)}" title="在編輯器中開啟">開啟</button>` : ''}
+                <button class="action-btn btn-copy-name" data-copy="${escapeHtml(baseName)}" title="${escapeHtml(btnCopyTitle)}">${I18nModule.t('btn_copy_name')}</button>
+                <button class="action-btn btn-reveal-path" data-path="${escapeHtml(r.filePath)}" title="${escapeHtml(btnRevealTitle)}">${I18nModule.t('btn_reveal_path')}</button>
+                ${r.filePath ? `<button class="action-btn btn-open-file" data-path="${escapeHtml(r.filePath)}" title="${escapeHtml(btnOpenTitle)}">${I18nModule.t('btn_open_file')}</button>` : ''}
               </div>
-              <div class="item-desc">${escapeHtml(r.description || '無描述')}</div>
+              <div class="item-desc">${escapeHtml(r.description || I18nModule.t('desc_none'))}</div>
             </div>
           </details>
         `;
@@ -369,15 +489,20 @@
       rawCondRules = rawCondRules.filter(r => r.isInvoked);
     }
     const condRules = rawCondRules;
-    dom.badgeRulesConditional.textContent = `${condRules.length} 項`;
+    dom.badgeRulesConditional.textContent = I18nModule.t('unit_items', { count: condRules.length });
     if (condRules.length === 0) {
-      dom.listRulesConditional.innerHTML = `<div class="empty-state">${currentMode === 'snapshot' ? '此對話未觸發條件式規範' : '無條件式規範'}</div>`;
+      dom.listRulesConditional.innerHTML = `<div class="empty-state">${currentMode === 'snapshot' ? I18nModule.t('empty_rules_cond_snapshot') : I18nModule.t('empty_rules_cond_live')}</div>`;
     } else {
       dom.listRulesConditional.innerHTML = condRules.map(r => {
         const baseName = (r.name || '').replace(/\.md$/i, '');
         const displayName = (ruleCondTitleMode === 'name') ? (r.name || baseName) : (r.displayName || r.name || baseName);
         const itemKey = r.filePath || r.name;
         const isOpen = openedKeys.has(itemKey);
+        const btnCopyTitle = I18nModule.t('btn_copy_rule_name_title', { name: baseName });
+        const btnRevealTitle = I18nModule.t('btn_reveal_rule_title');
+        const btnOpenTitle = I18nModule.t('btn_open_rule_title');
+        const sourceTitle = I18nModule.t('tag_source_title', { source: r.source || '' });
+
         return `
           <details class="context-item-details ${r.isInvoked ? 'highlight-invoked' : ''}" data-item-key="${escapeHtml(itemKey)}" ${isOpen ? 'open' : ''}>
             <summary class="item-summary">
@@ -385,15 +510,15 @@
                 <span class="item-chevron">${Codicons.chevronRight}</span>
                 <span class="item-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</span>
               </div>
-              ${showSourceTag && r.source ? `<span class="item-source-tag" title="所屬專案：${escapeHtml(r.source)}">${escapeHtml(r.source)}</span>` : ''}
+              ${showSourceTag && r.source ? `<span class="item-source-tag" title="${escapeHtml(sourceTitle)}">${escapeHtml(r.source)}</span>` : ''}
             </summary>
             <div class="item-detail-body">
               <div class="item-action-bar">
-                <button class="action-btn btn-copy-name" data-copy="${escapeHtml(baseName)}" title="複製規範名稱：${escapeHtml(baseName)}">複製名稱</button>
-                <button class="action-btn btn-reveal-path" data-path="${escapeHtml(r.filePath)}" title="在檔案總管中選取此檔案">跳轉</button>
-                ${r.filePath ? `<button class="action-btn btn-open-file" data-path="${escapeHtml(r.filePath)}" title="在編輯器中開啟">開啟</button>` : ''}
+                <button class="action-btn btn-copy-name" data-copy="${escapeHtml(baseName)}" title="${escapeHtml(btnCopyTitle)}">${I18nModule.t('btn_copy_name')}</button>
+                <button class="action-btn btn-reveal-path" data-path="${escapeHtml(r.filePath)}" title="${escapeHtml(btnRevealTitle)}">${I18nModule.t('btn_reveal_path')}</button>
+                ${r.filePath ? `<button class="action-btn btn-open-file" data-path="${escapeHtml(r.filePath)}" title="${escapeHtml(btnOpenTitle)}">${I18nModule.t('btn_open_file')}</button>` : ''}
               </div>
-              <div class="item-desc">${escapeHtml(r.description || '無描述')}</div>
+              <div class="item-desc">${escapeHtml(r.description || I18nModule.t('desc_none'))}</div>
             </div>
           </details>
         `;
@@ -411,14 +536,14 @@
     }
     const allSkills = rawSkills;
 
-    dom.badgeSkills.textContent = `${allSkills.length} 項`;
+    dom.badgeSkills.textContent = I18nModule.t('unit_items', { count: allSkills.length });
 
     if (currentMode === 'snapshot') {
       if (dom.metaModel) dom.metaModel.textContent = currentData.model || 'Gemini Flash';
     }
 
     if (allSkills.length === 0) {
-      dom.listSkills.innerHTML = `<div class="empty-state">${currentMode === 'snapshot' ? '此對話未調用額外技能' : '無可用技能'}</div>`;
+      dom.listSkills.innerHTML = `<div class="empty-state">${currentMode === 'snapshot' ? I18nModule.t('empty_skills_snapshot') : I18nModule.t('empty_skills_live')}</div>`;
     } else {
       let html = '';
       const workspace = allSkills.filter(s => s.type === 'workspace');
@@ -426,15 +551,15 @@
       const builtin = allSkills.filter(s => s.type === 'builtin');
 
       if (workspace.length > 0) {
-        html += `<div class="subgroup-title">${Codicons.folder} 工作區專屬技能 (${workspace.length})</div>`;
+        html += `<div class="subgroup-title">${Codicons.folder} ${I18nModule.t('group_skills_workspace', { count: workspace.length })}</div>`;
         html += workspace.map(s => renderSkillItem(s, openedKeys, showSourceTag)).join('');
       }
       if (global.length > 0) {
-        html += `<div class="subgroup-title">${Codicons.globe} 全域客製技能 (${global.length})</div>`;
+        html += `<div class="subgroup-title">${Codicons.globe} ${I18nModule.t('group_skills_global', { count: global.length })}</div>`;
         html += global.map(s => renderSkillItem(s, openedKeys, false)).join('');
       }
       if (builtin.length > 0) {
-        html += `<div class="subgroup-title">${Codicons.package} IDE 內建技能 (${builtin.length})</div>`;
+        html += `<div class="subgroup-title">${Codicons.package} ${I18nModule.t('group_skills_builtin', { count: builtin.length })}</div>`;
         html += builtin.map(s => renderSkillItem(s, openedKeys, false)).join('');
       }
       dom.listSkills.innerHTML = html;
@@ -449,9 +574,9 @@
       }));
     }
     const mcpServers = rawMcpServers;
-    dom.badgeMcp.textContent = `${mcpServers.length} 個`;
+    dom.badgeMcp.textContent = I18nModule.t('unit_servers', { count: mcpServers.length });
     if (mcpServers.length === 0) {
-      dom.listMcp.innerHTML = `<div class="empty-state">${currentMode === 'snapshot' ? '此對話未調用 MCP 工具' : '無註冊之 MCP 伺服器'}</div>`;
+      dom.listMcp.innerHTML = `<div class="empty-state">${currentMode === 'snapshot' ? I18nModule.t('empty_mcp_snapshot') : I18nModule.t('empty_mcp_live')}</div>`;
     } else {
       dom.listMcp.innerHTML = mcpServers.map(s => {
         const tools = s.tools || [];
@@ -464,8 +589,8 @@
               <span class="mcp-scope-tag" title="${escapeHtml(s.scope || '')}">${escapeHtml(scopeShort || 'Global')}</span>
             </div>
             <div class="mcp-actions-right">
-              ${s.instructionsPath ? `<button class="item-btn btn-open-file" data-path="${escapeHtml(s.instructionsPath)}">開啟</button>` : ''}
-              <span class="badge purple">${tools.length} 個 API</span>
+              ${s.instructionsPath ? `<button class="item-btn btn-open-file" data-path="${escapeHtml(s.instructionsPath)}">${I18nModule.t('btn_open_file')}</button>` : ''}
+              <span class="badge purple">${I18nModule.t('unit_apis', { count: tools.length })}</span>
             </div>
           </div>
         `;
@@ -501,7 +626,7 @@
         e.stopPropagation();
         const copyText = btn.getAttribute('data-copy');
         if (copyText) {
-          vscode.postMessage({ type: 'copyText', payload: { text: copyText, label: '名稱' } });
+          vscode.postMessage({ type: 'copyText', payload: { text: copyText, label: I18nModule.t('btn_copy_name') } });
         }
       });
     });
@@ -513,6 +638,10 @@
     const revealTarget = s.dirPath || s.filePath;
     const itemKey = s.filePath || s.dirPath || s.name;
     const isOpen = openedKeys && openedKeys.has(itemKey);
+    const btnCopyTitle = I18nModule.t('btn_copy_skill_name_title', { name: skillName });
+    const btnRevealTitle = I18nModule.t('btn_reveal_skill_title');
+    const btnOpenTitle = I18nModule.t('btn_open_skill_title');
+    const sourceTitle = I18nModule.t('tag_source_title', { source: s.source || '' });
 
     return `
       <details class="context-item-details ${s.isInvoked ? 'highlight-invoked' : ''}" data-item-key="${escapeHtml(itemKey)}" ${isOpen ? 'open' : ''}>
@@ -521,15 +650,15 @@
             <span class="item-chevron">${Codicons.chevronRight}</span>
             <span class="item-name" title="${escapeHtml(displayName)}">${escapeHtml(displayName)}</span>
           </div>
-          ${showSourceTag && s.source ? `<span class="item-source-tag" title="所屬專案：${escapeHtml(s.source)}">${escapeHtml(s.source)}</span>` : ''}
+          ${showSourceTag && s.source ? `<span class="item-source-tag" title="${escapeHtml(sourceTitle)}">${escapeHtml(s.source)}</span>` : ''}
         </summary>
         <div class="item-detail-body">
           <div class="item-action-bar">
-            <button class="action-btn btn-copy-name" data-copy="${escapeHtml(skillName)}" title="複製技能名稱：${escapeHtml(skillName)}">複製名稱</button>
-            <button class="action-btn btn-reveal-path" data-path="${escapeHtml(revealTarget)}" title="在檔案總管中選取此技能資料夾">跳轉</button>
-            ${s.filePath ? `<button class="action-btn btn-open-file" data-path="${escapeHtml(s.filePath)}" title="在編輯器中開啟 SKILL.md">開啟</button>` : ''}
+            <button class="action-btn btn-copy-name" data-copy="${escapeHtml(skillName)}" title="${escapeHtml(btnCopyTitle)}">${I18nModule.t('btn_copy_name')}</button>
+            <button class="action-btn btn-reveal-path" data-path="${escapeHtml(revealTarget)}" title="${escapeHtml(btnRevealTitle)}">${I18nModule.t('btn_reveal_path')}</button>
+            ${s.filePath ? `<button class="action-btn btn-open-file" data-path="${escapeHtml(s.filePath)}" title="${escapeHtml(btnOpenTitle)}">${I18nModule.t('btn_open_file')}</button>` : ''}
           </div>
-          <div class="item-desc">${escapeHtml(s.description || '無描述')}</div>
+          <div class="item-desc">${escapeHtml(s.description || I18nModule.t('desc_none'))}</div>
         </div>
       </details>
     `;
@@ -538,23 +667,24 @@
   // 產生 Markdown 摘要字串
   function buildMarkdownSummary() {
     if (!currentData) return '';
+    const isEn = I18nModule.currentLang === 'en';
     const lines = [];
-    lines.push(`# 🤖 AI 上下文狀態摘要 (${currentMode === 'live' ? '當前環境配置' : '對話已調用快照'})`);
-    lines.push(`- 時間: ${currentData.timestamp || new Date().toISOString()}`);
+    lines.push(`# 🤖 ${I18nModule.t('header_title')} (${currentMode === 'live' ? I18nModule.t('btn_mode_live') : I18nModule.t('btn_mode_snapshot')})`);
+    lines.push(`- ${isEn ? 'Timestamp' : '時間'}: ${currentData.timestamp || new Date().toISOString()}`);
     if (currentData.conversationTitle) {
-      lines.push(`- 對話任務: ${currentData.conversationTitle} (${currentData.conversationId})`);
+      lines.push(`- ${isEn ? 'Conversation Task' : '對話任務'}: ${currentData.conversationTitle} (${currentData.conversationId})`);
     }
     if (currentData.model) {
-      lines.push(`- 使用模型: ${currentData.model}`);
+      lines.push(`- ${isEn ? 'Model' : '使用模型'}: ${currentData.model}`);
     }
     lines.push('');
 
-    lines.push(`## 📌 常駐規範 (${currentData.rules?.alwaysActive?.length || 0})`);
-    (currentData.rules?.alwaysActive || []).forEach(r => lines.push(`- **${r.displayName || r.name}** (${r.source || '全域'}): ${r.description || ''}`));
+    lines.push(`## 📌 ${I18nModule.t('card_rules_active_title')} (${currentData.rules?.alwaysActive?.length || 0})`);
+    (currentData.rules?.alwaysActive || []).forEach(r => lines.push(`- **${r.displayName || r.name}** (${r.source || (isEn ? 'Global' : '全域')}): ${r.description || ''}`));
     lines.push('');
 
     const condList = currentMode === 'snapshot' ? (currentData.rules?.conditional || []).filter(r => r.isInvoked) : (currentData.rules?.conditional || []);
-    lines.push(`## 🔀 條件式規範 (${condList.length})`);
+    lines.push(`## 🔀 ${I18nModule.t('card_rules_conditional_title')} (${condList.length})`);
     condList.forEach(r => lines.push(`- **${r.displayName || r.name}**: ${r.description || ''}`));
     lines.push('');
 
@@ -566,7 +696,7 @@
     if (currentMode === 'snapshot') {
       skillList = skillList.filter(s => s.isInvoked);
     }
-    lines.push(`## ⚡ 技能 (${skillList.length})`);
+    lines.push(`## ⚡ ${I18nModule.t('card_skills_title')} (${skillList.length})`);
     skillList.forEach(s => {
       const displayTitle = s.displayName ? `${s.displayName} (${s.name})` : s.name;
       lines.push(`- **${displayTitle}** [${s.type}]: ${s.description}`);
@@ -577,14 +707,17 @@
     if (currentMode === 'snapshot') {
       mcpList = mcpList.filter(s => s.isInvoked);
     }
-    lines.push(`## 🔌 MCP 伺服器 (${mcpList.length})`);
-    mcpList.forEach(m => lines.push(`- **${m.name}** (${m.tools?.length || 0} 個 API)`));
+    lines.push(`## 🔌 ${I18nModule.t('card_mcp_title')} (${mcpList.length})`);
+    mcpList.forEach(m => lines.push(`- **${m.name}** (${I18nModule.t('unit_apis', { count: m.tools?.length || 0 })})`));
 
     return lines.join('\n');
   }
 
   // 事件綁定
   function initEvents() {
+    // 初始化國際化模組（套用當前偏好語系）
+    I18nModule.init();
+
     syncModeUI();
     updateToggleButtons();
 
@@ -669,7 +802,8 @@
           currentConvLimit = lim;
           saveState();
           renderCustomConvList();
-          Toast.show(`已切換顯示最近 ${lim >= 500 ? '全部' : lim + ' 筆'} 對話`, 'info', 1500);
+          const limStr = lim >= 500 ? I18nModule.t('toast_limit_all') : I18nModule.t('toast_limit_items', { count: lim });
+          Toast.show(I18nModule.t('toast_limit_changed', { limit: limStr }), 'info', 1500);
         });
       });
     }
@@ -733,7 +867,7 @@
     if (dom.btnRefresh) {
       dom.btnRefresh.addEventListener('click', () => {
         vscode.postMessage({ type: 'fetchData', payload: { mode: currentMode, conversationId: selectedConvId } });
-        Toast.show('已重新整理 AI 上下文狀態', 'info');
+        Toast.show(I18nModule.t('toast_refreshed'), 'info');
       });
     }
 
@@ -741,6 +875,7 @@
     dom.btnCopy.addEventListener('click', () => {
       const summary = buildMarkdownSummary();
       vscode.postMessage({ type: 'copyToClipboard', payload: { text: summary } });
+      Toast.show(I18nModule.t('toast_copied_summary'), 'info');
     });
 
     // 開啟 MCP 目錄
@@ -780,6 +915,10 @@
         renderAll();
       } else if (type === 'toast') {
         Toast.show(payload.message, payload.status || 'info');
+      } else if (type === 'localeChanged') {
+        if (event.data.locale && event.data.locale !== I18nModule.currentLang) {
+          I18nModule.applyLanguage(event.data.locale, true);
+        }
       }
     });
 

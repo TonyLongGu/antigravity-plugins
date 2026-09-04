@@ -184,6 +184,16 @@ class ToolboxViewProvider {
       case 'revealScriptInExplorer':
         await scriptService.revealScriptInExplorer(msg.path, this);
         break;
+
+      case 'setGlobalLocale': {
+        const { locale } = msg;
+        try {
+          await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
+        } catch (err) {
+          console.error('Failed to update global locale in toolbox:', err);
+        }
+        break;
+      }
     }
   }
 
@@ -197,6 +207,16 @@ class ToolboxViewProvider {
       type: 'toast',
       payload: { message, status },
     };
+    if (this._view) {
+      this._view.webview.postMessage(payload);
+    }
+    if (this._panel) {
+      this._panel.webview.postMessage(payload);
+    }
+  }
+
+  broadcastLocale(locale) {
+    const payload = { type: 'localeChanged', locale };
     if (this._view) {
       this._view.webview.postMessage(payload);
     }
@@ -249,12 +269,17 @@ class ToolboxViewProvider {
     );
     const htmlPath = path.join(this._extensionUri.fsPath, 'media', 'index.html');
     const cssPath = path.join(this._extensionUri.fsPath, 'media', 'style.css');
+    const localesPath = path.join(this._extensionUri.fsPath, 'media', 'locales.js');
 
     let html = fs.readFileSync(htmlPath, 'utf-8');
     let css = fs.existsSync(cssPath) ? fs.readFileSync(cssPath, 'utf-8') : '';
+    let localesJs = fs.existsSync(localesPath) ? fs.readFileSync(localesPath, 'utf-8') : '';
+    const currentLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
 
     return html
       .replace(/<link rel="stylesheet" href="style\.css">/g, `<style>${css}</style>`)
+      .replace(/<script src="locales\.js"><\/script>/g, `<script>window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)};</script><script>${localesJs}</script>`)
+      .replace(/src="locales\.js"/g, `src="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'locales.js'))}"`)
       .replace(/src="app\.js"/g, `src="${scriptUri}"`);
   }
 }
@@ -274,10 +299,10 @@ function activate(context) {
   );
 
   // 1.1 註冊 VS Code 命令：在編輯器分頁開啟控制中心
+  const openInEditorHandler = () => { provider.openInEditor(); };
   context.subscriptions.push(
-    vscode.commands.registerCommand('antigravity.toolbox.openInEditor', () => {
-      provider.openInEditor();
-    })
+    vscode.commands.registerCommand('antigravity.toolbox.openInEditor', openInEditorHandler),
+    vscode.commands.registerCommand('antigravity.toolbox.openInEditor.en', openInEditorHandler)
   );
 
   // 2. 註冊 VS Code 命令：重新整理
@@ -291,19 +316,23 @@ function activate(context) {
   );
 
   // 3. 註冊 VS Code 命令：修正同名專案
+  const fixWorkspaceHandler = () => {
+    workspaceService.fixWorkspaceDuplicates(provider);
+    provider.pushStatus();
+  };
   context.subscriptions.push(
-    vscode.commands.registerCommand('antigravity.toolbox.fixWorkspace', () => {
-      workspaceService.fixWorkspaceDuplicates(provider);
-      provider.pushStatus();
-    })
+    vscode.commands.registerCommand('antigravity.toolbox.fixWorkspace', fixWorkspaceHandler),
+    vscode.commands.registerCommand('antigravity.toolbox.fixWorkspace.en', fixWorkspaceHandler)
   );
 
   // 4. 註冊 VS Code 命令：重設為預設名稱
+  const resetWorkspaceHandler = () => {
+    workspaceService.resetWorkspaceNames(provider);
+    provider.pushStatus();
+  };
   context.subscriptions.push(
-    vscode.commands.registerCommand('antigravity.toolbox.resetWorkspace', () => {
-      workspaceService.resetWorkspaceNames(provider);
-      provider.pushStatus();
-    })
+    vscode.commands.registerCommand('antigravity.toolbox.resetWorkspace', resetWorkspaceHandler),
+    vscode.commands.registerCommand('antigravity.toolbox.resetWorkspace.en', resetWorkspaceHandler)
   );
 
   // 5. 註冊 VS Code 命令：開啟 settings.json
@@ -314,13 +343,15 @@ function activate(context) {
   );
 
   // 6. 註冊 VS Code 命令：加入至專案腳本執行器 (右鍵選單 / 命令面板)
+  const addScriptHandler = (uri, selectedUris) => {
+    const targets = (Array.isArray(selectedUris) && selectedUris.length > 0) ? selectedUris : (uri ? [uri] : []);
+    if (targets.length > 0) {
+      scriptService.addScripts(targets, provider);
+    }
+  };
   context.subscriptions.push(
-    vscode.commands.registerCommand('antigravity.toolbox.addScriptToRunner', (uri, selectedUris) => {
-      const targets = (Array.isArray(selectedUris) && selectedUris.length > 0) ? selectedUris : (uri ? [uri] : []);
-      if (targets.length > 0) {
-        scriptService.addScripts(targets, provider);
-      }
-    })
+    vscode.commands.registerCommand('antigravity.toolbox.addScriptToRunner', addScriptHandler),
+    vscode.commands.registerCommand('antigravity.toolbox.addScriptToRunner.en', addScriptHandler)
   );
 
   // 6.1 註冊 VS Code 命令：聚焦控制中心側邊欄
@@ -335,11 +366,26 @@ function activate(context) {
     vscode.StatusBarAlignment.Right,
     50
   );
-  statusBar.text = `$(symbol-property) 控制中心`;
-  statusBar.tooltip = '點擊開啟 Antigravity 控制中心側邊欄';
+  const updateToolboxStatusBar = () => {
+    const isEn = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW') === 'en';
+    statusBar.text = isEn ? `$(symbol-property) Control Center` : `$(symbol-property) 控制中心`;
+    statusBar.tooltip = isEn ? 'Click to open Antigravity Control Center' : '點擊開啟 Antigravity 控制中心側邊欄';
+  };
+  updateToolboxStatusBar();
   statusBar.command = 'workbench.view.extension.antigravity-toolbox-container';
   statusBar.show();
   context.subscriptions.push(statusBar);
+
+  // 7.1 監聽全域語言變動 (跨外掛即時聯動廣播)
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('antigravity.locale')) {
+        const newLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
+        updateToolboxStatusBar();
+        provider.broadcastLocale(newLocale);
+      }
+    })
+  );
 
   // 8. 監聽工作區變更事件自動更新狀態 (立即清除記憶體快取以讀取最新磁碟狀態)
   context.subscriptions.push(

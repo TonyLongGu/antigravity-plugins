@@ -2,7 +2,7 @@
 	"name": "antigravity-script-runner",
 	"displayName": "腳本右鍵執行工具 (Script Runner)",
 	"description": "在 Antigravity IDE 檔案總管與編輯器為 .bat、.cmd、.ps1、.py 腳本提供右鍵與右上角 ▶ 按鈕執行功能（在內建 PowerShell 終端機安全執行）",
-	"version": "1.2.0",
+	"version": "1.2.2",
 	"publisher": "antigravity-toolkit",
 	"engines": {
 		"vscode": "^1.80.0"
@@ -48,6 +48,24 @@
 				"title": "執行批次檔",
 				"category": "腳本執行",
 				"icon": "$(play)"
+			},
+			{
+				"command": "scriptRunner.runPy.en",
+				"title": "Run Python Script",
+				"category": "Script Runner",
+				"icon": "$(play)"
+			},
+			{
+				"command": "scriptRunner.runPs1.en",
+				"title": "Run PowerShell Script",
+				"category": "Script Runner",
+				"icon": "$(play)"
+			},
+			{
+				"command": "scriptRunner.runBat.en",
+				"title": "Run Batch File",
+				"category": "Script Runner",
+				"icon": "$(play)"
 			}
 		],
 		"menus": {
@@ -55,68 +73,128 @@
 				{
 					"command": "scriptRunner.runPy",
 					"group": "navigation@1",
-					"when": "editorLangId == python || resourceExtname == .py"
+					"when": "(editorLangId == python || resourceExtname == .py) && config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "scriptRunner.runPy.en",
+					"group": "navigation@1",
+					"when": "(editorLangId == python || resourceExtname == .py) && config.antigravity.locale == 'en'"
 				},
 				{
 					"command": "scriptRunner.runPs1",
 					"group": "navigation@2",
-					"when": "editorLangId == powershell || resourceExtname == .ps1"
+					"when": "(editorLangId == powershell || resourceExtname == .ps1) && config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "scriptRunner.runPs1.en",
+					"group": "navigation@2",
+					"when": "(editorLangId == powershell || resourceExtname == .ps1) && config.antigravity.locale == 'en'"
 				},
 				{
 					"command": "scriptRunner.runBat",
 					"group": "navigation@3",
-					"when": "editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd"
+					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "scriptRunner.runBat.en",
+					"group": "navigation@3",
+					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale == 'en'"
 				}
 			],
 			"explorer/context": [
 				{
 					"command": "scriptRunner.runPy",
 					"group": "z_script_runner@1",
-					"when": "resourceExtname == .py"
+					"when": "resourceExtname == .py && config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "scriptRunner.runPy.en",
+					"group": "z_script_runner@1",
+					"when": "resourceExtname == .py && config.antigravity.locale == 'en'"
 				},
 				{
 					"command": "scriptRunner.runPs1",
 					"group": "z_script_runner@2",
-					"when": "resourceExtname == .ps1"
+					"when": "resourceExtname == .ps1 && config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "scriptRunner.runPs1.en",
+					"group": "z_script_runner@2",
+					"when": "resourceExtname == .ps1 && config.antigravity.locale == 'en'"
 				},
 				{
 					"command": "scriptRunner.runBat",
 					"group": "z_script_runner@3",
-					"when": "resourceExtname == .bat || resourceExtname == .cmd"
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "scriptRunner.runBat.en",
+					"group": "z_script_runner@3",
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale == 'en'"
 				}
 			],
 			"editor/context": [
 				{
 					"command": "scriptRunner.runPy",
 					"group": "z_script_runner@1",
-					"when": "editorLangId == python || resourceExtname == .py"
+					"when": "(editorLangId == python || resourceExtname == .py) && config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "scriptRunner.runPy.en",
+					"group": "z_script_runner@1",
+					"when": "(editorLangId == python || resourceExtname == .py) && config.antigravity.locale == 'en'"
 				},
 				{
 					"command": "scriptRunner.runPs1",
 					"group": "z_script_runner@2",
-					"when": "editorLangId == powershell || resourceExtname == .ps1"
+					"when": "(editorLangId == powershell || resourceExtname == .ps1) && config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "scriptRunner.runPs1.en",
+					"group": "z_script_runner@2",
+					"when": "(editorLangId == powershell || resourceExtname == .ps1) && config.antigravity.locale == 'en'"
 				},
 				{
 					"command": "scriptRunner.runBat",
 					"group": "z_script_runner@3",
-					"when": "editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd"
+					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "scriptRunner.runBat.en",
+					"group": "z_script_runner@3",
+					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale == 'en'"
 				}
 			],
 			"editor/title/context": [
 				{
 					"command": "scriptRunner.runPy",
 					"group": "z_script_runner@1",
-					"when": "resourceExtname == .py"
+					"when": "resourceExtname == .py && config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "scriptRunner.runPy.en",
+					"group": "z_script_runner@1",
+					"when": "resourceExtname == .py && config.antigravity.locale == 'en'"
 				},
 				{
 					"command": "scriptRunner.runPs1",
 					"group": "z_script_runner@2",
-					"when": "resourceExtname == .ps1"
+					"when": "resourceExtname == .ps1 && config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "scriptRunner.runPs1.en",
+					"group": "z_script_runner@2",
+					"when": "resourceExtname == .ps1 && config.antigravity.locale == 'en'"
 				},
 				{
 					"command": "scriptRunner.runBat",
 					"group": "z_script_runner@3",
-					"when": "resourceExtname == .bat || resourceExtname == .cmd"
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale != 'en'"
+				},
+				{
+					"command": "scriptRunner.runBat.en",
+					"group": "z_script_runner@3",
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale == 'en'"
 				}
 			]
 		}

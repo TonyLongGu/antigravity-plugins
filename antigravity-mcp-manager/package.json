@@ -2,7 +2,7 @@
 	"name": "antigravity-mcp-manager",
 	"displayName": "Antigravity MCP 管理儀表板",
 	"description": "Google Antigravity IDE 原生 MCP 伺服器視覺化管理、開關控制與即時連線測試側邊欄",
-	"version": "1.1.3",
+	"version": "1.1.5",
 	"publisher": "antigravity-toolkit",
 	"engines": {
 		"vscode": "^1.80.0"
@@ -15,6 +15,24 @@
 		"*"
 	],
 	"contributes": {
+		"configuration": {
+			"title": "Antigravity",
+			"properties": {
+				"antigravity.locale": {
+					"type": "string",
+					"default": "zh-TW",
+					"enum": [
+						"zh-TW",
+						"en"
+					],
+					"enumDescriptions": [
+						"繁體中文 (Traditional Chinese)",
+						"English"
+					],
+					"description": "Antigravity 外掛全域介面語言 (Global Interface Language for Antigravity Plugins)"
+				}
+			}
+		},
 		"viewsContainers": {
 			"activitybar": [
 				{
@@ -50,13 +68,24 @@
 				"command": "antigravity.mcp.focusView",
 				"title": "聚焦 MCP 側邊欄面板",
 				"category": "MCP"
+			},
+			{
+				"command": "antigravity.mcp.openInEditor.en",
+				"title": "Open in Editor Tab",
+				"category": "MCP",
+				"icon": "$(split-horizontal)"
 			}
 		],
 		"menus": {
 			"view/title": [
 				{
 					"command": "antigravity.mcp.openInEditor",
-					"when": "view == antigravity.mcpManagerView",
+					"when": "view == antigravity.mcpManagerView && config.antigravity.locale != 'en'",
+					"group": "navigation"
+				},
+				{
+					"command": "antigravity.mcp.openInEditor.en",
+					"when": "view == antigravity.mcpManagerView && config.antigravity.locale == 'en'",
 					"group": "navigation"
 				}
 			]

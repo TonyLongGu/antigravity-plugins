@@ -1,7 +1,6 @@
 // ==============================================================================
 // 檔案名稱：media/app.js
-// 功能說明：Google Antigravity MCP 管理儀表板 - VS Code 側邊欄前端核心 (全域管理)
-// 遵循規範：ide-extension-workflow 模組化控制器與 vscode.setState() 狀態保存
+// 功能說明：Google Antigravity MCP 管理儀表板 - 前端核心控制器 (支援全域聯動多國語言)
 // ==============================================================================
 
 (function () {
@@ -38,7 +37,7 @@
   }
 
   // ============================================================================
-  // 1. Toast 浮動提示模組 (標準樣式：對齊 AI上下文檢視器)
+  // 1. Toast 浮動提示模組
   // ============================================================================
   const ToastModule = {
     container: document.getElementById('toast-container'),
@@ -67,7 +66,117 @@
   };
 
   // ============================================================================
-  // 2. 伺服器標籤與屬性解析輔助工具
+  // 2. 國際化核心模組 (I18n Module - 支援外部獨立 JSON 與全域聯動)
+  // ============================================================================
+  const I18nModule = {
+    currentLang: 'zh-TW',
+
+    init() {
+      // 優先使用後端注入之全域設定，其次讀取本機快取
+      const initial = (typeof window !== 'undefined' && window.INITIAL_LOCALE) || null;
+      let saved = null;
+      try {
+        saved = localStorage.getItem('antigravity_locale');
+      } catch (e) {}
+
+      if (initial === 'zh-TW' || initial === 'en') {
+        this.currentLang = initial;
+      } else if (saved === 'zh-TW' || saved === 'en') {
+        this.currentLang = saved;
+      } else {
+        this.currentLang = 'zh-TW';
+      }
+
+      this.applyLanguage(this.currentLang, false);
+
+      const btnLang = document.getElementById('btn-lang-toggle');
+      if (btnLang) {
+        btnLang.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.toggle();
+        });
+      }
+    },
+
+    t(key, params = {}) {
+      const locales = window.LOCALES || {};
+      const dict = locales[this.currentLang] || locales['zh-TW'] || {};
+      let text = dict[key] !== undefined ? dict[key] : key;
+      if (typeof text === 'string') {
+        Object.keys(params).forEach((p) => {
+          text = text.replace(new RegExp(`\\{${p}\\}`, 'g'), params[p]);
+        });
+      }
+      return text;
+    },
+
+    toggle() {
+      const next = this.currentLang === 'zh-TW' ? 'en' : 'zh-TW';
+      // 1. 本地即時應用
+      this.applyLanguage(next, true);
+      // 2. 通知後端寫入全域設定並廣播所有外掛
+      vscode.postMessage({ type: 'setGlobalLocale', locale: next });
+      ToastModule.show(this.t('toast_lang_switched'), 'info', 1800);
+    },
+
+    applyLanguage(lang, save = true) {
+      this.currentLang = lang;
+      if (save) {
+        try {
+          localStorage.setItem('antigravity_locale', lang);
+        } catch (e) {}
+      }
+
+      document.documentElement.lang = lang === 'zh-TW' ? 'zh-TW' : 'en';
+
+      const langIndicator = document.getElementById('lang-indicator');
+      const btnLang = document.getElementById('btn-lang-toggle');
+      if (langIndicator) {
+        langIndicator.textContent = this.t('btn_lang_indicator');
+      }
+      if (btnLang) {
+        btnLang.title = this.t('btn_lang_toggle_title');
+      }
+
+      // 遍歷靜態 data-i18n
+      document.querySelectorAll('[data-i18n]').forEach((el) => {
+        const key = el.getAttribute('data-i18n');
+        if (key) {
+          const trans = this.t(key);
+          if (trans !== undefined) {
+            if (typeof trans === 'string' && trans.includes('<') && trans.includes('>')) {
+              el.innerHTML = trans;
+            } else {
+              el.textContent = trans;
+            }
+          }
+        }
+      });
+
+      // 遍歷靜態 data-i18n-title
+      document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+        const key = el.getAttribute('data-i18n-title');
+        if (key) {
+          el.title = this.t(key);
+        }
+      });
+
+      // 遍歷靜態 data-i18n-placeholder
+      document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (key) {
+          el.placeholder = this.t(key);
+        }
+      });
+
+      // 重新渲染伺服器卡片中的多國語言文字
+      GlobalConfigModule.render();
+    }
+  };
+
+  // ============================================================================
+  // 3. 伺服器標籤與屬性解析輔助工具
   // ============================================================================
   const ServerTagHelper = {
     getServerTags(serverConfig) {
@@ -92,7 +201,7 @@
   };
 
   // ============================================================================
-  // 3. 探針測速與連線狀態模組 (ProbeModule)
+  // 4. 探針測速與連線狀態模組 (ProbeModule)
   // ============================================================================
   const ProbeModule = {
     results: {}, // key: 'name' -> { status: 'idle'|'testing'|'ok'|'fail', message: string, latency: number }
@@ -106,13 +215,13 @@
       if (result.ok) {
         this.results[name] = {
           status: 'ok',
-          message: result.message || '連線正常',
+          message: result.message || I18nModule.t('status_ok_default'),
           latency: result.latency || 0,
         };
       } else {
         this.results[name] = {
           status: 'fail',
-          message: result.message || '連線失敗',
+          message: result.message || I18nModule.t('status_fail_default'),
           latency: result.latency || 0,
         };
       }
@@ -134,11 +243,11 @@
       const globalKeys = Object.keys(globalServers);
 
       if (globalKeys.length === 0) {
-        ToastModule.show('未發現可測試的 MCP 伺服器', 'info');
+        ToastModule.show(I18nModule.t('toast_no_servers_to_test'), 'info');
         return;
       }
 
-      ToastModule.show(`開始測試 ${globalKeys.length} 個全域 MCP 伺服器...`, 'info', 1800);
+      ToastModule.show(I18nModule.t('toast_testing_all', { count: globalKeys.length }), 'info', 1800);
 
       for (const name of globalKeys) {
         this.testServer(name);
@@ -149,7 +258,7 @@
   };
 
   // ============================================================================
-  // 4. 全域配置模組 (GlobalConfigModule)
+  // 5. 全域配置模組 (GlobalConfigModule)
   // ============================================================================
   const GlobalConfigModule = {
     data: null,
@@ -270,7 +379,11 @@
       this.dom.listContainer.innerHTML = '';
 
       if (filteredKeys.length === 0) {
-        if (this.dom.emptyState) this.dom.emptyState.style.display = 'block';
+        if (this.dom.emptyState) {
+          this.dom.emptyState.style.display = 'block';
+          const emptySpan = this.dom.emptyState.querySelector('span');
+          if (emptySpan) emptySpan.textContent = I18nModule.t('empty_servers');
+        }
         return;
       }
       if (this.dom.emptyState) this.dom.emptyState.style.display = 'none';
@@ -279,7 +392,6 @@
         const server = servers[key];
         const isEnabled = server.disabled !== true;
         const testResult = ProbeModule.results[key];
-        const tags = ServerTagHelper.getServerTags(server);
 
         const card = document.createElement('div');
         let statusClass = '';
@@ -287,13 +399,13 @@
         if (testResult) {
           if (testResult.status === 'ok') {
             statusClass = 'status-tested-ok';
-            cardTitle = `${key}\n[狀態] ${testResult.message}`;
+            cardTitle = `${key}\n${I18nModule.t('status_ok_prefix')} ${testResult.message}`;
           } else if (testResult.status === 'fail') {
             statusClass = 'status-tested-fail';
-            cardTitle = `${key}\n[錯誤] ${testResult.message}`;
+            cardTitle = `${key}\n${I18nModule.t('status_fail_prefix')} ${testResult.message}`;
           } else if (testResult.status === 'testing') {
             statusClass = 'status-tested-testing';
-            cardTitle = `${key}\n[測試中...]`;
+            cardTitle = `${key}\n${I18nModule.t('status_testing')}`;
           }
         }
 
@@ -307,6 +419,9 @@
           dotClass = testResult && testResult.status === 'fail' ? 'error' : 'enabled';
         }
 
+        const btnTestLabel = I18nModule.t('btn_test');
+        const btnTestTitle = I18nModule.t('btn_test_title');
+
         card.innerHTML = `
           <div class="server-card-main">
             <div class="server-info-left">
@@ -316,7 +431,7 @@
               </div>
             </div>
             <div class="server-controls-right">
-              <button class="btn-test ${testResult && testResult.status === 'testing' ? 'is-testing' : ''}" data-name="${escapeHtml(key)}" title="測試連線狀態">測試</button>
+              <button class="btn-test ${testResult && testResult.status === 'testing' ? 'is-testing' : ''}" data-name="${escapeHtml(key)}" title="${escapeHtml(btnTestTitle)}">${escapeHtml(btnTestLabel)}</button>
               <label class="switch">
                 <input type="checkbox" ${isEnabled ? 'checked' : ''} data-name="${escapeHtml(key)}">
                 <span class="slider"></span>
@@ -348,7 +463,7 @@
   };
 
   // ============================================================================
-  // 5. 全域滑鼠右鍵平滑拖曳滾動模組 (RMB Drag Scroll Module - Hand Pan Mode)
+  // 6. 全域滑鼠右鍵平滑拖曳滾動模組 (RMB Drag Scroll Module - Hand Pan Mode)
   // ============================================================================
   const DragScrollModule = {
     init() {
@@ -358,13 +473,11 @@
       let lastY = 0;
       let accumulatedDeltaY = 0;
       let rafId = null;
-      // 移動距離調整為 3 倍（極速大跨度捲動）
       const speed = 3.6;
 
       const flushScroll = () => {
         if (accumulatedDeltaY !== 0) {
           const curScroll = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
-          // 抓手平移模式：滑鼠往上推 (accumulatedDeltaY < 0) -> 頁面向下捲動 (nextScroll 增加)
           const nextScroll = curScroll - accumulatedDeltaY * speed;
           window.scrollTo(0, nextScroll);
           if (document.documentElement) document.documentElement.scrollTop = nextScroll;
@@ -385,16 +498,11 @@
         }
       };
 
-      // 1. 監聽滑鼠按下 (mousedown)
       window.addEventListener('mousedown', (e) => {
-        // 僅響應滑鼠右鍵 (button === 2)
         if (e.button !== 2) return;
-
-        // 防禦性檢查：若點擊在輸入框或文字編輯區，保留原生右鍵行為（避免 target 非 Element 引發報錯）
         if (e.target && typeof e.target.closest === 'function' && e.target.closest('input, textarea, select, [contenteditable="true"]')) {
           return;
         }
-
         isRmbDown = true;
         hasDragged = false;
         startY = e.clientY;
@@ -402,11 +510,8 @@
         accumulatedDeltaY = 0;
       });
 
-      // 2. 監聽滑鼠移動 (mousemove)
       window.addEventListener('mousemove', (e) => {
         if (!isRmbDown) return;
-
-        // 檢查右鍵是否仍在按壓狀態（防呆：游標在外部放開後移回）
         if ((e.buttons & 2) === 0) {
           endDrag();
           return;
@@ -415,7 +520,6 @@
         const currentY = e.clientY;
         const totalDeltaFromStart = currentY - startY;
 
-        // 移動超過 3px 視為拖曳意圖，防止原地右鍵點擊誤觸
         if (!hasDragged && Math.abs(totalDeltaFromStart) > 3) {
           hasDragged = true;
           document.body.classList.add('is-rmb-dragging');
@@ -426,7 +530,6 @@
           e.preventDefault();
           const stepDelta = currentY - lastY;
           lastY = currentY;
-
           accumulatedDeltaY += stepDelta;
           if (!rafId) {
             rafId = requestAnimationFrame(flushScroll);
@@ -434,11 +537,9 @@
         }
       });
 
-      // 3. 監聽滑鼠放開 (mouseup)
       window.addEventListener('mouseup', (e) => {
         if (e.button === 2) {
           endDrag();
-          // 防禦性超時重設：若極端情況下 contextmenu 未能觸發，確保 hasDragged 在 150ms 內安全解除
           if (hasDragged) {
             setTimeout(() => {
               hasDragged = false;
@@ -447,14 +548,11 @@
         }
       });
 
-      // 4. 視窗失去焦點時重設狀態
       window.addEventListener('blur', () => {
         endDrag();
         hasDragged = false;
       });
 
-      // 5. 攔截右鍵選單 (contextmenu)
-      // 若曾經發生拖曳，立即阻止彈出右鍵選單；若為原地單擊則不干擾
       window.addEventListener(
         'contextmenu',
         (e) => {
@@ -472,7 +570,7 @@
   };
 
   // ============================================================================
-  // 6. 核心分發器與生命週期管理 (App)
+  // 7. 核心分發器與生命週期管理 (App)
   // ============================================================================
   const App = {
     dom: {
@@ -498,6 +596,9 @@
     },
 
     init() {
+      // 1. 初始化多國語言模組 (Qt 外部解耦字典)
+      I18nModule.init();
+
       this.restoreState();
 
       // 全部摺疊卡片 (靜默執行)
@@ -525,7 +626,7 @@
       if (this.dom.btnRefresh) {
         this.dom.btnRefresh.addEventListener('click', () => {
           vscode.postMessage({ type: 'getData' });
-          ToastModule.show('已重新整理 MCP 伺服器狀態', 'info');
+          ToastModule.show(I18nModule.t('toast_refreshed'), 'info');
         });
       }
 
@@ -538,9 +639,16 @@
 
       // 監聽 Extension Host 傳入訊息
       window.addEventListener('message', (event) => {
-        const { type, payload, message, status } = event.data;
+        const { type, payload, message, status, locale } = event.data;
 
         switch (type) {
+          case 'localeChanged': {
+            if (locale && locale !== I18nModule.currentLang) {
+              I18nModule.applyLanguage(locale, true);
+            }
+            break;
+          }
+
           case 'updateAllData': {
             if (payload && payload.global) {
               GlobalConfigModule.update(payload.global);
@@ -559,7 +667,7 @@
           }
 
           case 'error': {
-            ToastModule.show(message || '發生錯誤', 'error');
+            ToastModule.show(message || I18nModule.t('toast_error'), 'error');
             break;
           }
         }

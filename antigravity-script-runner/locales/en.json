@@ -1,0 +1,7 @@
+{
+  "terminal_name": "Script Runner",
+  "warning_select_file": "Please select or open a saved script file in File Explorer first!",
+  "error_file_not_found": "File not found: {filePath}",
+  "status_started_admin": "🛡️ Started as Administrator: {fileName}",
+  "status_started_terminal": "Started in terminal: {fileName}"
+}

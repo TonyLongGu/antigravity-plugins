@@ -7,9 +7,11 @@ const STORAGE_KEY = 'antigravity_quick_access_items_v1';
 class StorageManager {
   /**
    * @param {vscode.ExtensionContext} context
+   * @param {import('./i18n')} [i18n]
    */
-  constructor(context) {
+  constructor(context, i18n = null) {
     this.context = context;
+    this.i18n = i18n;
   }
 
   /**
@@ -103,15 +105,32 @@ class StorageManager {
 
     if (addedCount > 0) {
       await this.saveData(data);
-      const msg = addedCount === 1
-        ? `已將「${lastName}」加入至${isPinned ? '常規釘選' : '臨時暫存'}清單`
-        : `已將 ${addedCount} 個項目加入至${isPinned ? '常規釘選' : '臨時暫存'}清單`;
+      let msg = '';
+      if (this.i18n) {
+        if (addedCount === 1) {
+          msg = isPinned ? this.i18n.t('added_single_pinned', { name: lastName }) : this.i18n.t('added_single_scratchpad', { name: lastName });
+        } else {
+          msg = isPinned ? this.i18n.t('added_multi_pinned', { count: addedCount }) : this.i18n.t('added_multi_scratchpad', { count: addedCount });
+        }
+      } else {
+        msg = addedCount === 1
+          ? `已將「${lastName}」加入至${isPinned ? '常規釘選' : '臨時暫存'}清單`
+          : `已將 ${addedCount} 個項目加入至${isPinned ? '常規釘選' : '臨時暫存'}清單`;
+      }
       return { success: true, message: msg, addedCount };
     }
 
+    let failMsg = '';
+    if (this.i18n) {
+      failMsg = uris.length === 1
+        ? (isPinned ? this.i18n.t('already_exists_single_pinned') : this.i18n.t('already_exists_single_scratchpad'))
+        : this.i18n.t('already_exists_multi');
+    } else {
+      failMsg = uris.length === 1 ? `項目已存在於${isPinned ? '常規釘選' : '臨時暫存'}清單中或路徑無效` : '所選項目皆已存在或無效';
+    }
     return {
       success: false,
-      message: uris.length === 1 ? `項目已存在於${isPinned ? '常規釘選' : '臨時暫存'}清單中或路徑無效` : '所選項目皆已存在或無效',
+      message: failMsg,
       addedCount: 0
     };
   }
@@ -247,7 +266,7 @@ class StorageManager {
       return { success: true, toggledCount, isPinned: lastIsPinned };
     }
 
-    return { success: false, toggledCount: 0, message: '找不到目標項目或路徑無效' };
+    return { success: false, toggledCount: 0, message: this.i18n ? this.i18n.t('target_not_found') : '找不到目標項目或路徑無效' };
   }
 
   /**

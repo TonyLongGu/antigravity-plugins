@@ -1,0 +1,7 @@
+{
+  "terminal_name": "腳本執行器 (Script Runner)",
+  "warning_select_file": "請先在檔案總管中選取或開啟已儲存的實體腳本檔案！",
+  "error_file_not_found": "檔案不存在：{filePath}",
+  "status_started_admin": "🛡️ 已以系統管理員身分啟動：{fileName}",
+  "status_started_terminal": "已在終端機啟動：{fileName}"
+}

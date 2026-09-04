@@ -43,9 +43,11 @@ class QuickAccessItem extends vscode.TreeItem {
 class QuickAccessTreeDataProvider {
   /**
    * @param {import('./storageManager')} storageManager
+   * @param {import('./i18n')} [i18n]
    */
-  constructor(storageManager) {
+  constructor(storageManager, i18n = null) {
     this.storageManager = storageManager;
+    this.i18n = i18n;
     this._onDidChangeTreeData = new vscode.EventEmitter();
     this.onDidChangeTreeData = this._onDidChangeTreeData.event;
     this._debounceTimer = null;
@@ -110,8 +112,11 @@ class QuickAccessTreeDataProvider {
     const categories = [];
 
     if (pinned.length > 0) {
+      const pinnedLabel = this.i18n
+        ? this.i18n.t('category_pinned', { count: pinned.length })
+        : `常規釘選 (${pinned.length})`;
       const pinnedCategory = new QuickAccessItem(
-        `常規釘選 (${pinned.length})`,
+        pinnedLabel,
         vscode.TreeItemCollapsibleState.Expanded,
         'category',
         {
@@ -123,8 +128,11 @@ class QuickAccessTreeDataProvider {
     }
 
     if (scratchpad.length > 0) {
+      const scratchLabel = this.i18n
+        ? this.i18n.t('category_scratchpad', { count: scratchpad.length })
+        : `臨時暫存 (${scratchpad.length})`;
       const scratchCategory = new QuickAccessItem(
-        `臨時暫存 (${scratchpad.length})`,
+        scratchLabel,
         vscode.TreeItemCollapsibleState.Expanded,
         'category',
         {
@@ -211,7 +219,7 @@ class QuickAccessTreeDataProvider {
             description: relDesc,
             command: {
               command: 'vscode.open',
-              title: '開啟檔案',
+              title: this.i18n ? this.i18n.t('open_file') : '開啟檔案',
               arguments: [vscode.Uri.file(fsPath)]
             }
           }
@@ -275,7 +283,7 @@ class QuickAccessTreeDataProvider {
               isPinned: parentIsPinned,
               command: {
                 command: 'vscode.open',
-                title: '開啟檔案',
+                title: this.i18n ? this.i18n.t('open_file') : '開啟檔案',
                 arguments: [vscode.Uri.file(fullPath)]
               }
             }

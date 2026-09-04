@@ -5,6 +5,7 @@
 // ==============================================================================
 
 const vscode = require('vscode');
+const fs = require('node:fs');
 const fsPromises = require('node:fs/promises');
 const path = require('node:path');
 
@@ -175,6 +176,16 @@ class MCPManagerViewProvider {
         vscode.window.showErrorMessage(message.message);
         break;
       }
+
+      case 'setGlobalLocale': {
+        const { locale } = message;
+        try {
+          await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
+        } catch (err) {
+          console.error('Failed to update global locale:', err);
+        }
+        break;
+      }
     }
   }
 
@@ -237,6 +248,16 @@ class MCPManagerViewProvider {
     }
   }
 
+  broadcastLocale(locale) {
+    const payload = { type: 'localeChanged', locale };
+    if (this._view) {
+      this._view.webview.postMessage(payload);
+    }
+    if (this._panel) {
+      this._panel.webview.postMessage(payload);
+    }
+  }
+
   async _getHtmlForWebview(webview) {
     const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'style.css'));
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'app.js'));
@@ -249,9 +270,30 @@ class MCPManagerViewProvider {
       html = `<!DOCTYPE html><html><body><h3>找不到 index.html</h3></body></html>`;
     }
 
+    // 讀取外部純 JSON 字典 (Qt 風格解耦翻譯檔)
+    const locales = {};
+    try {
+      const zhPath = path.join(this._extensionUri.fsPath, 'locales', 'zh-TW.json');
+      const enPath = path.join(this._extensionUri.fsPath, 'locales', 'en.json');
+      if (fs.existsSync(zhPath)) {
+        locales['zh-TW'] = JSON.parse(await fsPromises.readFile(zhPath, 'utf-8'));
+      }
+      if (fs.existsSync(enPath)) {
+        locales['en'] = JSON.parse(await fsPromises.readFile(enPath, 'utf-8'));
+      }
+    } catch (e) {
+      console.error('Failed to load external locales:', e);
+    }
+
+    const currentLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
+
     return html
       .replace(/href="style\.css"/g, `href="${styleUri}"`)
-      .replace(/src="app\.js"/g, `src="${scriptUri}"`);
+      .replace(/src="app\.js"/g, `src="${scriptUri}"`)
+      .replace(
+        /<script id="i18n-locales-data" type="application\/json">\{\}<\/script>/g,
+        `<script>window.LOCALES = ${JSON.stringify(locales)}; window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)};</script>`
+      );
   }
 }
 
@@ -275,10 +317,12 @@ async function activate(context) {
   await provider.refreshWebviewData();
 
   // 註冊 VS Code 指令
+  const openInEditorHandler = async () => {
+    await provider.openInEditor();
+  };
   context.subscriptions.push(
-    vscode.commands.registerCommand('antigravity.mcp.openInEditor', async () => {
-      await provider.openInEditor();
-    }),
+    vscode.commands.registerCommand('antigravity.mcp.openInEditor', openInEditorHandler),
+    vscode.commands.registerCommand('antigravity.mcp.openInEditor.en', openInEditorHandler),
     vscode.commands.registerCommand('antigravity.mcp.refresh', async () => {
       await provider.refreshWebviewData();
       provider.pushToast('狀態已重新整理', 'info');
@@ -300,6 +344,16 @@ async function activate(context) {
     watcher.onDidDelete(() => provider.refreshWebviewData());
     context.subscriptions.push(watcher);
   } catch (e) {}
+
+  // 監聽全域語言變動設定 (支援跨外掛即時聯動廣播)
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('antigravity.locale')) {
+        const newLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
+        provider.broadcastLocale(newLocale);
+      }
+    })
+  );
 }
 
 function deactivate() {}

@@ -20,17 +20,20 @@
     <div class="header-title-row">
       <div class="header-title">
         <svg class="lucide-icon" viewBox="0 0 24 24"><line x1="4" x2="20" y1="21" y2="21"/><line x1="4" x2="20" y1="14" y2="14"/><line x1="4" x2="20" y1="7" y2="7"/><circle cx="8" cy="21" r="2"/><circle cx="16" cy="14" r="2"/><circle cx="10" cy="7" r="2"/></svg>
-        <span>控制中心</span>
+        <span data-i18n="header_title">控制中心</span>
       </div>
       <div class="header-actions">
-        <button id="btn-collapse-all" class="btn-icon" title="摺疊全部卡片">
+        <button id="btn-collapse-all" class="btn-icon" data-i18n-title="btn_collapse_all_title" title="摺疊全部卡片">
           <svg class="lucide-icon" viewBox="0 0 24 24"><path d="m4 14 8-8 8 8"/><path d="m4 20 8-8 8 8"/></svg>
         </button>
-        <button id="btn-expand-all" class="btn-icon" title="展開全部卡片">
+        <button id="btn-expand-all" class="btn-icon" data-i18n-title="btn_expand_all_title" title="展開全部卡片">
           <svg class="lucide-icon" viewBox="0 0 24 24"><path d="m4 10 8 8 8-8"/><path d="m4 4 8 8 8-8"/></svg>
         </button>
-        <button id="btn-refresh" class="btn-icon" title="重新整理">
+        <button id="btn-refresh" class="btn-icon" data-i18n-title="btn_refresh_title" title="重新整理">
           <svg class="lucide-icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+        </button>
+        <button id="btn-lang-toggle" class="btn-lang" data-i18n-title="btn_lang_toggle_title" title="Switch to English">
+          <span id="lang-indicator">EN</span>
         </button>
       </div>
     </div>
@@ -45,37 +48,37 @@
       <summary class="card-header">
         <span class="chevron"><svg class="lucide-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
         <span class="card-icon"><svg class="lucide-icon" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg></span>
-        <span class="card-title-text">多專案工作區</span>
+        <span class="card-title-text" data-i18n="module_workspace_title">多專案工作區</span>
         <span id="ws-badge" class="badge"></span>
       </summary>
 
       <div class="card-body">
         <div class="info-box">
           <div class="info-row">
-            <span class="label">工作區：</span>
+            <span class="label" data-i18n="label_workspace">工作區：</span>
             <span id="ws-name" class="value text-truncate"></span>
           </div>
           <div class="info-row">
-            <span class="label">包含專案：</span>
+            <span class="label" data-i18n="label_includes_projects">包含專案：</span>
             <span id="ws-count" class="value"></span>
           </div>
           <div class="info-row" id="ws-custom-row">
-            <span class="label">自訂名稱：</span>
+            <span class="label" data-i18n="label_custom_name">自訂名稱：</span>
             <span id="ws-custom-count" class="value"></span>
           </div>
         </div>
 
         <div id="duplicate-banner" class="alert-banner hidden">
           <span class="alert-icon"><svg class="lucide-icon" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
-          <span id="duplicate-text">偵測到同名專案衝突</span>
+          <span id="duplicate-text" data-i18n="dup_banner_conflict">偵測到同名專案衝突</span>
         </div>
 
         <div class="grid-2col" id="ws-actions">
-          <button id="btn-fix-workspace" class="btn btn-primary" title="自動將同名專案及同層連帶專案加上「父資料夾 \ 專案名」">
-            <span>修正同名專案</span>
+          <button id="btn-fix-workspace" class="btn btn-primary" data-i18n-title="btn_fix_workspace_title" title="自動將同名專案及同層連帶專案加上「父資料夾 \ 專案名」">
+            <span data-i18n="btn_fix_workspace">修正同名專案</span>
           </button>
-          <button id="btn-reset-workspace" class="btn btn-secondary" title="清除所有專案的自訂名稱，回到預設資料夾名稱">
-            <span>還原預設名稱</span>
+          <button id="btn-reset-workspace" class="btn btn-secondary" data-i18n-title="btn_reset_workspace_title" title="清除所有專案的自訂名稱，回到預設資料夾名稱">
+            <span data-i18n="btn_reset_workspace">還原預設名稱</span>
           </button>
         </div>
 
@@ -83,17 +86,17 @@
           <summary class="folder-summary">
             <div class="folder-summary-left">
               <span class="item-chevron"><svg class="lucide-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
-              <span>專案清單 (<span id="folder-list-count">0</span>)</span>
+              <span><span data-i18n="folder_list_title">專案清單</span> (<span id="folder-list-count">0</span>)</span>
             </div>
             <div class="folder-summary-actions">
-              <button type="button" id="btn-show-only-first" class="btn-micro" title="僅保留第 1 個專案顯示，其餘全部隱藏">
-                <span>首項</span>
+              <button type="button" id="btn-show-only-first" class="btn-micro" data-i18n-title="btn_show_only_first_title" title="僅保留第 1 個專案顯示，其餘全部隱藏">
+                <span data-i18n="btn_show_only_first">首項</span>
               </button>
-              <button type="button" id="btn-invert" class="btn-micro" title="首項保持開啟，其餘專案反轉顯示/隱藏狀態">
-                <span>反轉</span>
+              <button type="button" id="btn-invert" class="btn-micro" data-i18n-title="btn_invert_title" title="首項保持開啟，其餘專案反轉顯示/隱藏狀態">
+                <span data-i18n="btn_invert">反轉</span>
               </button>
-              <button type="button" id="btn-show-all" class="btn-micro" title="全部顯示（啟用工作區所有專案）">
-                <span>全部</span>
+              <button type="button" id="btn-show-all" class="btn-micro" data-i18n-title="btn_show_all_title" title="全部顯示（啟用工作區所有專案）">
+                <span data-i18n="btn_show_all">全部</span>
               </button>
             </div>
           </summary>
@@ -109,13 +112,13 @@
       <summary class="card-header">
         <span class="chevron"><svg class="lucide-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
         <span class="card-icon"><svg class="lucide-icon" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg></span>
-        <span class="card-title-text">專案腳本執行器</span>
+        <span class="card-title-text" data-i18n="module_scripts_title">專案腳本執行器</span>
         <span id="scripts-badge" class="badge purple">0 個</span>
       </summary>
 
       <div class="card-body">
         <div id="scripts-empty-hint" class="empty-hint hidden">
-          <span>尚未加入腳本，請在檔案總管對 <code>.ps1</code> 或 <code>.bat</code> 檔案按右鍵加入</span>
+          <span data-i18n="scripts_empty_hint">尚未加入腳本，請在檔案總管對 <code>.ps1</code> 或 <code>.bat</code> 檔案按右鍵加入</span>
         </div>
 
         <div id="scripts-list" class="script-list"></div>
@@ -129,27 +132,27 @@
       <summary class="card-header">
         <span class="chevron"><svg class="lucide-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
         <span class="card-icon"><svg class="lucide-icon" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg></span>
-        <span class="card-title-text">IDE 設定檔</span>
+        <span class="card-title-text" data-i18n="module_settings_title">IDE 設定檔</span>
       </summary>
       <div class="card-body">
         <div class="action-stack">
           <button class="btn btn-secondary btn-block" data-target="settingsJson">
-            <span>開啟 settings.json (編輯器)</span>
+            <span data-i18n="btn_open_settings_json">開啟 settings.json (編輯器)</span>
           </button>
         </div>
 
         <div class="divider">
-          <span>檔案總管顯示過濾</span>
+          <span data-i18n="divider_explorer_filters">檔案總管顯示過濾</span>
         </div>
 
         <div class="setting-toggle-list" id="explorer-toggle-list">
           <!-- 1. 隱藏 .gitignore 檔案 -->
           <div class="setting-toggle-row" data-key="hideGitignore">
             <div class="setting-toggle-info">
-              <span class="setting-toggle-title">隱藏 .gitignore 檔案</span>
-              <span class="setting-toggle-desc">files.exclude (**/.gitignore)</span>
+              <span class="setting-toggle-title" data-i18n="setting_hide_gitignore_title">隱藏 .gitignore 檔案</span>
+              <span class="setting-toggle-desc" data-i18n="setting_hide_gitignore_desc">files.exclude (**/.gitignore)</span>
             </div>
-            <button type="button" class="folder-switch" id="toggle-hide-gitignore" title="點擊切換">
+            <button type="button" class="folder-switch" id="toggle-hide-gitignore" data-i18n-title="switch_click_to_toggle" title="點擊切換">
               <span class="switch-thumb"></span>
             </button>
           </div>
@@ -157,10 +160,10 @@
           <!-- 2. 隱藏 Git 忽略的檔案 (Exclude Git Ignore) -->
           <div class="setting-toggle-row" data-key="excludeGitIgnore">
             <div class="setting-toggle-info">
-              <span class="setting-toggle-title">隱藏 Git 忽略的檔案</span>
-              <span class="setting-toggle-desc">explorer.excludeGitIgnore</span>
+              <span class="setting-toggle-title" data-i18n="setting_exclude_gitignore_title">隱藏 Git 忽略的檔案</span>
+              <span class="setting-toggle-desc" data-i18n="setting_exclude_gitignore_desc">explorer.excludeGitIgnore</span>
             </div>
-            <button type="button" class="folder-switch" id="toggle-exclude-gitignore" title="點擊切換">
+            <button type="button" class="folder-switch" id="toggle-exclude-gitignore" data-i18n-title="switch_click_to_toggle" title="點擊切換">
               <span class="switch-thumb"></span>
             </button>
           </div>
@@ -168,10 +171,10 @@
           <!-- 3. 隱藏系統雜項 (Thumbs.db, .DS_Store) -->
           <div class="setting-toggle-row" data-key="hideSystemJunk">
             <div class="setting-toggle-info">
-              <span class="setting-toggle-title">隱藏系統暫存雜項</span>
-              <span class="setting-toggle-desc">Thumbs.db, .DS_Store, desktop.ini</span>
+              <span class="setting-toggle-title" data-i18n="setting_hide_system_junk_title">隱藏系統暫存雜項</span>
+              <span class="setting-toggle-desc" data-i18n="setting_hide_system_junk_desc">Thumbs.db, .DS_Store, desktop.ini</span>
             </div>
-            <button type="button" class="folder-switch" id="toggle-hide-system-junk" title="點擊切換">
+            <button type="button" class="folder-switch" id="toggle-hide-system-junk" data-i18n-title="switch_click_to_toggle" title="點擊切換">
               <span class="switch-thumb"></span>
             </button>
           </div>
@@ -179,10 +182,10 @@
           <!-- 4. 隱藏 Python 快取 (__pycache__) -->
           <div class="setting-toggle-row" data-key="hidePythonCache">
             <div class="setting-toggle-info">
-              <span class="setting-toggle-title">隱藏 Python 編譯快取</span>
-              <span class="setting-toggle-desc">__pycache__, *.pyc</span>
+              <span class="setting-toggle-title" data-i18n="setting_hide_python_cache_title">隱藏 Python 編譯快取</span>
+              <span class="setting-toggle-desc" data-i18n="setting_hide_python_cache_desc">__pycache__, *.pyc</span>
             </div>
-            <button type="button" class="folder-switch" id="toggle-hide-python-cache" title="點擊切換">
+            <button type="button" class="folder-switch" id="toggle-hide-python-cache" data-i18n-title="switch_click_to_toggle" title="點擊切換">
               <span class="switch-thumb"></span>
             </button>
           </div>
@@ -197,27 +200,27 @@
       <summary class="card-header">
         <span class="chevron"><svg class="lucide-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
         <span class="card-icon"><svg class="lucide-icon" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></span>
-        <span class="card-title-text">全域自訂 (~/.gemini)</span>
+        <span class="card-title-text" data-i18n="module_config_title">全域自訂 (~/.gemini)</span>
       </summary>
       <div class="card-body">
         <div class="grid-2col">
           <button class="btn-grid" data-target="globalConfig">
-            <span class="grid-label">Config 根目錄</span>
+            <span class="grid-label" data-i18n="config_root">Config 根目錄</span>
           </button>
           <button class="btn-grid" data-target="mcpConfig">
-            <span class="grid-label">mcp_config.json</span>
+            <span class="grid-label" data-i18n="config_mcp">mcp_config.json</span>
           </button>
           <button class="btn-grid" data-target="skills">
-            <span class="grid-label">Skills 技能</span>
+            <span class="grid-label" data-i18n="config_skills">Skills 技能</span>
           </button>
           <button class="btn-grid" data-target="rules">
-            <span class="grid-label">Rules 規範</span>
+            <span class="grid-label" data-i18n="config_rules">Rules 規範</span>
           </button>
           <button class="btn-grid" data-target="plugins">
-            <span class="grid-label">Plugins 插件</span>
+            <span class="grid-label" data-i18n="config_plugins">Plugins 插件</span>
           </button>
           <button class="btn-grid" data-target="appData">
-            <span class="grid-label">AppData 核心</span>
+            <span class="grid-label" data-i18n="config_appdata">AppData 核心</span>
           </button>
         </div>
       </div>
@@ -230,38 +233,38 @@
       <summary class="card-header">
         <span class="chevron"><svg class="lucide-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
         <span class="card-icon"><svg class="lucide-icon" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04z"/></svg></span>
-        <span class="card-title-text">對話記憶庫 (Brain)</span>
+        <span class="card-title-text" data-i18n="module_brain_title">對話記憶庫 (Brain)</span>
       </summary>
       <div class="card-body">
         <div class="info-box">
           <div class="info-row">
-            <span class="label">總佔用空間：</span>
+            <span class="label" data-i18n="label_brain_size">總佔用空間：</span>
             <span id="brain-size" class="value">0.0 MB</span>
           </div>
           <div class="info-row">
-            <span class="label">對話紀錄數：</span>
+            <span class="label" data-i18n="label_brain_count">對話紀錄數：</span>
             <span id="brain-count" class="value">0 個</span>
           </div>
         </div>
 
         <button class="btn btn-secondary btn-block" data-target="brain">
-          <span>開啟 Brain 目錄 (檔案總管)</span>
+          <span data-i18n="btn_open_brain">開啟 Brain 目錄 (檔案總管)</span>
         </button>
 
         <div class="divider">
-          <span>歷史紀錄清理</span>
+          <span data-i18n="divider_history_cleanup">歷史紀錄清理</span>
         </div>
 
         <div class="slider-container">
           <div class="slider-header">
-            <span class="slider-label">保留範圍：最近 <strong id="brain-months-val">3</strong> 個月</span>
+            <span class="slider-label" id="brain-slider-label">保留範圍：最近 <strong id="brain-months-val">3</strong> 個月</span>
             <span id="brain-days-hint" class="slider-hint">(清理 90 天前舊檔)</span>
           </div>
           <input type="range" id="brain-slider" class="range-slider" min="2" max="4" value="3" step="1">
           <div class="slider-ticks">
-            <span>2月</span>
-            <span>3月</span>
-            <span>4月</span>
+            <span data-i18n="tick_2m">2月</span>
+            <span data-i18n="tick_3m">3月</span>
+            <span data-i18n="tick_4m">4月</span>
           </div>
         </div>
 
@@ -275,6 +278,7 @@
   <!-- In-app 浮動通知容器 -->
   <div id="toast-container" class="toast-container"></div>
 
+  <script src="locales.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
