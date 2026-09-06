@@ -361,8 +361,8 @@ class TranscriptParserService {
       // 1. 提取靜態注入之常駐規範 <RULE[路徑]>
       const ruleTagMatches = str.matchAll(/<RULE\[([a-zA-Z]:[\\/][^\]\r\n]+)\]>/gi);
       for (const rm of ruleTagMatches) {
-        const rPath = path.normalize(rm[1].trim());
-        if (fs.existsSync(rPath)) {
+        const rPath = ContextScannerService.normalizeFsPath(rm[1]);
+        if (rPath && fs.existsSync(rPath)) {
           alwaysActiveRules.add(rPath);
           const ws = ContextScannerService.findWorkspaceRoot(rPath);
           if (ws) workspaces.add(ws);
@@ -372,8 +372,8 @@ class TranscriptParserService {
       // 2. 提取靜態注入之條件式規範 - file:///D:/.../.agents/rules/...
       const condRuleMatches = str.matchAll(/-\s+file:\/\/\/([a-zA-Z]:[^\r\n:]+\.agents[\\/]rules[\\/][^\r\n:]+\.md)/gi);
       for (const crm of condRuleMatches) {
-        const rPath = path.normalize(crm[1].trim());
-        if (fs.existsSync(rPath)) {
+        const rPath = ContextScannerService.normalizeFsPath(crm[1]);
+        if (rPath && fs.existsSync(rPath)) {
           conditionalRules.add(rPath);
           const ws = ContextScannerService.findWorkspaceRoot(rPath);
           if (ws) workspaces.add(ws);
@@ -383,8 +383,8 @@ class TranscriptParserService {
       // 3. 提取靜態注入之可用技能清單 - skill-name (D:\.../SKILL.md)
       const skillMatches = str.matchAll(/-\s+([a-zA-Z0-9_\-]+)\s+\(([a-zA-Z]:[^\r\n\)]+SKILL\.md)\)/gi);
       for (const sm of skillMatches) {
-        const sPath = path.normalize(sm[2].trim());
-        if (fs.existsSync(sPath)) {
+        const sPath = ContextScannerService.normalizeFsPath(sm[2]);
+        if (sPath && fs.existsSync(sPath)) {
           availableSkills.add(sPath);
           const ws = ContextScannerService.findWorkspaceRoot(sPath);
           if (ws) workspaces.add(ws);
@@ -572,26 +572,28 @@ class TranscriptParserService {
 
               let fp = tc.args?.AbsolutePath || tc.args?.TargetFile || tc.args?.SearchPath;
               if (fp && typeof fp === 'string') {
-                fp = fp.replace(/^["']|["']$/g, '').trim();
-                const lowerFp = fp.toLowerCase();
-                touchedFiles.add(lowerFp);
-                if (lowerFp.includes('skill.md')) {
-                  const skillDir = path.basename(path.dirname(fp));
-                  const skillKey = skillDir.toLowerCase();
-                  invokedSkills.add(skillKey);
-                  discoveredSkillPaths.set(skillKey, fp);
-                  const wsRoot = ContextScannerService.findWorkspaceRoot(fp);
-                  if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
-                }
-                if (lowerFp.includes('.agents\\rules') || lowerFp.includes('/.agents/rules') || lowerFp.includes('.gemini\\config\\rules') || lowerFp.includes('/.gemini/config/rules')) {
-                  const ruleKey = path.basename(fp).toLowerCase();
-                  invokedRules.add(ruleKey);
-                  discoveredRulePaths.set(ruleKey, fp);
-                  const wsRoot = ContextScannerService.findWorkspaceRoot(fp);
-                  if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
-                } else {
-                  const wsRoot = ContextScannerService.findWorkspaceRoot(fp);
-                  if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
+                const cleanFp = ContextScannerService.normalizeFsPath(fp);
+                if (cleanFp && fs.existsSync(cleanFp)) {
+                  const lowerFp = cleanFp.toLowerCase();
+                  touchedFiles.add(lowerFp);
+                  if (lowerFp.includes('skill.md')) {
+                    const skillDir = path.basename(path.dirname(cleanFp));
+                    const skillKey = skillDir.toLowerCase();
+                    invokedSkills.add(skillKey);
+                    discoveredSkillPaths.set(skillKey, cleanFp);
+                    const wsRoot = ContextScannerService.findWorkspaceRoot(cleanFp);
+                    if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
+                  }
+                  if (lowerFp.includes('.agents\\rules') || lowerFp.includes('/.agents/rules') || lowerFp.includes('.gemini\\config\\rules') || lowerFp.includes('/.gemini/config/rules')) {
+                    const ruleKey = path.basename(cleanFp).toLowerCase();
+                    invokedRules.add(ruleKey);
+                    discoveredRulePaths.set(ruleKey, cleanFp);
+                    const wsRoot = ContextScannerService.findWorkspaceRoot(cleanFp);
+                    if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
+                  } else {
+                    const wsRoot = ContextScannerService.findWorkspaceRoot(cleanFp);
+                    if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
+                  }
                 }
               }
             }
@@ -601,27 +603,26 @@ class TranscriptParserService {
           if (obj.type === 'VIEW_FILE' && obj.content) {
             const matchPath = obj.content.match(/File Path:\s*`file:\/\/\/?([^`]+)`/);
             if (matchPath) {
-              let fp = matchPath[1];
-              if (fp && typeof fp === 'string') {
-                fp = fp.replace(/^["']|["']$/g, '').trim();
-                const lowerFp = fp.toLowerCase();
+              const cleanFp = ContextScannerService.normalizeFsPath(matchPath[1]);
+              if (cleanFp && fs.existsSync(cleanFp)) {
+                const lowerFp = cleanFp.toLowerCase();
                 touchedFiles.add(lowerFp);
                 if (lowerFp.includes('skill.md')) {
-                  const skillDir = path.basename(path.dirname(fp));
+                  const skillDir = path.basename(path.dirname(cleanFp));
                   const skillKey = skillDir.toLowerCase();
                   invokedSkills.add(skillKey);
-                  discoveredSkillPaths.set(skillKey, fp);
-                  const wsRoot = ContextScannerService.findWorkspaceRoot(fp);
+                  discoveredSkillPaths.set(skillKey, cleanFp);
+                  const wsRoot = ContextScannerService.findWorkspaceRoot(cleanFp);
                   if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
                 }
                 if (lowerFp.includes('.agents\\rules') || lowerFp.includes('/.agents/rules') || lowerFp.includes('.gemini\\config\\rules') || lowerFp.includes('/.gemini/config/rules')) {
-                  const ruleKey = path.basename(fp).toLowerCase();
+                  const ruleKey = path.basename(cleanFp).toLowerCase();
                   invokedRules.add(ruleKey);
-                  discoveredRulePaths.set(ruleKey, fp);
-                  const wsRoot = ContextScannerService.findWorkspaceRoot(fp);
+                  discoveredRulePaths.set(ruleKey, cleanFp);
+                  const wsRoot = ContextScannerService.findWorkspaceRoot(cleanFp);
                   if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
                 } else {
-                  const wsRoot = ContextScannerService.findWorkspaceRoot(fp);
+                  const wsRoot = ContextScannerService.findWorkspaceRoot(cleanFp);
                   if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
                 }
               }
@@ -724,48 +725,45 @@ class TranscriptParserService {
       }
     }
 
-    // 6.4 補全動態日誌中的 Skills
+    // 6.4 補全動態日誌中的 Skills（僅保留實體檔案真實存在者）
     for (const [skillKey, skillPath] of discoveredSkillPaths.entries()) {
+      const cleanSkillPath = ContextScannerService.normalizeFsPath(skillPath);
+      if (!cleanSkillPath || !fs.existsSync(cleanSkillPath)) {
+        continue;
+      }
+
       const alreadyExists = [
         ...(baseEnv.skills.workspace || []),
         ...(baseEnv.skills.global || []),
         ...(baseEnv.skills.builtin || [])
-      ].some(s => (s.filePath && s.filePath.toLowerCase() === skillPath.toLowerCase()) || 
+      ].some(s => (s.filePath && s.filePath.toLowerCase() === cleanSkillPath.toLowerCase()) || 
                   (s.dirName && s.dirName.toLowerCase() === skillKey) || 
                   (s.name && s.name.toLowerCase() === skillKey));
 
       if (!alreadyExists) {
-        const parsedSkill = await ContextScannerService.parseSingleSkillFile(skillPath);
+        const parsedSkill = await ContextScannerService.parseSingleSkillFile(cleanSkillPath);
         if (parsedSkill) {
           parsedSkill.isInvoked = true;
           baseEnv.skills.workspace.push(parsedSkill);
-        } else {
-          baseEnv.skills.workspace.push({
-            name: skillKey,
-            displayName: skillKey,
-            dirName: skillKey,
-            description: '此對話調用之技能（檔案未在當前目錄中）',
-            filePath: skillPath,
-            dirPath: path.dirname(skillPath),
-            source: ContextScannerService.formatWorkspaceName(path.resolve(path.dirname(skillPath), '../../..')),
-            type: 'workspace',
-            isInvoked: true,
-            sizeBytes: 0
-          });
         }
       }
     }
 
-    // 6.5 補全動態日誌中的 Rules
+    // 6.5 補全動態日誌中的 Rules（僅保留實體檔案真實存在者）
     for (const [ruleKey, rulePath] of discoveredRulePaths.entries()) {
+      const cleanRulePath = ContextScannerService.normalizeFsPath(rulePath);
+      if (!cleanRulePath || !fs.existsSync(cleanRulePath)) {
+        continue;
+      }
+
       const alreadyExists = [
         ...(baseEnv.rules.alwaysActive || []),
         ...(baseEnv.rules.conditional || [])
-      ].some(r => (r.filePath && r.filePath.toLowerCase() === rulePath.toLowerCase()) || 
+      ].some(r => (r.filePath && r.filePath.toLowerCase() === cleanRulePath.toLowerCase()) || 
                   (r.name && r.name.toLowerCase() === ruleKey));
 
       if (!alreadyExists) {
-        const parsedRule = await ContextScannerService.parseSingleRuleFile(rulePath);
+        const parsedRule = await ContextScannerService.parseSingleRuleFile(cleanRulePath);
         if (parsedRule) {
           parsedRule.isInvoked = true;
           if (parsedRule.isAlwaysActive) {
@@ -846,6 +844,24 @@ class TranscriptParserService {
       };
     });
 
+    // 10. 全域過濾防線：徹底排除本機磁碟上已不存在的規範與技能檔案（採用統一 normalizeFsPath）
+    const fileExistsFilter = (item) => {
+      if (!item || !item.filePath) return false;
+      const cleanFp = ContextScannerService.normalizeFsPath(item.filePath);
+      return Boolean(cleanFp && fs.existsSync(cleanFp));
+    };
+
+    const finalRules = {
+      alwaysActive: annotatedRules.alwaysActive.filter(fileExistsFilter),
+      conditional: annotatedRules.conditional.filter(fileExistsFilter)
+    };
+
+    const finalSkills = {
+      workspace: annotatedSkills.workspace.filter(fileExistsFilter),
+      global: annotatedSkills.global.filter(fileExistsFilter),
+      builtin: annotatedSkills.builtin.filter(fileExistsFilter)
+    };
+
     return {
       mode: 'snapshot',
       conversationId: targetConv.id,
@@ -857,8 +873,8 @@ class TranscriptParserService {
       invokedSkillsCount: invokedSkills.size,
       invokedRulesCount: invokedRules.size,
       invokedTools: Array.from(invokedTools),
-      rules: annotatedRules,
-      skills: annotatedSkills,
+      rules: finalRules,
+      skills: finalSkills,
       mcpServers: annotatedMcp,
       workspaces: effectiveWorkspaceObjects
     };

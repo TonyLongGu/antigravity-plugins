@@ -10,13 +10,13 @@ Google Antigravity IDE 專屬原生側邊欄擴充套件。
 
 1. **多專案工作區管理 (Workspace)**：
    - 即時偵測當前開啟的 `.code-workspace` 多專案工作區。
-   - 智慧標記同名專案衝突與同層連帶專案（如 `UnityPj\MapleRealm` 與 `SpinePj\MapleRealm`，以及同層的 `GitHubPj\Antigravity` 與 `GitHubPj\ai`）。
+   - 智慧標記同名專案衝突與同層連帶專案（如 `Unity\MapleRealm` 與 `Spine\MapleRealm`，以及同層的 `GitHub\Antigravity` 與 `GitHub\ai`）。
    - **一鍵「自動修正同名專案名稱」**：自動在工作區 JSON 中將同名專案及同層專案補上「父資料夾 \ 專案名」前綴，保持命名一致性。
    - 點擊專案項目可直接在 Windows 檔案總管開啟該專案目錄。
 
 2. **專案腳本執行器 (Project Script Runner)**：
    - ⚡ **檔案總管右鍵直達**：在檔案總管對 `.ps1`、`.bat`、`.cmd` 檔案按右鍵選擇「加入至專案腳本執行器」，即刻一鍵加入。
-   - 🗂️ **依專案順序動態聯動排序**：自動解析腳本隸屬的專案名稱（如 `AiPj \ ai`），並隨上方「多專案工作區」專案拖曳排序順序即時動態更新先後次序。
+   - 🗂️ **依專案順序動態聯動排序**：自動解析腳本隸屬的專案名稱（如 `Ai \ ai`），並隨上方「多專案工作區」專案拖曳排序順序即時動態更新先後次序。
    - ▶️ **一般執行**：在 IDE 原生整合終端機中運行腳本（`.ps1` 自動使用 `-ExecutionPolicy Bypass` 執行）。
    - ⚡ **管理員執行**：以 Windows 系統管理員權限 (UAC 提權) 於獨立視窗運行。
    - 💾 **工作區持久化保存**：腳本清單自動保存於 `.code-workspace` 檔案，隨工作區切換無縫動態載入。

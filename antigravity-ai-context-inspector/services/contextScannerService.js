@@ -247,7 +247,11 @@ class ContextScannerService {
    */
   static formatWorkspaceName(wsPath) {
     if (!wsPath || typeof wsPath !== 'string') return '';
-    const norm = wsPath.replace(/\\/g, '/').replace(/\/+$/, '');
+    let decoded = wsPath;
+    try {
+      decoded = decodeURIComponent(wsPath);
+    } catch (e) {}
+    const norm = decoded.replace(/\\/g, '/').replace(/\/+$/, '');
     if (norm.toLowerCase().includes('/pj/')) {
       const parts = norm.split(/\/pj\//i);
       if (parts.length > 1 && parts[1]) {
@@ -258,19 +262,31 @@ class ContextScannerService {
     if (segs.length >= 2) {
       return `${segs[segs.length - 2]} \\ ${segs[segs.length - 1]}`;
     }
-    return segs[segs.length - 1] || wsPath;
+    return segs[segs.length - 1] || decoded;
+  }
+
+  /**
+   * 安全標準化本機路徑：徹底處理 URI 編碼、file:/// 協議前綴、引號與 Windows 斜線相容性
+   */
+  static normalizeFsPath(filePath) {
+    if (!filePath || typeof filePath !== 'string') return '';
+    let p = filePath.trim().replace(/^["']|["']$/g, '');
+    try {
+      p = decodeURIComponent(p);
+    } catch (e) {}
+    p = p.replace(/^file:\/\/\/?/i, '');
+    if (process.platform === 'win32' && /^\/[a-zA-Z]:/.test(p)) {
+      p = p.slice(1);
+    }
+    return path.normalize(p);
   }
 
   /**
    * 依據給定檔案或目錄路徑，向上溯源尋找所屬之工作區根目錄（含有 .agents）
    */
   static findWorkspaceRoot(filePath) {
-    if (!filePath || typeof filePath !== 'string') return null;
-    let cleanPath = filePath.replace(/^file:\/\/\/?/i, '').replace(/^["']|["']$/g, '').trim();
-    if (cleanPath.startsWith('/') && process.platform === 'win32' && /^[a-zA-Z]:/.test(cleanPath.slice(1))) {
-      cleanPath = cleanPath.slice(1);
-    }
-    cleanPath = path.normalize(cleanPath).replace(/[\\/]+$/, '');
+    const cleanPath = this.normalizeFsPath(filePath).replace(/[\\/]+$/, '');
+    if (!cleanPath) return null;
 
     // 1. 如果路徑中包含 .agents，直接截取 .agents 前一層作為工作區根目錄
     const agentsIdx = cleanPath.toLowerCase().indexOf(path.sep + '.agents');
@@ -308,13 +324,14 @@ class ContextScannerService {
    * 單檔解析單一 Rule (.md)
    */
   static async parseSingleRuleFile(filePath, sourceName = '', isGlobal = false, wsIndex = 999) {
-    if (!fs.existsSync(filePath)) return null;
+    const cleanPath = this.normalizeFsPath(filePath);
+    if (!cleanPath || !fs.existsSync(cleanPath)) return null;
     try {
-      const stat = await fsPromises.stat(filePath);
-      const content = await fsPromises.readFile(filePath, 'utf-8');
+      const stat = await fsPromises.stat(cleanPath);
+      const content = await fsPromises.readFile(cleanPath, 'utf-8');
       const lines = content.split(/\r?\n/);
       const meta = this.parseFrontmatter(content);
-      const fileName = path.basename(filePath);
+      const fileName = path.basename(cleanPath);
 
       let firstHeader = '';
       for (const line of lines) {
@@ -334,12 +351,12 @@ class ContextScannerService {
         }
       }
 
-      const finalSource = sourceName || (isGlobal ? '全域設定 (Global)' : this.formatWorkspaceName(path.resolve(filePath, '../..')));
+      const finalSource = sourceName || (isGlobal ? '全域設定 (Global)' : this.formatWorkspaceName(path.resolve(cleanPath, '../..')));
 
       return {
         name: fileName,
         displayName: firstHeader || fileName,
-        filePath: filePath,
+        filePath: cleanPath,
         source: finalSource,
         wsIndex: wsIndex,
         isGlobal: isGlobal,
@@ -358,13 +375,14 @@ class ContextScannerService {
    * 單檔解析單一 Skill (SKILL.md)
    */
   static async parseSingleSkillFile(skillMdPath, sourceName = '', type = 'workspace', wsIndex = 999) {
-    if (!fs.existsSync(skillMdPath)) return null;
+    const cleanPath = this.normalizeFsPath(skillMdPath);
+    if (!cleanPath || !fs.existsSync(cleanPath)) return null;
     try {
-      const content = await fsPromises.readFile(skillMdPath, 'utf-8');
+      const content = await fsPromises.readFile(cleanPath, 'utf-8');
       const meta = this.parseFrontmatter(content);
-      const stat = await fsPromises.stat(skillMdPath);
+      const stat = await fsPromises.stat(cleanPath);
       const lines = content.split(/\r?\n/);
-      const skillDir = path.dirname(skillMdPath);
+      const skillDir = path.dirname(cleanPath);
       const dirName = path.basename(skillDir);
 
       let firstHeader = '';
@@ -390,7 +408,7 @@ class ContextScannerService {
         displayName: displayName,
         dirName: dirName,
         description: meta.description || '無描述',
-        filePath: skillMdPath,
+        filePath: cleanPath,
         dirPath: skillDir,
         source: finalSource,
         wsIndex: wsIndex,
