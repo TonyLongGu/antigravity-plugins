@@ -36,7 +36,8 @@
   let idleTimer = null;
   let currentSpeed = 1.0;
   let isLooping = false;
-  let lastVolume = 1.0;
+  let isMuted = false;
+  let lastVolume = 0.5;
 
   // 3. DOM 節點引用 - 工具列與畫廊
   const folderNameEl = document.getElementById('folderName');
@@ -308,24 +309,89 @@
   // 7. 狀態持久化
   const STORAGE_KEY_THUMB_SIZE = 'antigravity.videoViewer.thumbSize';
   const STORAGE_KEY_SHOW_THUMBS = 'antigravity.videoViewer.showThumbs';
+  const STORAGE_KEY_VOLUME = 'antigravity.videoViewer.volume';
+  const STORAGE_KEY_LAST_VOLUME = 'antigravity.videoViewer.lastVolume';
+  const STORAGE_KEY_MUTED = 'antigravity.videoViewer.muted';
+
+  let saveVolumeDebounceTimer = null;
+  function saveVolumeState() {
+    const rawVol = parseFloat(volumeSliderEl.value);
+    const vol = Math.round(Math.max(0, Math.min(1, isNaN(rawVol) ? 0.5 : rawVol)) * 100) / 100;
+    const muted = isMuted || (playerVideoEl && playerVideoEl.muted) || vol === 0;
+    if (vol > 0) {
+      lastVolume = vol;
+    }
+
+    try {
+      localStorage.setItem(STORAGE_KEY_VOLUME, vol.toString());
+      localStorage.setItem(STORAGE_KEY_MUTED, muted ? 'true' : 'false');
+      localStorage.setItem(STORAGE_KEY_LAST_VOLUME, lastVolume.toString());
+    } catch (_) {}
+
+    if (vscode) {
+      const curState = vscode.getState() || {};
+      curState.volume = vol;
+      curState.muted = muted;
+      curState.lastVolume = lastVolume;
+      vscode.setState(curState);
+
+      if (saveVolumeDebounceTimer) clearTimeout(saveVolumeDebounceTimer);
+      saveVolumeDebounceTimer = setTimeout(() => {
+        vscode.postMessage({
+          type: 'saveVolume',
+          volume: vol,
+          muted: muted,
+          lastVolume: lastVolume
+        });
+      }, 200);
+    }
+  }
+
+  function syncVolumeUI() {
+    const rawVol = parseFloat(volumeSliderEl.value);
+    const curVol = Math.round(Math.max(0, Math.min(1, isNaN(rawVol) ? 0.5 : rawVol)) * 100) / 100;
+    playerVideoEl.volume = curVol;
+    playerVideoEl.muted = isMuted || curVol === 0;
+
+    if (playerVideoEl.muted || curVol === 0) {
+      iconVolHighEl.style.display = 'none';
+      iconVolMutedEl.style.display = 'block';
+    } else {
+      iconVolHighEl.style.display = 'block';
+      iconVolMutedEl.style.display = 'none';
+    }
+  }
 
   function saveUiState() {
+    const rawVol = parseFloat(volumeSliderEl.value);
+    const vol = Math.round(Math.max(0, Math.min(1, isNaN(rawVol) ? 0.5 : rawVol)) * 100) / 100;
+    const muted = isMuted || (playerVideoEl && playerVideoEl.muted) || vol === 0;
+    if (vol > 0) {
+      lastVolume = vol;
+    }
     const state = {
       thumbSize: parseInt(sizeSliderEl.value, 10) || 280,
       sortBy: sortSelectEl.value,
       filterText: searchInputEl.value.trim(),
       recursive: isRecursive,
-      showThumbs: showThumbs
+      showThumbs: showThumbs,
+      volume: vol,
+      muted: muted,
+      lastVolume: lastVolume
     };
 
     if (vscode) {
       vscode.setState(state);
       vscode.postMessage({ type: 'saveThumbSize', size: state.thumbSize });
       vscode.postMessage({ type: 'saveShowThumbs', showThumbs: state.showThumbs });
+      vscode.postMessage({ type: 'saveVolume', volume: state.volume, muted: state.muted, lastVolume: state.lastVolume });
     }
     try {
       localStorage.setItem(STORAGE_KEY_THUMB_SIZE, state.thumbSize.toString());
       localStorage.setItem(STORAGE_KEY_SHOW_THUMBS, state.showThumbs ? 'true' : 'false');
+      localStorage.setItem(STORAGE_KEY_VOLUME, state.volume.toString());
+      localStorage.setItem(STORAGE_KEY_MUTED, state.muted ? 'true' : 'false');
+      localStorage.setItem(STORAGE_KEY_LAST_VOLUME, state.lastVolume.toString());
     } catch (_) {}
   }
 
@@ -340,10 +406,31 @@
       if (localShowThumbs !== null) {
         showThumbs = localShowThumbs === 'true';
       }
+      const localLastVolume = localStorage.getItem(STORAGE_KEY_LAST_VOLUME);
+      if (localLastVolume !== null) {
+        const parsed = parseFloat(localLastVolume);
+        if (!isNaN(parsed) && parsed > 0) {
+          lastVolume = Math.round(Math.max(0.05, Math.min(1, parsed)) * 100) / 100;
+        }
+      }
+      const localVolume = localStorage.getItem(STORAGE_KEY_VOLUME);
+      if (localVolume !== null) {
+        const parsed = parseFloat(localVolume);
+        if (!isNaN(parsed)) {
+          const clamped = Math.round(Math.max(0, Math.min(1, parsed)) * 100) / 100;
+          volumeSliderEl.value = clamped;
+          if (clamped > 0) lastVolume = clamped;
+        }
+      }
+      const localMuted = localStorage.getItem(STORAGE_KEY_MUTED);
+      if (localMuted !== null) {
+        isMuted = localMuted === 'true';
+      }
     } catch (_) {}
 
     if (!vscode) {
       updateThumbToggleButton();
+      syncVolumeUI();
       return;
     }
     const state = vscode.getState();
@@ -366,8 +453,20 @@
       if (typeof state.showThumbs === 'boolean') {
         showThumbs = state.showThumbs;
       }
+      if (typeof state.lastVolume === 'number' && !isNaN(state.lastVolume) && state.lastVolume > 0) {
+        lastVolume = Math.round(Math.max(0.05, Math.min(1, state.lastVolume)) * 100) / 100;
+      }
+      if (typeof state.volume === 'number' && !isNaN(state.volume)) {
+        const clamped = Math.round(Math.max(0, Math.min(1, state.volume)) * 100) / 100;
+        volumeSliderEl.value = clamped;
+        if (clamped > 0) lastVolume = clamped;
+      }
+      if (typeof state.muted === 'boolean') {
+        isMuted = state.muted;
+      }
     }
     updateThumbToggleButton();
+    syncVolumeUI();
   }
 
   function updateThumbToggleButton() {
@@ -1135,7 +1234,7 @@
     playerVideoEl.src = v.uri;
     playerVideoEl.playbackRate = currentSpeed;
     playerVideoEl.loop = isLooping;
-    playerVideoEl.volume = volumeSliderEl.value;
+    syncVolumeUI();
 
     playerModalEl.classList.add('active');
     document.body.classList.add('in-player');
@@ -1444,20 +1543,20 @@
   nextBtnEl.addEventListener('click', nextVideo);
 
   // 15. 音量控制
-  function setVolume(vol) {
-    const clamped = Math.max(0, Math.min(1, vol));
-    playerVideoEl.volume = clamped;
+  function setVolume(vol, persist = true) {
+    const clamped = Math.round(Math.max(0, Math.min(1, vol)) * 100) / 100;
     volumeSliderEl.value = clamped;
 
     if (clamped === 0) {
-      playerVideoEl.muted = true;
-      iconVolHighEl.style.display = 'none';
-      iconVolMutedEl.style.display = 'block';
+      isMuted = true;
     } else {
-      playerVideoEl.muted = false;
-      iconVolHighEl.style.display = 'block';
-      iconVolMutedEl.style.display = 'none';
+      isMuted = false;
       lastVolume = clamped;
+    }
+    syncVolumeUI();
+
+    if (persist) {
+      saveVolumeState();
     }
   }
 
@@ -1466,7 +1565,7 @@
   });
 
   volumeBtnEl.addEventListener('click', () => {
-    if (playerVideoEl.muted || playerVideoEl.volume === 0) {
+    if (isMuted || playerVideoEl.muted || playerVideoEl.volume === 0) {
       setVolume(lastVolume > 0 ? lastVolume : 0.5);
     } else {
       setVolume(0);
@@ -2062,6 +2161,57 @@
           showThumbs = targetShowThumbs;
           updateThumbToggleButton();
         }
+
+        let initVolume = null;
+        let initMuted = null;
+        let initLastVolume = null;
+
+        if (currentSavedState && typeof currentSavedState.lastVolume === 'number') {
+          initLastVolume = currentSavedState.lastVolume;
+        } else if (typeof message.lastVolume === 'number' && !isNaN(message.lastVolume)) {
+          initLastVolume = message.lastVolume;
+        } else {
+          try {
+            const llv = localStorage.getItem(STORAGE_KEY_LAST_VOLUME);
+            if (llv !== null) initLastVolume = parseFloat(llv);
+          } catch (_) {}
+        }
+        if (typeof initLastVolume === 'number' && !isNaN(initLastVolume) && initLastVolume > 0) {
+          lastVolume = Math.round(Math.max(0.05, Math.min(1, initLastVolume)) * 100) / 100;
+        }
+
+        if (currentSavedState && typeof currentSavedState.volume === 'number') {
+          initVolume = currentSavedState.volume;
+        } else if (typeof message.volume === 'number' && !isNaN(message.volume)) {
+          initVolume = message.volume;
+        } else {
+          try {
+            const lv = localStorage.getItem(STORAGE_KEY_VOLUME);
+            if (lv !== null) initVolume = parseFloat(lv);
+          } catch (_) {}
+        }
+
+        if (typeof initVolume === 'number' && !isNaN(initVolume)) {
+          const clamped = Math.round(Math.max(0, Math.min(1, initVolume)) * 100) / 100;
+          volumeSliderEl.value = clamped;
+          if (clamped > 0) lastVolume = clamped;
+        }
+
+        if (currentSavedState && typeof currentSavedState.muted === 'boolean') {
+          initMuted = currentSavedState.muted;
+        } else if (typeof message.muted === 'boolean') {
+          initMuted = message.muted;
+        } else {
+          try {
+            const lm = localStorage.getItem(STORAGE_KEY_MUTED);
+            if (lm !== null) initMuted = lm === 'true';
+          } catch (_) {}
+        }
+
+        if (typeof initMuted === 'boolean') {
+          isMuted = initMuted;
+        }
+        syncVolumeUI();
 
         folderNameEl.textContent = folderNameStr;
         folderInfoEl.title = currentFolder;

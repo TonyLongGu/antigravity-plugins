@@ -646,6 +646,21 @@ class VideoViewerPanel {
           await VideoViewerPanel.globalState.update('antigravity.videoViewer.showThumbs', msg.showThumbs);
         }
         break;
+      case 'saveVolume':
+        if (VideoViewerPanel.globalState) {
+          if (typeof msg.volume === 'number' && !isNaN(msg.volume)) {
+            const clamped = Math.max(0, Math.min(1, msg.volume));
+            await VideoViewerPanel.globalState.update('antigravity.videoViewer.volume', clamped);
+          }
+          if (typeof msg.muted === 'boolean') {
+            await VideoViewerPanel.globalState.update('antigravity.videoViewer.muted', msg.muted);
+          }
+          if (typeof msg.lastVolume === 'number' && !isNaN(msg.lastVolume) && msg.lastVolume > 0) {
+            const clamped = Math.max(0.05, Math.min(1, msg.lastVolume));
+            await VideoViewerPanel.globalState.update('antigravity.videoViewer.lastVolume', clamped);
+          }
+        }
+        break;
       case 'deleteFiles':
         if (Array.isArray(msg.filePaths) && msg.filePaths.length > 0) {
           const count = msg.filePaths.length;
@@ -726,6 +741,15 @@ class VideoViewerPanel {
         const savedShowThumbs = VideoViewerPanel.globalState
           ? VideoViewerPanel.globalState.get('antigravity.videoViewer.showThumbs', true)
           : true;
+        const savedVolume = VideoViewerPanel.globalState
+          ? VideoViewerPanel.globalState.get('antigravity.videoViewer.volume', 0.5)
+          : 0.5;
+        const savedMuted = VideoViewerPanel.globalState
+          ? VideoViewerPanel.globalState.get('antigravity.videoViewer.muted', false)
+          : false;
+        const savedLastVolume = VideoViewerPanel.globalState
+          ? VideoViewerPanel.globalState.get('antigravity.videoViewer.lastVolume', 0.5)
+          : 0.5;
         this.panel.webview.postMessage({
           type: 'initData',
           folderPath: this.folderPath,
@@ -734,6 +758,9 @@ class VideoViewerPanel {
           recursive: this.isRecursive,
           thumbSize: savedThumbSize,
           showThumbs: savedShowThumbs,
+          volume: savedVolume,
+          muted: savedMuted,
+          lastVolume: savedLastVolume,
           targetFilePath: this.initialVideoPath
         });
         this.initialVideoPath = null;
