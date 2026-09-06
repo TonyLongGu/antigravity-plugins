@@ -30,58 +30,63 @@
             <circle cx="11" cy="11" r="8"></circle>
             <path d="m21 21-4.3-4.3"></path>
           </svg>
-          <input type="text" id="searchInput" class="search-input" placeholder="搜尋檔名..." autocomplete="off" spellcheck="false">
-          <span class="search-clear" id="searchClear" title="清除搜尋">✕</span>
+          <input type="text" id="searchInput" class="search-input" data-i18n-placeholder="search_placeholder" placeholder="搜尋檔名..." autocomplete="off" spellcheck="false">
+          <span class="search-clear" id="searchClear" data-i18n-title="search_clear_title" title="清除搜尋">✕</span>
         </div>
 
         <!-- 排序選單 -->
-        <select id="sortSelect" class="select-input" title="排序依據">
-          <option value="name-asc">檔名 (A - Z)</option>
-          <option value="name-desc">檔名 (Z - A)</option>
-          <option value="size-desc">大小 (大到小)</option>
-          <option value="size-asc">大小 (小到大)</option>
-          <option value="date-desc">時間 (新到舊)</option>
-          <option value="date-asc">時間 (舊到新)</option>
+        <select id="sortSelect" class="select-input" data-i18n-title="sort_select_title" title="排序依據">
+          <option value="name-asc" data-i18n="sort_name_asc">檔名 (A - Z)</option>
+          <option value="name-desc" data-i18n="sort_name_desc">檔名 (Z - A)</option>
+          <option value="size-desc" data-i18n="sort_size_desc">大小 (大到小)</option>
+          <option value="size-asc" data-i18n="sort_size_asc">大小 (小到大)</option>
+          <option value="date-desc" data-i18n="sort_date_desc">時間 (新到舊)</option>
+          <option value="date-asc" data-i18n="sort_date_asc">時間 (舊到新)</option>
         </select>
 
         <div class="divider"></div>
 
         <!-- 縮圖尺寸滑桿 -->
         <div class="size-control">
-          <span>尺寸</span>
-          <input type="range" id="sizeSlider" class="slider-input" min="110" max="360" value="180" title="調整縮圖尺寸 (110px - 360px，支援 Ctrl + 滑鼠滾輪)">
+          <span data-i18n="slider_size_label">尺寸</span>
+          <input type="range" id="sizeSlider" class="slider-input" min="110" max="360" value="180" data-i18n-title="slider_size_title" title="調整縮圖尺寸 (110px - 360px，支援 Ctrl + 滑鼠滾輪)">
         </div>
       </div>
 
       <!-- 右側：子資料夾開關與動作按鈕 -->
       <div class="toolbar-right">
         <!-- 包含子資料夾切換 -->
-        <button id="recursiveBtn" class="btn-icon" title="包含子資料夾中的所有圖片">
+        <button id="recursiveBtn" class="btn-icon" data-i18n-title="btn_recursive_title_off" title="包含子資料夾中的所有圖片">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="m3 3 7 7-7 7"></path>
             <path d="m13 7 4 4-4 4"></path>
           </svg>
-          <span>子資料夾</span>
+          <span data-i18n="btn_recursive">子資料夾</span>
         </button>
 
         <!-- 重新整理 -->
-        <button id="refreshBtn" class="btn-icon" title="重新掃描資料夾 (F5)">
+        <button id="refreshBtn" class="btn-icon" data-i18n-title="btn_refresh_title" title="重新掃描資料夾 (F5)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
             <path d="M3 3v5h5"></path>
             <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path>
             <path d="M16 21h5v-5"></path>
           </svg>
-          <span>重新整理</span>
+          <span data-i18n="btn_refresh">重新整理</span>
         </button>
 
         <!-- 在系統檔案總管中開啟 -->
-        <button id="revealFolderBtn" class="btn-icon" title="在系統檔案總管中開啟此資料夾">
+        <button id="revealFolderBtn" class="btn-icon" data-i18n-title="btn_reveal_folder_title" title="在系統檔案總管中開啟此資料夾">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
             <polyline points="15 3 21 3 21 9"></polyline>
             <line x1="10" y1="14" x2="21" y2="3"></line>
           </svg>
+        </button>
+
+        <!-- 語言切換按鈕 -->
+        <button id="btn-lang-toggle" class="btn-icon btn-lang" data-i18n-title="btn_lang_toggle_title" title="Switch to English">
+          <span id="lang-indicator">EN</span>
         </button>
       </div>
     </header>
@@ -101,8 +106,8 @@
           <circle cx="9" cy="9" r="2"></circle>
           <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path>
         </svg>
-        <div class="empty-title" id="emptyTitle">此資料夾內沒有支援的圖片</div>
-        <div class="empty-desc" id="emptyDesc">支援格式：PNG, JPG, WebP, GIF, SVG, BMP, ICO, AVIF, TIFF 等。您可以嘗試開啟子資料夾搜尋或點擊重新整理。</div>
+        <div class="empty-title" id="emptyTitle" data-i18n="empty_folder_title">此資料夾內沒有支援的圖片</div>
+        <div class="empty-desc" id="emptyDesc" data-i18n="empty_folder_desc">支援格式：PNG, JPG, WebP, GIF, SVG, BMP, ICO, AVIF, TIFF 等。您可以嘗試開啟子資料夾搜尋或點擊重新整理。</div>
       </div>
     </main>
 
@@ -114,33 +119,33 @@
       <div class="batch-divider"></div>
       <div class="batch-buttons">
         <!-- 複製路徑 (Format B: 純絕對路徑清單) -->
-        <button id="batchCopyPathsBtn" class="batch-btn batch-btn-primary" title="複製選取圖片的絕對路徑列表（每行一個路徑，適合貼到 AI 對話）">
+        <button id="batchCopyPathsBtn" class="batch-btn batch-btn-primary" data-i18n-title="batch_copy_paths_title" title="複製選取圖片的絕對路徑列表（每行一個路徑，適合貼到 AI 對話）">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
-          <span>複製路徑</span>
+          <span data-i18n="batch_copy_paths">複製路徑</span>
         </button>
 
         <!-- 順時針旋轉 90 度 -->
-        <button id="batchRotateCwBtn" class="batch-btn" title="順時針旋轉 90 度 (覆蓋實體檔案)">
+        <button id="batchRotateCwBtn" class="batch-btn" data-i18n-title="batch_rotate_cw_title" title="順時針旋轉 90 度 (覆蓋實體檔案)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path></svg>
-          <span>順時針 90°</span>
+          <span data-i18n="batch_rotate_cw">順時針 90°</span>
         </button>
 
         <!-- 逆時針旋轉 90 度 -->
-        <button id="batchRotateCcwBtn" class="batch-btn" title="逆時針旋轉 90 度 (覆蓋實體檔案)">
+        <button id="batchRotateCcwBtn" class="batch-btn" data-i18n-title="batch_rotate_ccw_title" title="逆時針旋轉 90 度 (覆蓋實體檔案)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
-          <span>逆時針 90°</span>
+          <span data-i18n="batch_rotate_ccw">逆時針 90°</span>
         </button>
 
         <!-- 刪除檔案 -->
-        <button id="batchDeleteBtn" class="batch-btn batch-btn-danger" title="將選取檔案移至系統資源回收筒">
+        <button id="batchDeleteBtn" class="batch-btn batch-btn-danger" data-i18n-title="batch_delete_title" title="將選取檔案移至系統資源回收筒">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-          <span>刪除</span>
+          <span data-i18n="batch_delete">刪除</span>
         </button>
 
         <div class="batch-divider"></div>
 
         <!-- 取消選取 -->
-        <button id="batchClearBtn" class="batch-btn batch-btn-ghost" title="取消所有選取 (Esc)">
+        <button id="batchClearBtn" class="batch-btn batch-btn-ghost" data-i18n-title="batch_clear_title" title="取消所有選取 (Esc)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       </div>
@@ -167,33 +172,33 @@
 
       <!-- 右側：檢視操作按鈕組 -->
       <div class="lightbox-header-right">
-        <button id="zoomOutBtn" class="btn-icon" title="縮小 (滾輪向下 / -)">
+        <button id="zoomOutBtn" class="btn-icon" data-i18n-title="lightbox_zoom_out_title" title="縮小 (滾輪向下 / -)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="8" y1="11" x2="14" y2="11"></line>
           </svg>
         </button>
-        <button id="zoomInBtn" class="btn-icon" title="放大 (滾輪向上 / +)">
+        <button id="zoomInBtn" class="btn-icon" data-i18n-title="lightbox_zoom_in_title" title="放大 (滾輪向上 / +)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="11" y1="8" x2="11" y2="14"></line>
             <line x1="8" y1="11" x2="14" y2="11"></line>
           </svg>
         </button>
-        <button id="zoomFitBtn" class="btn-icon" title="最適視窗大小 (雙擊滑鼠)">
+        <button id="zoomFitBtn" class="btn-icon" data-i18n-title="lightbox_zoom_fit_title" title="最適視窗大小 (雙擊滑鼠)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
           </svg>
         </button>
-        <button id="zoomActualBtn" class="btn-icon" title="1:1 原始解析度">
+        <button id="zoomActualBtn" class="btn-icon" data-i18n-title="lightbox_zoom_actual_title" title="1:1 原始解析度">
           <span style="font-size: 11px; font-weight: bold; font-family: var(--font-mono);">1:1</span>
         </button>
-        <button id="selectAndCloseBtn" class="btn-icon" title="關閉檢視器並在畫廊中選取此圖片 (S / Enter)">
+        <button id="selectAndCloseBtn" class="btn-icon" data-i18n-title="lightbox_select_close_title" title="關閉檢視器並在畫廊中選取此圖片 (S / Enter)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
         </button>
-        <button id="lightboxCloseBtn" class="btn-icon" title="關閉檢視器 (Esc)">✕</button>
+        <button id="lightboxCloseBtn" class="btn-icon" data-i18n-title="lightbox_close_title" title="關閉檢視器 (Esc / 右鍵)">✕</button>
       </div>
     </div>
 
@@ -205,12 +210,12 @@
     </div>
 
     <!-- 上一張 / 下一張 導航切換按鈕 -->
-    <button class="nav-arrow nav-prev" id="prevBtn" title="上一張 (← 鍵)">
+    <button class="nav-arrow nav-prev" id="prevBtn" data-i18n-title="lightbox_prev_title" title="上一張 (← 鍵)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="m15 18-6-6 6-6"></path>
       </svg>
     </button>
-    <button class="nav-arrow nav-next" id="nextBtn" title="下一張 (→ 鍵)">
+    <button class="nav-arrow nav-next" id="nextBtn" data-i18n-title="lightbox_next_title" title="下一張 (→ 鍵)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="m9 18 6-6-6-6"></path>
       </svg>
@@ -220,6 +225,7 @@
   <!-- Toast 通知容器 -->
   <div class="toast-container" id="toastContainer"></div>
 
+  <script src="locales.js"></script>
   <script src="viewer.js"></script>
 </body>
 </html>

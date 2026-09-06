@@ -61,6 +61,128 @@
   const batchDeleteBtnEl = document.getElementById('batchDeleteBtn');
   const batchClearBtnEl = document.getElementById('batchClearBtn');
 
+  // ============================================================================
+  // 3.5 國際化核心模組 (I18n Module)
+  // ============================================================================
+  const I18nModule = {
+    currentLang: 'zh-TW',
+
+    init() {
+      const initial = (typeof window !== 'undefined' && window.INITIAL_LOCALE) || null;
+      let saved = null;
+      try {
+        saved = localStorage.getItem('antigravity_locale');
+      } catch (e) {}
+
+      if (initial === 'zh-TW' || initial === 'en') {
+        this.currentLang = initial;
+      } else if (saved === 'zh-TW' || saved === 'en') {
+        this.currentLang = saved;
+      } else {
+        this.currentLang = 'zh-TW';
+      }
+
+      this.applyLanguage(this.currentLang, false);
+
+      const btnLangToggle = document.getElementById('btn-lang-toggle');
+      if (btnLangToggle) {
+        btnLangToggle.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.toggle();
+        });
+      }
+    },
+
+    t(key, params = {}) {
+      const locales = window.LOCALES || (typeof globalThis !== 'undefined' ? globalThis.LOCALES : null) || {};
+      const dict = locales[this.currentLang] || locales['zh-TW'] || {};
+      let text = dict[key] !== undefined ? dict[key] : key;
+      if (typeof text === 'string') {
+        Object.keys(params).forEach((p) => {
+          text = text.replace(new RegExp(`\\{${p}\\}`, 'g'), params[p]);
+        });
+      }
+      return text;
+    },
+
+    toggle() {
+      const next = this.currentLang === 'zh-TW' ? 'en' : 'zh-TW';
+      this.applyLanguage(next, true);
+      if (vscode) {
+        vscode.postMessage({ type: 'setGlobalLocale', payload: { locale: next }, locale: next });
+      }
+      showToast(this.t('toast_lang_switched'), 'info');
+    },
+
+    applyLanguage(lang, save = true) {
+      this.currentLang = lang;
+      if (save) {
+        try {
+          localStorage.setItem('antigravity_locale', lang);
+        } catch (e) {}
+      }
+
+      document.documentElement.lang = lang === 'zh-TW' ? 'zh-TW' : 'en';
+
+      const langIndicator = document.getElementById('lang-indicator');
+      if (langIndicator) {
+        langIndicator.textContent = this.t('btn_lang_indicator');
+      }
+      const btnLangToggle = document.getElementById('btn-lang-toggle');
+      if (btnLangToggle) {
+        btnLangToggle.title = this.t('btn_lang_toggle_title');
+      }
+
+      // 遍歷靜態 data-i18n
+      document.querySelectorAll('[data-i18n]').forEach((el) => {
+        const key = el.getAttribute('data-i18n');
+        if (key) {
+          const trans = this.t(key);
+          if (trans !== undefined) {
+            el.textContent = trans;
+          }
+        }
+      });
+
+      // 遍歷靜態 data-i18n-title
+      document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+        const key = el.getAttribute('data-i18n-title');
+        if (key) {
+          el.title = this.t(key);
+        }
+      });
+
+      // 遍歷靜態 data-i18n-placeholder
+      document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (key) {
+          el.placeholder = this.t(key);
+        }
+      });
+
+      updateRecursiveButton();
+      updateSelectionUI();
+
+      if (folderNameStr) {
+        folderNameEl.textContent = folderNameStr;
+      } else {
+        folderNameEl.textContent = this.t('loading');
+      }
+      if (currentFolder) {
+        folderInfoEl.title = currentFolder;
+      }
+
+      if (allImages.length > 0) {
+        imgCountBadgeEl.textContent = this.t('img_count_badge', { count: allImages.length });
+        if (filteredImages.length !== allImages.length) {
+          filterCountBadgeEl.textContent = this.t('filter_count_badge', { count: filteredImages.length });
+        }
+      }
+      renderGallery();
+    }
+  };
+
   // 選取狀態集合 (儲存 fullPath)
   const selectedPaths = new Set();
 
@@ -78,7 +200,7 @@
     if (selectedPaths.size > 0) {
       document.body.classList.add('has-selection');
       batchActionBarEl.style.display = 'flex';
-      batchSelectedCountEl.textContent = `已選取 ${selectedPaths.size} 張`;
+      batchSelectedCountEl.textContent = I18nModule.t('batch_selected_count', { count: selectedPaths.size });
     } else {
       document.body.classList.remove('has-selection');
       batchActionBarEl.style.display = 'none';
@@ -193,10 +315,10 @@
   function updateRecursiveButton() {
     if (isRecursive) {
       recursiveBtnEl.classList.add('active');
-      recursiveBtnEl.title = '目前：包含子資料夾（點擊切換為僅當前資料夾）';
+      recursiveBtnEl.title = I18nModule.t('btn_recursive_title_on');
     } else {
       recursiveBtnEl.classList.remove('active');
-      recursiveBtnEl.title = '目前：僅當前資料夾（點擊切換為搜尋子資料夾）';
+      recursiveBtnEl.title = I18nModule.t('btn_recursive_title_off');
     }
   }
 
@@ -216,7 +338,7 @@
         img.relativePath.toLowerCase().includes(query)
       );
       filterCountBadgeEl.style.display = 'inline-flex';
-      filterCountBadgeEl.textContent = `已篩選: ${filteredImages.length}`;
+      filterCountBadgeEl.textContent = I18nModule.t('filter_count_badge', { count: filteredImages.length });
       searchClearEl.style.display = 'block';
     }
 
@@ -251,11 +373,11 @@
       emptyStateEl.style.display = 'flex';
       galleryGridEl.style.display = 'none';
       if (allImages.length === 0) {
-        emptyTitleEl.textContent = '此資料夾內沒有支援的圖片檔案';
-        emptyDescEl.textContent = '支援格式：PNG, JPG, WebP, GIF, SVG, BMP, ICO, AVIF, TIFF 等。您可以嘗試開啟子資料夾搜尋或按重新整理。';
+        emptyTitleEl.textContent = I18nModule.t('empty_folder_title');
+        emptyDescEl.textContent = I18nModule.t('empty_folder_desc');
       } else {
-        emptyTitleEl.textContent = '找不到符合關鍵字的圖片';
-        emptyDescEl.textContent = `搜尋條件「${searchInputEl.value}」未匹配到任何圖片，請嘗試其他關鍵字。`;
+        emptyTitleEl.textContent = I18nModule.t('empty_filter_title');
+        emptyDescEl.textContent = I18nModule.t('empty_filter_desc', { query: searchInputEl.value });
       }
       return;
     }
@@ -270,12 +392,12 @@
       if (selectedPaths.has(img.fullPath)) {
         card.classList.add('is-selected');
       }
-      card.title = `${img.fileName} (${img.sizeFormatted})\n路徑: ${img.relativePath}`;
+      card.title = `${img.fileName} (${img.sizeFormatted})\n${I18nModule.t('card_path_prefix')}${img.relativePath}`;
 
       // 縮圖與懸浮動作
       card.innerHTML = `
         <div class="card-thumb-wrapper">
-          <button class="card-select-btn" title="選取圖片 (Shift+點選加選)" data-path="${img.fullPath}">
+          <button class="card-select-btn" title="${I18nModule.t('card_select_title')}" data-path="${img.fullPath}">
             <svg class="check-icon" viewBox="0 0 24 24" fill="none">
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
@@ -283,10 +405,10 @@
           <img class="card-thumb" src="${img.uri}" loading="lazy" alt="${img.fileName}" />
           <span class="card-ext-badge">${img.ext}</span>
           <div class="card-actions">
-            <button class="card-action-btn copy-btn" title="複製路徑" data-index="${idx}">
+            <button class="card-action-btn copy-btn" title="${I18nModule.t('card_copy_path_title')}" data-index="${idx}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
             </button>
-            <button class="card-action-btn reveal-btn" title="在系統檔案總管顯示" data-index="${idx}">
+            <button class="card-action-btn reveal-btn" title="${I18nModule.t('card_reveal_title')}" data-index="${idx}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
             </button>
           </div>
@@ -340,7 +462,7 @@
       copyBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         copyToClipboard(img.fullPath);
-        showToast(`已複製路徑：${img.fileName}`, 'success');
+        showToast(I18nModule.t('toast_path_copied', { name: img.fileName }), 'success');
       });
 
       const revealBtn = card.querySelector('.reveal-btn');
@@ -465,7 +587,7 @@
     lightboxTitleEl.textContent = imgData.fileName;
     lightboxTitleEl.title = imgData.fullPath;
     lightboxIndexBadgeEl.textContent = `${currentIndex + 1} / ${filteredImages.length}`;
-    lightboxMetaEl.textContent = `載入中... • ${imgData.sizeFormatted}`;
+    lightboxMetaEl.textContent = `${I18nModule.t('loading')} • ${imgData.sizeFormatted}`;
 
     // 重置旋轉角度
     rotation = 0;
@@ -498,13 +620,17 @@
   function closeLightbox() {
     lightboxModalEl.classList.remove('active');
     currentIndex = -1;
+    if (isDragging) {
+      isDragging = false;
+      lightboxCanvasEl.classList.remove('dragging');
+    }
   }
 
   function prevImage() {
     if (currentIndex > 0) {
       openLightbox(currentIndex - 1);
     } else {
-      showToast('已是第一張圖片', 'info');
+      showToast(I18nModule.t('lightbox_first_image'), 'info');
     }
   }
 
@@ -512,7 +638,7 @@
     if (currentIndex < filteredImages.length - 1) {
       openLightbox(currentIndex + 1);
     } else {
-      showToast('已是最後一張圖片', 'info');
+      showToast(I18nModule.t('lightbox_last_image'), 'info');
     }
   }
 
@@ -771,12 +897,15 @@
   galleryViewportEl.addEventListener('pointercancel', endRightDrag);
 
   // 全域阻斷看圖區的原生右鍵選單（杜絕無效「剪下、貼上」奪取焦點導致介面異常）
-  // 僅在搜尋輸入框內保留右鍵選單以利貼上關鍵字
+  // 僅在搜尋輸入框內保留右鍵選單以利貼上關鍵字；若在大圖檢視模式則退出大圖（如同 Esc）
   document.addEventListener('contextmenu', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
       return;
     }
     e.preventDefault();
+    if (lightboxModalEl.classList.contains('active')) {
+      closeLightbox();
+    }
   });
 
   // ==============================================================================
@@ -896,7 +1025,7 @@
     if (selectedPaths.size === 0) return;
     const text = Array.from(selectedPaths).join('\n');
     copyToClipboard(text);
-    showToast(`已複製 ${selectedPaths.size} 個檔案之絕對路徑`, 'success');
+    showToast(I18nModule.t('toast_batch_copied', { count: selectedPaths.size }), 'success');
   });
 
   // 2. 取消所有選取
@@ -963,7 +1092,7 @@
 
     batchRotateCwBtnEl.disabled = true;
     batchRotateCcwBtnEl.disabled = true;
-    showToast(`正在準備旋轉 ${total} 張圖片...`, 'info');
+    showToast(I18nModule.t('toast_rotating_prep', { count: total }), 'info');
 
     const updates = [];
     let skippedCount = 0;
@@ -979,7 +1108,7 @@
         continue;
       }
 
-      showToast(`正在旋轉圖片 (${i + 1}/${total})：${imgObj.fileName}`, 'info');
+      showToast(I18nModule.t('toast_rotating_progress', { current: i + 1, total, name: imgObj.fileName }), 'info');
 
       try {
         const base64Data = await rotateImageViaCanvas(imgObj.uri, imgObj.ext, angleDeg);
@@ -997,7 +1126,7 @@
 
     if (updates.length > 0 && vscode) {
       if (skippedCount > 0) {
-        showToast(`正在儲存 ${updates.length} 張圖片（已略過 ${skippedCount} 個不支援旋轉之檔案）`, 'info');
+        showToast(I18nModule.t('toast_rotate_saving', { count: updates.length, skipped: skippedCount }), 'info');
       }
       vscode.postMessage({
         type: 'saveRotatedImages',
@@ -1005,9 +1134,9 @@
       });
     } else {
       if (skippedCount > 0) {
-        showToast(`所選的檔案均不支援物理旋轉（如 SVG 向量或 GIF 動態圖）`, 'warn');
+        showToast(I18nModule.t('toast_rotate_not_supported'), 'warn');
       } else {
-        showToast(`旋轉未能完成`, 'warn');
+        showToast(I18nModule.t('toast_rotate_failed'), 'warn');
       }
     }
   }
@@ -1020,8 +1149,13 @@
     rotateSelectedImages(-90);
   });
 
-  // 檢視器按鈕事件
+  // 檢視器按鈕與滑鼠事件（點擊關閉按鈕或在檢視器內按滑鼠右鍵均可退出，如同 Esc）
   lightboxCloseBtnEl.addEventListener('click', closeLightbox);
+  lightboxModalEl.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeLightbox();
+  });
   prevBtnEl.addEventListener('click', prevImage);
   nextBtnEl.addEventListener('click', nextImage);
 
@@ -1065,7 +1199,7 @@
         }
       }, 50);
 
-      showToast(`已在畫廊中選取：${cur.fileName}`, 'success');
+      showToast(I18nModule.t('toast_selected_in_gallery', { name: cur.fileName }), 'success');
     }
   });
 
@@ -1155,7 +1289,7 @@
 
         folderNameEl.textContent = folderNameStr;
         folderInfoEl.title = currentFolder;
-        imgCountBadgeEl.textContent = `${allImages.length} 張圖片`;
+        imgCountBadgeEl.textContent = I18nModule.t('img_count_badge', { count: allImages.length });
         updateRecursiveButton();
 
         // 清理不存在於當前清單中的選取路徑
@@ -1165,12 +1299,11 @@
         updateSelectionUI();
 
         applyFilterAndSort();
-        showToast(`已載入 ${allImages.length} 張圖片`, 'info');
         break;
 
       case 'updateImages':
         allImages = message.images || [];
-        imgCountBadgeEl.textContent = `${allImages.length} 張圖片`;
+        imgCountBadgeEl.textContent = I18nModule.t('img_count_badge', { count: allImages.length });
 
         // 清理已被刪除或不存在的選取路徑
         selectedPaths.forEach(p => {
@@ -1188,14 +1321,23 @@
             lightboxIndexBadgeEl.textContent = `${currentIndex + 1} / ${filteredImages.length}`;
           }
         }
-        showToast(`已重新整理（共 ${allImages.length} 張圖片）`, 'success');
+        showToast(I18nModule.t('toast_refresh_done', { count: allImages.length }), 'success');
         break;
 
       case 'toast':
         showToast(message.text, message.level || 'info');
         break;
+
+      case 'localeChanged':
+        if (message.locale && (message.locale === 'zh-TW' || message.locale === 'en')) {
+          I18nModule.applyLanguage(message.locale, true);
+        }
+        break;
     }
   });
+
+  // 初始化多國語言模組
+  I18nModule.init();
 
   // 初始化還原 UI 設定
   restoreUiState();
