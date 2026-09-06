@@ -1039,17 +1039,17 @@
       });
 
       // 5. 攔截右鍵選單 (contextmenu)
-      // 若曾經發生拖曳，立即阻止彈出右鍵選單；若為原地單擊則不干擾
+      // 全面禁用非文字輸入區之原生右鍵選單（杜絕「剪下、貼上」奪取焦點導致面板異常）
+      // 僅在文字輸入框或可編輯區放行原生右鍵以利貼上操作
       window.addEventListener(
         'contextmenu',
         (e) => {
-          if (hasDragged) {
-            e.preventDefault();
-            e.stopPropagation();
-            setTimeout(() => {
-              hasDragged = false;
-            }, 50);
+          if (e.target && typeof e.target.closest === 'function' && e.target.closest('input, textarea, select, [contenteditable="true"]')) {
+            return;
           }
+          e.preventDefault();
+          e.stopPropagation();
+          hasDragged = false;
         },
         true
       );

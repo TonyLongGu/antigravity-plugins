@@ -90,6 +90,48 @@
 				"icon": "$(folder-opened)"
 			},
 			{
+				"command": "antigravity.quickAccess.addScriptToRunner",
+				"title": "加入至專案腳本執行器",
+				"category": "Quick Access",
+				"icon": "$(symbol-property)"
+			},
+			{
+				"command": "antigravity.quickAccess.viewImages",
+				"title": "檢視圖片",
+				"category": "Quick Access",
+				"icon": "$(file-media)"
+			},
+			{
+				"command": "antigravity.quickAccess.runBat",
+				"title": "執行批次檔",
+				"category": "Quick Access",
+				"icon": "$(play)"
+			},
+			{
+				"command": "antigravity.quickAccess.runBatAdmin",
+				"title": "執行批次檔 (系統管理員)",
+				"category": "Quick Access",
+				"icon": "$(shield)"
+			},
+			{
+				"command": "antigravity.quickAccess.runPs1",
+				"title": "執行 PowerShell 腳本",
+				"category": "Quick Access",
+				"icon": "$(play)"
+			},
+			{
+				"command": "antigravity.quickAccess.runPs1Admin",
+				"title": "執行 PowerShell 腳本 (系統管理員)",
+				"category": "Quick Access",
+				"icon": "$(shield)"
+			},
+			{
+				"command": "antigravity.quickAccess.runPy",
+				"title": "執行 Python 腳本",
+				"category": "Quick Access",
+				"icon": "$(play)"
+			},
+			{
 				"command": "antigravity.quickAccess.add.en",
 				"title": "Add to Scratchpad",
 				"category": "Quick Access",
@@ -142,6 +184,48 @@
 				"title": "Reveal in File Explorer",
 				"category": "Quick Access",
 				"icon": "$(folder-opened)"
+			},
+			{
+				"command": "antigravity.quickAccess.addScriptToRunner.en",
+				"title": "Add to Project Script Runner",
+				"category": "Quick Access",
+				"icon": "$(symbol-property)"
+			},
+			{
+				"command": "antigravity.quickAccess.viewImages.en",
+				"title": "View Images",
+				"category": "Quick Access",
+				"icon": "$(file-media)"
+			},
+			{
+				"command": "antigravity.quickAccess.runBat.en",
+				"title": "Run Batch File",
+				"category": "Quick Access",
+				"icon": "$(play)"
+			},
+			{
+				"command": "antigravity.quickAccess.runBatAdmin.en",
+				"title": "Run Batch File (Admin)",
+				"category": "Quick Access",
+				"icon": "$(shield)"
+			},
+			{
+				"command": "antigravity.quickAccess.runPs1.en",
+				"title": "Run PowerShell Script",
+				"category": "Quick Access",
+				"icon": "$(play)"
+			},
+			{
+				"command": "antigravity.quickAccess.runPs1Admin.en",
+				"title": "Run PowerShell Script (Admin)",
+				"category": "Quick Access",
+				"icon": "$(shield)"
+			},
+			{
+				"command": "antigravity.quickAccess.runPy.en",
+				"title": "Run Python Script",
+				"category": "Quick Access",
+				"icon": "$(play)"
 			}
 		],
 		"menus": {
@@ -199,44 +283,114 @@
 					"group": "inline@2"
 				},
 				{
-					"command": "antigravity.quickAccess.revealInExplorer",
-					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale != 'en'",
-					"group": "1_reveal@1"
-				},
-				{
-					"command": "antigravity.quickAccess.revealInExplorer.en",
-					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale == 'en'",
-					"group": "1_reveal@1"
-				},
-				{
-					"command": "antigravity.quickAccess.revealInOS",
-					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale != 'en'",
-					"group": "1_reveal@2"
-				},
-				{
-					"command": "antigravity.quickAccess.revealInOS.en",
-					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale == 'en'",
-					"group": "1_reveal@2"
-				},
-				{
 					"command": "antigravity.quickAccess.togglePin",
 					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale != 'en'",
-					"group": "2_manage@1"
+					"group": "1_manage@1"
 				},
 				{
 					"command": "antigravity.quickAccess.togglePin.en",
 					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale == 'en'",
-					"group": "2_manage@1"
+					"group": "1_manage@1"
 				},
 				{
 					"command": "antigravity.quickAccess.remove",
 					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder)/ && config.antigravity.locale != 'en'",
-					"group": "2_manage@2"
+					"group": "1_manage@2"
 				},
 				{
 					"command": "antigravity.quickAccess.remove.en",
 					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder)/ && config.antigravity.locale == 'en'",
-					"group": "2_manage@2"
+					"group": "1_manage@2"
+				},
+				{
+					"command": "antigravity.quickAccess.revealInExplorer",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale != 'en'",
+					"group": "2_reveal@1"
+				},
+				{
+					"command": "antigravity.quickAccess.revealInExplorer.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale == 'en'",
+					"group": "2_reveal@1"
+				},
+				{
+					"command": "antigravity.quickAccess.revealInOS",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale != 'en'",
+					"group": "2_reveal@2"
+				},
+				{
+					"command": "antigravity.quickAccess.revealInOS.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale == 'en'",
+					"group": "2_reveal@2"
+				},
+				{
+					"command": "antigravity.quickAccess.addScriptToRunner",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /;canAddToRunner/ && config.antigravity.locale != 'en'",
+					"group": "3_toolbox@1"
+				},
+				{
+					"command": "antigravity.quickAccess.addScriptToRunner.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /;canAddToRunner/ && config.antigravity.locale == 'en'",
+					"group": "3_toolbox@1"
+				},
+				{
+					"command": "antigravity.quickAccess.viewImages",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /(;folder|;isImage)/ && config.antigravity.locale != 'en'",
+					"group": "4_script_runner@1"
+				},
+				{
+					"command": "antigravity.quickAccess.viewImages.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /(;folder|;isImage)/ && config.antigravity.locale == 'en'",
+					"group": "4_script_runner@1"
+				},
+				{
+					"command": "antigravity.quickAccess.runPy",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /;isPy/ && config.antigravity.locale != 'en'",
+					"group": "4_script_runner@2"
+				},
+				{
+					"command": "antigravity.quickAccess.runPy.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /;isPy/ && config.antigravity.locale == 'en'",
+					"group": "4_script_runner@2"
+				},
+				{
+					"command": "antigravity.quickAccess.runPs1",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /;isPs1/ && config.antigravity.locale != 'en'",
+					"group": "4_script_runner@3"
+				},
+				{
+					"command": "antigravity.quickAccess.runPs1.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /;isPs1/ && config.antigravity.locale == 'en'",
+					"group": "4_script_runner@3"
+				},
+				{
+					"command": "antigravity.quickAccess.runPs1Admin",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /;isPs1/ && config.antigravity.locale != 'en'",
+					"group": "4_script_runner@4"
+				},
+				{
+					"command": "antigravity.quickAccess.runPs1Admin.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /;isPs1/ && config.antigravity.locale == 'en'",
+					"group": "4_script_runner@4"
+				},
+				{
+					"command": "antigravity.quickAccess.runBat",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /;isBat/ && config.antigravity.locale != 'en'",
+					"group": "4_script_runner@5"
+				},
+				{
+					"command": "antigravity.quickAccess.runBat.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /;isBat/ && config.antigravity.locale == 'en'",
+					"group": "4_script_runner@5"
+				},
+				{
+					"command": "antigravity.quickAccess.runBatAdmin",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /;isBat/ && config.antigravity.locale != 'en'",
+					"group": "4_script_runner@6"
+				},
+				{
+					"command": "antigravity.quickAccess.runBatAdmin.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /;isBat/ && config.antigravity.locale == 'en'",
+					"group": "4_script_runner@6"
 				}
 			],
 			"explorer/context": [

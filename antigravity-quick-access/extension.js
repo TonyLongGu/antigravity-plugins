@@ -196,17 +196,116 @@ function activate(context) {
     }
   };
 
-  // 11. 工作區專案增減/隱藏即時連動監聽
+  // 11. 註冊命令：加入至專案腳本執行器 (Add to Project Script Runner，支援單選與多選批次加入)
+  const addScriptToRunnerHandler = async (element, elements) => {
+    const selected = getSelectedElements(element, elements);
+    const targetUris = selected
+      .map(el => el?.fsPath ? vscode.Uri.file(el.fsPath) : (el instanceof vscode.Uri ? el : null))
+      .filter(Boolean);
+    if (targetUris.length === 0) return;
+
+    try {
+      await vscode.commands.executeCommand('antigravity.toolbox.addScriptToRunner', targetUris[0], targetUris);
+    } catch {
+      vscode.window.showWarningMessage(i18n.t('msg_plugin_toolbox_required'));
+    }
+  };
+
+  // 12. 註冊命令：檢視圖片 (View Images)
+  const viewImagesHandler = async (element, elements) => {
+    const selected = getSelectedElements(element, elements);
+    const target = selected[0];
+    const targetPath = target?.fsPath || (target instanceof vscode.Uri ? target.fsPath : null);
+    if (!targetPath) return;
+
+    try {
+      await vscode.commands.executeCommand('scriptRunner.viewFolderImages', vscode.Uri.file(targetPath));
+    } catch {
+      vscode.window.showWarningMessage(i18n.t('msg_plugin_script_runner_required'));
+    }
+  };
+
+  // 13. 註冊命令：執行批次檔 (Run Batch File)
+  const runBatHandler = async (element, elements) => {
+    const selected = getSelectedElements(element, elements);
+    const target = selected[0];
+    const targetPath = target?.fsPath || (target instanceof vscode.Uri ? target.fsPath : null);
+    if (!targetPath) return;
+
+    try {
+      await vscode.commands.executeCommand('scriptRunner.runBat', vscode.Uri.file(targetPath));
+    } catch {
+      vscode.window.showWarningMessage(i18n.t('msg_plugin_script_runner_required'));
+    }
+  };
+
+  // 14. 註冊命令：執行批次檔 (系統管理員) (Run Batch File (Admin))
+  const runBatAdminHandler = async (element, elements) => {
+    const selected = getSelectedElements(element, elements);
+    const target = selected[0];
+    const targetPath = target?.fsPath || (target instanceof vscode.Uri ? target.fsPath : null);
+    if (!targetPath) return;
+
+    try {
+      await vscode.commands.executeCommand('scriptRunner.runBatAdmin', vscode.Uri.file(targetPath));
+    } catch {
+      vscode.window.showWarningMessage(i18n.t('msg_plugin_script_runner_required'));
+    }
+  };
+
+  // 15. 註冊命令：執行 PowerShell 腳本 (Run PowerShell Script)
+  const runPs1Handler = async (element, elements) => {
+    const selected = getSelectedElements(element, elements);
+    const target = selected[0];
+    const targetPath = target?.fsPath || (target instanceof vscode.Uri ? target.fsPath : null);
+    if (!targetPath) return;
+
+    try {
+      await vscode.commands.executeCommand('scriptRunner.runPs1', vscode.Uri.file(targetPath));
+    } catch {
+      vscode.window.showWarningMessage(i18n.t('msg_plugin_script_runner_required'));
+    }
+  };
+
+  // 16. 註冊命令：執行 PowerShell 腳本 (系統管理員) (Run PowerShell Script (Admin))
+  const runPs1AdminHandler = async (element, elements) => {
+    const selected = getSelectedElements(element, elements);
+    const target = selected[0];
+    const targetPath = target?.fsPath || (target instanceof vscode.Uri ? target.fsPath : null);
+    if (!targetPath) return;
+
+    try {
+      await vscode.commands.executeCommand('scriptRunner.runPs1Admin', vscode.Uri.file(targetPath));
+    } catch {
+      vscode.window.showWarningMessage(i18n.t('msg_plugin_script_runner_required'));
+    }
+  };
+
+  // 17. 註冊命令：執行 Python 腳本 (Run Python Script)
+  const runPyHandler = async (element, elements) => {
+    const selected = getSelectedElements(element, elements);
+    const target = selected[0];
+    const targetPath = target?.fsPath || (target instanceof vscode.Uri ? target.fsPath : null);
+    if (!targetPath) return;
+
+    try {
+      await vscode.commands.executeCommand('scriptRunner.runPy', vscode.Uri.file(targetPath));
+    } catch {
+      vscode.window.showWarningMessage(i18n.t('msg_plugin_script_runner_required'));
+    }
+  };
+
+  // 18. 工作區專案增減/隱藏即時連動監聽
   const workspaceFoldersWatcher = vscode.workspace.onDidChangeWorkspaceFolders(() => {
     treeDataProvider.refresh();
   });
 
-  // 12. 檔案系統變更監聽 (當檔案被刪除或更名時即時連動過濾)
+  // 19. 檔案系統變更監聽 (當檔案被刪除或更名時即時連動過濾)
   const fsWatcher = vscode.workspace.createFileSystemWatcher('**/*');
   fsWatcher.onDidDelete(() => treeDataProvider.refresh());
   fsWatcher.onDidCreate(() => treeDataProvider.refresh());
 
-  // 13. 多專案工作區檔案 (.code-workspace) 即時變更監聽 (連動 antigravity-toolbox 專案開關)
+  // 20. 多專案工作區檔案 (.code-workspace) 即時變更監聽 (連動 antigravity-toolbox 專案開關)
   let wsFileWatcher = null;
   if (vscode.workspace.workspaceFile?.fsPath) {
     try {
@@ -219,7 +318,7 @@ function activate(context) {
     } catch {}
   }
 
-  // 14. 設定變更監聽 (files.exclude 或 workbench.list 設定變動，以及 antigravity.locale 語言全域變更)
+  // 21. 設定變更監聽 (files.exclude 或 workbench.list 設定變動，以及 antigravity.locale 語言全域變更)
   const configWatcher = vscode.workspace.onDidChangeConfiguration((e) => {
     if (
       e.affectsConfiguration('antigravity.locale') ||
@@ -252,6 +351,20 @@ function activate(context) {
     vscode.commands.registerCommand('antigravity.quickAccess.revealInExplorer.en', revealInExplorerHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.revealInOS', revealInOSHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.revealInOS.en', revealInOSHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.addScriptToRunner', addScriptToRunnerHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.addScriptToRunner.en', addScriptToRunnerHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.viewImages', viewImagesHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.viewImages.en', viewImagesHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.runBat', runBatHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.runBat.en', runBatHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.runBatAdmin', runBatAdminHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.runBatAdmin.en', runBatAdminHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.runPs1', runPs1Handler),
+    vscode.commands.registerCommand('antigravity.quickAccess.runPs1.en', runPs1Handler),
+    vscode.commands.registerCommand('antigravity.quickAccess.runPs1Admin', runPs1AdminHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.runPs1Admin.en', runPs1AdminHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.runPy', runPyHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.runPy.en', runPyHandler),
     workspaceFoldersWatcher,
     fsWatcher,
     configWatcher

@@ -280,7 +280,7 @@ class ToolboxViewProvider {
       .replace(/<link rel="stylesheet" href="style\.css">/g, `<style>${css}</style>`)
       .replace(/<script src="locales\.js"><\/script>/g, `<script>window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)};</script><script>${localesJs}</script>`)
       .replace(/src="locales\.js"/g, `src="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'locales.js'))}"`)
-      .replace(/src="app\.js"/g, `src="${scriptUri}"`);
+      .replace(/src="app\.js"/g, `src="${scriptUri}?v=${Date.now()}"`);
   }
 }
 

@@ -17,10 +17,31 @@ class QuickAccessItem extends vscode.TreeItem {
   constructor(label, collapsibleState, itemType, options = {}) {
     super(label, collapsibleState);
     this.itemType = itemType;
-    this.contextValue = itemType;
     this.fsPath = options.fsPath;
     this.isPinned = options.isPinned || false;
     this.groupId = options.groupId;
+
+    // 依據節點類型與副檔名動態生成 contextValue，供 view/item/context 精準匹配右鍵選單
+    const contextParts = [itemType];
+    const isFolder = itemType === 'root-folder' || itemType === 'sub-folder';
+    if (isFolder) {
+      contextParts.push('folder');
+    } else if (options.fsPath) {
+      const ext = path.extname(options.fsPath).toLowerCase();
+      if (ext) {
+        contextParts.push(`ext:${ext.replace('.', '')}`);
+      }
+      if (['.bat', '.cmd'].includes(ext)) {
+        contextParts.push('isBat', 'isScript', 'canAddToRunner');
+      } else if (ext === '.ps1') {
+        contextParts.push('isPs1', 'isScript', 'canAddToRunner');
+      } else if (ext === '.py') {
+        contextParts.push('isPy', 'isScript');
+      } else if (['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.bmp', '.ico', '.avif', '.tif', '.tiff', '.jfif'].includes(ext)) {
+        contextParts.push('isImage');
+      }
+    }
+    this.contextValue = contextParts.join(';');
 
     if (options.fsPath) {
       this.resourceUri = vscode.Uri.file(options.fsPath);

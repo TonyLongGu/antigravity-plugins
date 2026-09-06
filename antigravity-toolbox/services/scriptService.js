@@ -296,25 +296,29 @@ async function renameScript(targetPath, provider = null) {
     return false;
   }
 
-  const currentDisplayName = (typeof scriptItem === 'object' && scriptItem.name) ? scriptItem.name : path.basename(canonicalFullPath);
+  const isCustomized = typeof scriptItem === 'object' && Boolean(scriptItem.name);
+  const defaultFileName = path.basename(canonicalFullPath);
+  const currentDisplayName = isCustomized ? scriptItem.name : defaultFileName;
 
   const inputName = await vscode.window.showInputBox({
-    prompt: '請輸入此腳本在控制中心的「自訂顯示名稱」（不影響磁碟檔名）：',
+    prompt: '請輸入此腳本在控制中心的「自訂顯示名稱」（留空按 Enter 即可恢復預設檔案名稱）：',
     value: currentDisplayName,
-    placeHolder: '例如：一鍵同步全部擴充套件',
-    validateInput: (val) => {
-      if (!val || !val.trim()) {
-        return '顯示名稱不可為空白';
-      }
-      return null;
-    },
+    placeHolder: `留空按 Enter 恢復預設檔名 (${defaultFileName})，或輸入新顯示名稱`,
   });
 
-  if (!inputName || !inputName.trim()) {
+  // 使用者按下 ESC 取消
+  if (inputName === undefined) {
     return false;
   }
 
-  const newName = inputName.trim();
+  const trimmed = inputName.trim();
+
+  // 若使用者留空送出，或輸入之名稱恰等於預設實體檔名，皆視為恢復預設檔案名稱
+  if (!trimmed || trimmed === defaultFileName) {
+    return resetScriptDisplayName(targetPath, provider);
+  }
+
+  const newName = trimmed;
   const idx = json.scripts.indexOf(scriptItem);
   if (typeof scriptItem === 'string') {
     json.scripts[idx] = {
@@ -372,7 +376,11 @@ function resetScriptDisplayName(targetPath, provider = null) {
     return true;
   }
 
-  return false;
+  // 原本就未自訂名稱，已是預設檔名
+  if (provider?.pushToast) {
+    provider.pushToast('當前已是預設檔案名稱。', 'info');
+  }
+  return true;
 }
 
 /**

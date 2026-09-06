@@ -23,5 +23,14 @@
   "confirm_clear_scratchpad": "確定要清空當前臨時暫存清單中的 {count} 個項目嗎？（常規釘選與隱藏專案之暫存不會受到影響）",
   "btn_clear_scratchpad": "清空清單",
   "msg_cleared_count": "已清空 {count} 個臨時暫存項目",
-  "msg_refreshed": "清單已重新整理"
+  "msg_refreshed": "清單已重新整理",
+  "cmd_add_script_to_runner": "加入至專案腳本執行器",
+  "cmd_view_images": "檢視圖片",
+  "cmd_run_bat": "執行批次檔",
+  "cmd_run_bat_admin": "執行批次檔 (系統管理員)",
+  "cmd_run_ps1": "執行 PowerShell 腳本",
+  "cmd_run_ps1_admin": "執行 PowerShell 腳本 (系統管理員)",
+  "cmd_run_py": "執行 Python 腳本",
+  "msg_plugin_script_runner_required": "請先安裝並啟用「腳本右鍵執行工具 (Script Runner)」擴充套件！",
+  "msg_plugin_toolbox_required": "請先安裝並啟用「Antigravity 控制中心 (Toolbox)」擴充套件！"
 }

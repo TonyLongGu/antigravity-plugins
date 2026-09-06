@@ -23,5 +23,14 @@
   "confirm_clear_scratchpad": "Are you sure you want to clear {count} items in Scratchpad? (Pinned and hidden project items will not be affected)",
   "btn_clear_scratchpad": "Clear List",
   "msg_cleared_count": "Cleared {count} scratchpad items",
-  "msg_refreshed": "List refreshed"
+  "msg_refreshed": "List refreshed",
+  "cmd_add_script_to_runner": "Add to Project Script Runner",
+  "cmd_view_images": "View Images",
+  "cmd_run_bat": "Run Batch File",
+  "cmd_run_bat_admin": "Run Batch File (Admin)",
+  "cmd_run_ps1": "Run PowerShell Script",
+  "cmd_run_ps1_admin": "Run PowerShell Script (Admin)",
+  "cmd_run_py": "Run Python Script",
+  "msg_plugin_script_runner_required": "Please install and enable the Script Runner extension first!",
+  "msg_plugin_toolbox_required": "Please install and enable the Antigravity Toolbox extension first!"
 }

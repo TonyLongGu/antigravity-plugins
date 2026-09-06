@@ -298,7 +298,7 @@ class AiContextViewProvider {
 
     return html
       .replace(/href="style\.css"/g, `href="${styleUri}"`)
-      .replace(/src="app\.js"/g, `src="${scriptUri}"`)
+      .replace(/src="app\.js"/g, `src="${scriptUri}?v=${Date.now()}"`)
       .replace(/<script src="locales\.js"><\/script>/g, `<script>window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)};</script><script>${localesJs}</script>`)
       .replace(/\{\{LIVE_ACTIVE\}\}/g, isSnapshot ? '' : 'active')
       .replace(/\{\{SNAPSHOT_ACTIVE\}\}/g, isSnapshot ? 'active' : '')

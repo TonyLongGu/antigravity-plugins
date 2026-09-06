@@ -19,13 +19,16 @@
     brain: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04z"/></svg>',
     alertTriangle: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
     chevronRight: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>',
-    gripVertical: '<svg class="lucide-icon grip-icon" viewBox="0 0 24 24"><circle cx="9" cy="12" r="1.5"/><circle cx="9" cy="5" r="1.5"/><circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="15" cy="5" r="1.5"/><circle cx="15" cy="19" r="1.5"/></svg>',
+    gripVertical: '<svg class="lucide-icon grip-icon" viewBox="0 0 10 16" width="7" height="11" fill="currentColor"><circle cx="3" cy="3" r="0.75"/><circle cx="7" cy="3" r="0.75"/><circle cx="3" cy="8" r="0.75"/><circle cx="7" cy="8" r="0.75"/><circle cx="3" cy="13" r="0.75"/><circle cx="7" cy="13" r="0.75"/></svg>',
     eye: '<svg class="lucide-icon eye-icon" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>',
     eyeOff: '<svg class="lucide-icon eye-icon" viewBox="0 0 24 24"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></svg>',
     play: '<svg class="lucide-icon" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></svg>',
     zap: '<svg class="lucide-icon" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
     trash2: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>',
-    terminal: '<svg class="lucide-icon" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>'
+    terminal: '<svg class="lucide-icon" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>',
+    pencil: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>',
+    rotateCcw: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>',
+    shield: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>'
   };
 
   // ============================================================================
@@ -807,32 +810,12 @@
 
             return `
               <div class="script-item ${missingClass}" data-path="${ToastModule.escapeHtml(s.fullPath || s.rawPath)}" data-raw-path="${ToastModule.escapeHtml(s.rawPath || s.fullPath)}" title="${I18nModule.t('script_item_title')}">
-                <div class="script-main-row">
-                  <div class="script-file-info" title="${scriptInfoTitle}">
-                    <span class="script-file-name">${ToastModule.escapeHtml(s.name || s.fileName)}</span>
-                  </div>
-                  <div class="script-name-actions">
-                    <button type="button" class="btn-micro-action btn-script-rename" title="${I18nModule.t('btn_script_rename_title')}">
-                      <span>${I18nModule.t('btn_script_rename')}</span>
-                    </button>
-                    ${s.hasCustomName ? `
-                    <button type="button" class="btn-micro-action btn-script-reset-name" title="${I18nModule.t('btn_script_reset_name_title')}">
-                      <span>${I18nModule.t('btn_script_reset_name')}</span>
-                    </button>` : ''}
-                    ${missingBadge}
-                  </div>
+                <div class="script-file-info" title="${scriptInfoTitle}">
+                  <span class="script-file-icon">${Icons.terminal}</span>
+                  <span class="script-file-name">${ToastModule.escapeHtml(s.name || s.fileName)}</span>
+                  ${missingBadge}
                 </div>
-                <div class="script-actions-grid">
-                  <button type="button" class="btn-script-action btn-script-run" title="${I18nModule.t('btn_script_run_title')}">
-                    <span>${I18nModule.t('btn_script_run')}</span>
-                  </button>
-                  <button type="button" class="btn-script-action btn-script-admin" title="${I18nModule.t('btn_script_admin_title')}">
-                    <span>${I18nModule.t('btn_script_admin')}</span>
-                  </button>
-                  <button type="button" class="btn-script-action btn-script-delete" title="${I18nModule.t('btn_script_delete_title')}">
-                    <span>${I18nModule.t('btn_script_delete')}</span>
-                  </button>
-                </div>
+                <div class="script-actions"><button type="button" class="btn-script-icon-action btn-script-rename" title="${I18nModule.t('btn_script_rename_title')}">${Icons.pencil}</button><button type="button" class="btn-script-icon-action btn-script-run" title="${I18nModule.t('btn_script_run_title')}">${Icons.play}</button><button type="button" class="btn-script-icon-action btn-script-admin" title="${I18nModule.t('btn_script_admin_title')}">${Icons.shield}</button><button type="button" class="btn-script-icon-action btn-script-delete" title="${I18nModule.t('btn_script_delete_title')}">${Icons.trash2}</button></div>
               </div>
             `;
           })
@@ -1085,17 +1068,17 @@
       });
 
       // 5. 攔截右鍵選單 (contextmenu)
-      // 若曾經發生拖曳，立即阻止彈出右鍵選單；若為原地單擊則不干擾
+      // 全面禁用非文字輸入區之原生右鍵選單（杜絕「剪下、貼上」奪取焦點導致面板異常）
+      // 僅在文字輸入框或可編輯區放行原生右鍵以利貼上操作
       window.addEventListener(
         'contextmenu',
         (e) => {
-          if (hasDragged) {
-            e.preventDefault();
-            e.stopPropagation();
-            setTimeout(() => {
-              hasDragged = false;
-            }, 50);
+          if (e.target && typeof e.target.closest === 'function' && e.target.closest('input, textarea, select, [contenteditable="true"]')) {
+            return;
           }
+          e.preventDefault();
+          e.stopPropagation();
+          hasDragged = false;
         },
         true
       );

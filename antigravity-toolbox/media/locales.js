@@ -47,7 +47,7 @@
       // 模組 2：專案腳本執行器
       module_scripts_title: '專案腳本執行器',
       scripts_empty_hint: '尚未加入腳本，請在檔案總管對 <code>.ps1</code> 或 <code>.bat</code> 檔案按右鍵加入',
-      btn_script_rename_title: '自訂此腳本在工具中的顯示名稱 (不修改實體檔名)',
+      btn_script_rename_title: '自訂顯示名稱 (留空按 Enter 可恢復預設檔名)',
       btn_script_rename: '命名',
       btn_script_reset_name_title: '恢復為預設檔案名稱',
       btn_script_reset_name: '恢復',
@@ -168,7 +168,7 @@
       // Module 2: Project Script Runner
       module_scripts_title: 'Project Script Runner',
       scripts_empty_hint: 'No scripts added yet. Right-click <code>.ps1</code> or <code>.bat</code> in Explorer to add.',
-      btn_script_rename_title: 'Customize display name for this script (does not rename file)',
+      btn_script_rename_title: 'Rename display name (Leave empty and press Enter to reset)',
       btn_script_rename: 'Rename',
       btn_script_reset_name_title: 'Restore to default file name',
       btn_script_reset_name: 'Reset',

@@ -279,6 +279,16 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script src="locales.js"></script>
+  <script>
+    // 優先全域攔截非文字輸入區之原生右鍵選單，防止跳出「剪下、貼上」選單造成焦點搶佔異常
+    document.addEventListener('contextmenu', function (e) {
+      if (e.target && typeof e.target.closest === 'function' && e.target.closest('input, textarea, select, [contenteditable="true"]')) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
+  </script>
   <script src="app.js"></script>
 </body>
 </html>

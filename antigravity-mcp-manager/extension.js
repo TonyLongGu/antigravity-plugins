@@ -289,7 +289,7 @@ class MCPManagerViewProvider {
 
     return html
       .replace(/href="style\.css"/g, `href="${styleUri}"`)
-      .replace(/src="app\.js"/g, `src="${scriptUri}"`)
+      .replace(/src="app\.js"/g, `src="${scriptUri}?v=${Date.now()}"`)
       .replace(
         /<script id="i18n-locales-data" type="application\/json">\{\}<\/script>/g,
         `<script>window.LOCALES = ${JSON.stringify(locales)}; window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)};</script>`
