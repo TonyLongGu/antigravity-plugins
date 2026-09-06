@@ -5,6 +5,7 @@ const fsPromises = require('node:fs/promises');
 const I18n = require('./i18n');
 const imageService = require('./services/imageService');
 const videoService = require('./services/videoService');
+const { videoStreamServer } = require('./services/videoStreamServer');
 
 /**
  * 轉義 PowerShell 單引號字串中的單引號
@@ -196,6 +197,7 @@ function activate(context) {
   // 4. 檢視資料夾圖片 (內容區工具視窗)
   const viewFolderImagesHandler = async (uri) => {
     let targetUri = uri;
+    let initialImagePath = null;
     if (targetUri && !targetUri.scheme && (targetUri.resourceUri || targetUri.fsPath)) {
       targetUri = targetUri.resourceUri || vscode.Uri.file(targetUri.fsPath);
     }
@@ -212,21 +214,22 @@ function activate(context) {
     }
 
     if (!targetUri || targetUri.scheme !== 'file' || !targetUri.fsPath) {
-      vscode.window.showWarningMessage('請選取實體資料夾以檢視圖片！');
+      vscode.window.showWarningMessage('請選取實體資料夾或圖片檔案以檢視圖片！');
       return;
     }
 
     try {
       const stat = await fsPromises.stat(targetUri.fsPath);
       if (!stat.isDirectory()) {
+        initialImagePath = targetUri.fsPath;
         targetUri = vscode.Uri.file(path.dirname(targetUri.fsPath));
       }
     } catch (err) {
-      vscode.window.showErrorMessage(`無法存取資料夾：${targetUri.fsPath}`);
+      vscode.window.showErrorMessage(`無法存取路徑：${targetUri.fsPath}`);
       return;
     }
 
-    await ImageViewerPanel.createOrShow(context.extensionUri, targetUri);
+    await ImageViewerPanel.createOrShow(context.extensionUri, targetUri, initialImagePath);
   };
 
   // 5. 檢視資料夾影片 (內容區工具視窗)
@@ -319,12 +322,19 @@ class ImageViewerPanel {
    * 建立或喚醒指定資料夾之圖片檢視視窗
    * @param {vscode.Uri} extensionUri
    * @param {vscode.Uri} folderUri
+   * @param {string|null} initialImagePath
    */
-  static async createOrShow(extensionUri, folderUri) {
+  static async createOrShow(extensionUri, folderUri, initialImagePath = null) {
     const folderPath = folderUri.fsPath;
     const existing = ImageViewerPanel.currentPanels.get(folderPath);
     if (existing) {
       existing.panel.reveal(vscode.ViewColumn.Active);
+      if (initialImagePath) {
+        existing.panel.webview.postMessage({
+          type: 'openTargetImage',
+          filePath: initialImagePath
+        });
+      }
       return;
     }
 
@@ -343,16 +353,17 @@ class ImageViewerPanel {
       }
     );
 
-    const instance = new ImageViewerPanel(panel, extensionUri, folderUri);
+    const instance = new ImageViewerPanel(panel, extensionUri, folderUri, initialImagePath);
     ImageViewerPanel.currentPanels.set(folderPath, instance);
   }
 
-  constructor(panel, extensionUri, folderUri) {
+  constructor(panel, extensionUri, folderUri, initialImagePath = null) {
     this.panel = panel;
     this.extensionUri = extensionUri;
     this.folderUri = folderUri;
     this.folderPath = folderUri.fsPath;
     this.folderName = path.basename(this.folderPath);
+    this.initialImagePath = initialImagePath;
     this.isRecursive = false;
     this._disposables = [];
 
@@ -480,8 +491,10 @@ class ImageViewerPanel {
           folderName: this.folderName,
           images,
           recursive: this.isRecursive,
-          thumbSize: savedThumbSize
+          thumbSize: savedThumbSize,
+          targetFilePath: this.initialImagePath
         });
+        this.initialImagePath = null;
       }
     } catch (err) {
       vscode.window.showErrorMessage(`讀取圖片失敗: ${err.message}`);
@@ -583,6 +596,9 @@ class VideoViewerPanel {
     this.isRecursive = false;
     this._disposables = [];
 
+    // 增加伺服器活躍引用計數
+    videoStreamServer.retain();
+
     this.panel.onDidDispose(() => this.dispose(), null, this._disposables);
     this.panel.webview.onDidReceiveMessage((msg) => this._handleMessage(msg), null, this._disposables);
 
@@ -590,6 +606,8 @@ class VideoViewerPanel {
   }
 
   dispose() {
+    // 釋放伺服器活躍引用計數（歸零則啟動延遲自動休眠）
+    videoStreamServer.release();
     VideoViewerPanel.currentPanels.delete(this.folderPath);
     this.panel.dispose();
     while (this._disposables.length) {

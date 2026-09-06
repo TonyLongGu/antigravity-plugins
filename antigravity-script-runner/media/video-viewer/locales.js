@@ -69,6 +69,7 @@
       ctrl_mute_title: '靜音切換 (M)',
       ctrl_volume_title: '音量調節 (滾輪或 ↑/↓)',
       ctrl_open_external_title: '以系統播放器開啟 (O)',
+      ctrl_hide_title: '隱藏控制器 (H，右鍵切換固定常駐)',
 
       // 提示訊息 (Toasts)
       toast_copy_success: '已複製路徑：{file}',
@@ -87,7 +88,9 @@
       toast_refresh_success: '已重新整理（共 {count} 部影片）',
       toast_lang_switched: '已切換為繁體中文介面',
       toast_thumb_lazy: '已開啟縮圖生成',
-      toast_thumb_disabled: '已關閉縮圖生成（極速輕量模式）'
+      toast_thumb_disabled: '已關閉縮圖生成（極速輕量模式）',
+      toast_controls_pinned: '控制列已鎖定固定（不自動隱藏）',
+      toast_controls_autohide: '已恢復自動隱藏（無操作時自動隱藏）'
     },
     'en': {
       // Top Toolbar
@@ -154,6 +157,7 @@
       ctrl_mute_title: 'Mute toggle (M)',
       ctrl_volume_title: 'Volume adjustment (Wheel or ↑/↓)',
       ctrl_open_external_title: 'Open with system player (O)',
+      ctrl_hide_title: 'Hide Controller (H, Right-click to pin)',
 
       // Toasts
       toast_copy_success: 'Path copied: {file}',
@@ -172,7 +176,9 @@
       toast_refresh_success: 'Refreshed ({count} videos total)',
       toast_lang_switched: 'Switched to English interface',
       toast_thumb_lazy: 'Thumbnails enabled',
-      toast_thumb_disabled: 'Thumbnails disabled (lightweight mode)'
+      toast_thumb_disabled: 'Thumbnails disabled (lightweight mode)',
+      toast_controls_pinned: 'Controls pinned (Auto-hide disabled)',
+      toast_controls_autohide: 'Auto-hide restored'
     }
   };
 

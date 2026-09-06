@@ -228,7 +228,7 @@ async function scanVideos(rootDir, recursive = false, webview = null) {
 
             const relativePath = path.relative(rootDir, fullPath).replace(/\\/g, '/');
             // 使用本機 HTTP 206 串流伺服器提供真正的 Range 切片播放與無損檔名編碼支援
-            const streamUri = `http://127.0.0.1:${streamPort}/video?path=${encodeURIComponent(fullPath)}`;
+            const streamUri = `http://127.0.0.1:${streamPort}/video?token=${videoStreamServer.sessionToken}&path=${encodeURIComponent(fullPath)}`;
 
             return {
               fileName: fileName,

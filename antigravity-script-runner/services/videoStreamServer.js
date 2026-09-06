@@ -2,6 +2,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const fsPromises = require('node:fs/promises');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 // 支援影片串流之 MIME 類型映射
 const MIME_TYPES = {
@@ -22,6 +23,38 @@ class VideoStreamServer {
     this.server = null;
     this.port = null;
     this.startPromise = null;
+    this.sessionToken = crypto.randomBytes(16).toString('hex');
+    this.activePanelsCount = 0;
+    this.shutdownTimer = null;
+  }
+
+  /**
+   * 增加使用中的面板引用計數
+   */
+  retain() {
+    this.activePanelsCount++;
+    if (this.shutdownTimer) {
+      clearTimeout(this.shutdownTimer);
+      this.shutdownTimer = null;
+    }
+  }
+
+  /**
+   * 減少使用中的面板引用計數；若歸零則 15 秒後自動休眠關閉伺服器
+   */
+  release() {
+    this.activePanelsCount = Math.max(0, this.activePanelsCount - 1);
+    if (this.activePanelsCount === 0 && this.server && this.server.listening) {
+      if (this.shutdownTimer) {
+        clearTimeout(this.shutdownTimer);
+      }
+      this.shutdownTimer = setTimeout(() => {
+        if (this.activePanelsCount === 0) {
+          console.log('[VideoStreamServer] 所有影片檢視面板已關閉，自動休眠伺服器釋放通訊埠');
+          this.dispose();
+        }
+      }, 15000);
+    }
   }
 
   /**
@@ -29,6 +62,11 @@ class VideoStreamServer {
    * @returns {Promise<number>} 回傳監聽連接埠號
    */
   async ensureServer() {
+    if (this.shutdownTimer) {
+      clearTimeout(this.shutdownTimer);
+      this.shutdownTimer = null;
+    }
+
     if (this.port && this.server && this.server.listening) {
       return this.port;
     }
@@ -53,6 +91,7 @@ class VideoStreamServer {
       srv.listen(0, '127.0.0.1', () => {
         this.server = srv;
         this.port = srv.address().port;
+        this.sessionToken = crypto.randomBytes(16).toString('hex');
         this.startPromise = null;
         console.log(`[VideoStreamServer] 本機 HTTP 206 串流伺服器已啟動於 127.0.0.1:${this.port}`);
         resolve(this.port);
@@ -89,6 +128,14 @@ class VideoStreamServer {
         return;
       }
 
+      // 1. 安全校驗：驗證 Session Token（防止外部網頁探測讀取本機檔案）
+      const token = reqUrl.searchParams.get('token');
+      if (!token || token !== this.sessionToken) {
+        res.writeHead(403, { 'Content-Type': 'text/plain; charset=UTF-8' });
+        res.end('403 Forbidden: Invalid or missing stream token');
+        return;
+      }
+
       const rawFilePath = reqUrl.searchParams.get('path');
       if (!rawFilePath) {
         res.writeHead(400, { 'Content-Type': 'text/plain; charset=UTF-8' });
@@ -97,6 +144,14 @@ class VideoStreamServer {
       }
 
       const filePath = path.normalize(rawFilePath);
+      const ext = path.extname(filePath).toLowerCase();
+
+      // 2. 安全校驗：限制副檔名白名單（僅限支援之影片格式）
+      if (!Object.prototype.hasOwnProperty.call(MIME_TYPES, ext)) {
+        res.writeHead(403, { 'Content-Type': 'text/plain; charset=UTF-8' });
+        res.end('403 Forbidden: File type not allowed for video streaming');
+        return;
+      }
 
       let stat;
       try {
@@ -114,7 +169,6 @@ class VideoStreamServer {
       }
 
       const fileSize = stat.size;
-      const ext = path.extname(filePath).toLowerCase();
       const contentType = MIME_TYPES[ext] || 'video/mp4';
       const range = req.headers.range;
 
@@ -248,15 +302,22 @@ class VideoStreamServer {
    */
   async getStreamUrl(filePath) {
     const port = await this.ensureServer();
-    return `http://127.0.0.1:${port}/video?path=${encodeURIComponent(filePath)}`;
+    return `http://127.0.0.1:${port}/video?token=${this.sessionToken}&path=${encodeURIComponent(filePath)}`;
   }
 
   /**
-   * 關閉串流伺服器（於擴充套件停用時調用）
+   * 關閉串流伺服器（於擴充套件停用或面板全部關閉時調用）
    */
   dispose() {
+    if (this.shutdownTimer) {
+      clearTimeout(this.shutdownTimer);
+      this.shutdownTimer = null;
+    }
     if (this.server) {
       try {
+        if (typeof this.server.closeAllConnections === 'function') {
+          this.server.closeAllConnections();
+        }
         this.server.close();
       } catch (_) {}
       this.server = null;

@@ -101,6 +101,7 @@
   const iconVolMutedEl = volumeBtnEl.querySelector('.icon-vol-muted');
   const volumeSliderEl = document.getElementById('volumeSlider');
   const ctrlOpenExternalBtnEl = document.getElementById('ctrlOpenExternalBtn');
+  const ctrlHideBtnEl = document.getElementById('ctrlHideBtn');
 
   const toastContainerEl = document.getElementById('toastContainer');
 
@@ -876,6 +877,8 @@
 
     const formatUpper = (video.ext || '').toUpperCase() || 'VIDEO';
     const durInitial = (video.durationFormatted && video.durationFormatted !== '--:--') ? video.durationFormatted : '--:--';
+    const isDecodable = isFormatBrowserDecodable(video.ext);
+    const formatTagText = isDecodable ? formatUpper : `${formatUpper} • 外部播放`;
 
     card.innerHTML = `
       <div class="card-thumb-container">
@@ -892,7 +895,7 @@
         <div class="card-play-badge">
           <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
         </div>
-        <div class="thumb-tag thumb-tag-format">${formatUpper}</div>
+        <div class="thumb-tag thumb-tag-format" title="${!isDecodable ? '非瀏覽器原生解碼格式，點擊右上角圖示即可調用系統播放器開啟' : ''}">${formatTagText}</div>
         <div class="thumb-tag thumb-tag-duration" id="dur-${idx}">${durInitial}</div>
         <div class="thumb-tag thumb-tag-res" id="res-${idx}" style="display:none;"></div>
         <div class="card-select-btn" title="${I18nModule.t('card_select_title')}">
@@ -1121,8 +1124,8 @@
     playerIndexBadgeEl.textContent = `${currentIndex + 1} / ${filteredVideos.length}`;
     playerMetaEl.textContent = `${I18nModule.t('loading')} • ${v.sizeFormatted}`;
 
-    prevBtnEl.style.opacity = currentIndex > 0 ? '1' : '0.3';
-    nextBtnEl.style.opacity = currentIndex < filteredVideos.length - 1 ? '1' : '0.3';
+    prevBtnEl.disabled = currentIndex <= 0;
+    nextBtnEl.disabled = currentIndex >= filteredVideos.length - 1;
 
     // 暫停所有背景縮圖隊列，並立即中斷當前背景解碼任務，將所有連線與解碼器配額 100% 留給當前播放影片
     thumbQueue.length = 0;
@@ -1168,6 +1171,9 @@
 
     currentIndex = -1;
     clearTimeout(idleTimer);
+    hideCooldownUntil = 0;
+    wakeUpOriginX = null;
+    wakeUpOriginY = null;
 
     // 恢復背景縮圖隊列處理（僅交由 IntersectionObserver 按需排入當前可視區）
     if (showThumbs) {
@@ -1409,10 +1415,17 @@
       if (err.code === 1) desc = '播放被中止 (MEDIA_ERR_ABORTED)';
       else if (err.code === 2) desc = '網路或連線讀取失敗 (MEDIA_ERR_NETWORK)';
       else if (err.code === 3) desc = '影片解碼失敗 (MEDIA_ERR_DECODE)';
-      else if (err.code === 4) desc = '格式不支援或檔案無法讀取 (MEDIA_ERR_SRC_NOT_SUPPORTED)';
+      else if (err.code === 4) desc = '格式不支援 (建議以系統播放器開啟)';
     }
     console.error('[VideoPlayer] 播放錯誤:', err, playerVideoEl.src);
-    playerMetaEl.textContent = `播放失敗 • ${desc}`;
+    playerMetaEl.innerHTML = `<span>播放失敗 • ${desc}</span> <button id="errOpenExtBtn" style="margin-left:8px;background:var(--accent-blue,#38bdf8);color:#0f172a;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:11px;font-weight:600;">以系統播放器開啟 (O)</button>`;
+    const errBtn = document.getElementById('errOpenExtBtn');
+    if (errBtn) {
+      errBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openCurrentInExternalPlayer();
+      });
+    }
     showToast(I18nModule.t('toast_play_error', { desc }), 'warn');
     updatePlayPauseUI(false);
   });
@@ -1519,6 +1532,45 @@
     ctrlOpenExternalBtnEl.addEventListener('click', openCurrentInExternalPlayer);
   }
 
+  // 17.0 隱藏控制器按鈕與常駐控制邏輯
+  let isAutoHideDisabled = false;
+  let hideCooldownUntil = 0;
+  let wakeUpOriginX = null;
+  let wakeUpOriginY = null;
+
+  function hideControlsImmediately(optX = null, optY = null) {
+    clearTimeout(idleTimer);
+    // 依需求設定 1 秒 (1000ms) 冷卻，期間完全停止對滑鼠滑入/移動的偵測，防止滑鼠移開時控制器又馬上跳出來
+    hideCooldownUntil = Date.now() + 1000;
+    wakeUpOriginX = optX;
+    wakeUpOriginY = optY;
+    playerModalEl.classList.add('is-idle');
+  }
+
+  if (ctrlHideBtnEl) {
+    ctrlHideBtnEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hideControlsImmediately(e.clientX, e.clientY);
+    });
+
+    // 支援右鍵點擊切換「鎖定常駐 / 自動隱藏」
+    ctrlHideBtnEl.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      isAutoHideDisabled = !isAutoHideDisabled;
+      if (isAutoHideDisabled) {
+        clearTimeout(idleTimer);
+        playerModalEl.classList.remove('is-idle');
+        ctrlHideBtnEl.classList.add('is-pinned');
+        showToast(I18nModule.t('toast_controls_pinned'), 'info');
+      } else {
+        ctrlHideBtnEl.classList.remove('is-pinned');
+        showToast(I18nModule.t('toast_controls_autohide'), 'info');
+        resetIdleTimer();
+      }
+    });
+  }
+
   // 在畫廊中選取當前播放影片並關閉
   selectAndCloseBtnEl.addEventListener('click', () => {
     if (currentIndex >= 0 && currentIndex < filteredVideos.length) {
@@ -1543,16 +1595,39 @@
     clearTimeout(idleTimer);
     playerModalEl.classList.remove('is-idle');
 
+    if (isAutoHideDisabled) return;
+
     if (!playerVideoEl.paused && !playerVideoEl.ended) {
       idleTimer = setTimeout(() => {
-        if (!playerVideoEl.paused && !isSeeking) {
+        if (!playerVideoEl.paused && !isSeeking && !isAutoHideDisabled) {
           playerModalEl.classList.add('is-idle');
         }
       }, 2400);
     }
   }
 
-  playerModalEl.addEventListener('pointermove', resetIdleTimer);
+  // 滑鼠移動與滑入事件偵測（具備 1 秒防抖冷卻與實質位移喚醒判定）
+  function handlePointerMove(e) {
+    const now = Date.now();
+    if (now < hideCooldownUntil) {
+      // 1 秒冷卻期間內：完全阻斷喚醒，並持續更新移開過程中的最新座標
+      wakeUpOriginX = e.clientX;
+      wakeUpOriginY = e.clientY;
+      return;
+    }
+
+    // 若剛結束 1 秒冷卻，滑鼠必須有新的一段實質位移（> 8px）才視為主動喚醒，杜絕移開收尾時的微小殘留抖動
+    if (wakeUpOriginX !== null && wakeUpOriginY !== null) {
+      const dist = Math.hypot(e.clientX - wakeUpOriginX, e.clientY - wakeUpOriginY);
+      if (dist < 8) return;
+      wakeUpOriginX = null;
+      wakeUpOriginY = null;
+    }
+
+    resetIdleTimer();
+  }
+
+  playerModalEl.addEventListener('pointermove', handlePointerMove);
 
   // 18. 關閉按鈕與右鍵退出 (符合「圖片檢視器右鍵退出」體驗)
   playerCloseBtnEl.addEventListener('click', closePlayer);
@@ -1560,6 +1635,10 @@
   // 全域右鍵阻斷與播放器右鍵退出核心
   document.addEventListener('contextmenu', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+      return;
+    }
+    // 若在控制列按鈕或浮動元素上點擊右鍵，不觸發關閉播放器
+    if (e.target.closest('#ctrlHideBtn') || e.target.closest('.ctrl-btn') || e.target.closest('.btn-icon')) {
       return;
     }
     e.preventDefault();
@@ -1878,6 +1957,17 @@
         e.preventDefault();
       } else if (e.key === 'm' || e.key === 'M') {
         volumeBtnEl.click();
+        e.preventDefault();
+      } else if (e.key === 'h' || e.key === 'H') {
+        if (playerModalEl.classList.contains('is-idle')) {
+          hideCooldownUntil = 0;
+          wakeUpOriginX = null;
+          wakeUpOriginY = null;
+          playerModalEl.classList.remove('is-idle');
+          resetIdleTimer();
+        } else {
+          hideControlsImmediately();
+        }
         e.preventDefault();
       } else if (e.key === 'o' || e.key === 'O') {
         openCurrentInExternalPlayer();

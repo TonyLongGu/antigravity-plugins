@@ -1057,8 +1057,14 @@ body.has-selection .card-select-btn,
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all var(--transition-fast), opacity 0.3s ease, visibility 0.3s ease;
   z-index: 1005;
+}
+
+.nav-arrow:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .nav-arrow svg {
@@ -1278,15 +1284,17 @@ body.has-selection .card-select-btn,
 /* ==============================================================================
    全螢幕與游標自動隱藏 (Fullscreen & Auto-Hide)
    ============================================================================== */
-.player-modal.is-playing.is-idle {
+.player-modal.is-idle {
   cursor: none !important;
 }
 
-.player-modal.is-playing.is-idle .player-controls,
-.player-modal.is-playing.is-idle .player-header,
-.player-modal.is-playing.is-idle .nav-arrow {
-  opacity: 0;
-  pointer-events: none;
+.player-modal.is-idle .player-controls,
+.player-modal.is-idle .player-header,
+.player-modal.is-idle .nav-arrow {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
 /* ==============================================================================
@@ -1365,15 +1373,21 @@ body.has-selection .card-select-btn,
   pointer-events: auto;
 }
 
-.player-modal.is-fullscreen.is-playing.is-idle .player-header,
-.player-modal.is-fullscreen.is-playing.is-idle .player-controls,
-.player-modal.is-fullscreen.is-playing.is-idle .nav-arrow,
-.player-modal:fullscreen.is-playing.is-idle .player-header,
-.player-modal:fullscreen.is-playing.is-idle .player-controls,
-.player-modal:fullscreen.is-playing.is-idle .nav-arrow {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.35s ease;
+.player-modal.is-fullscreen.is-idle .player-header,
+.player-modal.is-fullscreen.is-idle .player-controls,
+.player-modal.is-fullscreen.is-idle .nav-arrow,
+.player-modal:fullscreen.is-idle .player-header,
+.player-modal:fullscreen.is-idle .player-controls,
+.player-modal:fullscreen.is-idle .nav-arrow {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+  transition: opacity 0.35s ease, visibility 0.35s ease;
+}
+
+.ctrl-btn.is-pinned {
+  color: var(--accent-blue, #38bdf8) !important;
+  background: rgba(56, 189, 248, 0.22) !important;
 }
 
 /* ==============================================================================

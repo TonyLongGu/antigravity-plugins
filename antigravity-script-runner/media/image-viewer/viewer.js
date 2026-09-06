@@ -365,7 +365,110 @@
     renderGallery();
   }
 
-  // 7. 渲染畫廊縮圖網格
+  // 7. 渲染畫廊縮圖網格卡片工廠與 RAF 漸進式分幀渲染引擎
+  let currentRenderToken = 0;
+
+  function createImageCard(img, idx) {
+    const card = document.createElement('div');
+    card.className = 'image-card';
+    card.dataset.path = img.fullPath;
+    if (selectedPaths.has(img.fullPath)) {
+      card.classList.add('is-selected');
+    }
+    card.title = `${img.fileName} (${img.sizeFormatted})\n${I18nModule.t('card_path_prefix')}${img.relativePath}`;
+
+    // 縮圖與懸浮動作
+    card.innerHTML = `
+      <div class="card-thumb-wrapper">
+        <button class="card-select-btn" title="${I18nModule.t('card_select_title')}" data-path="${img.fullPath}">
+          <svg class="check-icon" viewBox="0 0 24 24" fill="none">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </button>
+        <img class="card-thumb" src="${img.uri}" loading="lazy" alt="${img.fileName}" />
+        <span class="card-ext-badge">${img.ext}</span>
+        <div class="card-actions">
+          <button class="card-action-btn copy-btn" title="${I18nModule.t('card_copy_path_title')}" data-index="${idx}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+          </button>
+          <button class="card-action-btn reveal-btn" title="${I18nModule.t('card_reveal_title')}" data-index="${idx}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+          </button>
+        </div>
+      </div>
+      <div class="card-footer">
+        <div class="card-title">${img.fileName}</div>
+        <div class="card-meta">
+          <span class="card-dim" id="dim-${idx}">...</span>
+          <span class="card-size">${img.sizeFormatted}</span>
+        </div>
+      </div>
+    `;
+
+    // 點擊勾選圓圈
+    const selectBtn = card.querySelector('.card-select-btn');
+    selectBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleCardSelection(img.fullPath);
+    });
+
+    // 點擊卡片開啟大圖或進行選取
+    card.addEventListener('click', (e) => {
+      if (hasDraggedLeftBox) return;
+      if (e.target.closest('.card-action-btn') || e.target.closest('.card-select-btn')) return;
+
+      // Shift + 左鍵：加選/反選
+      if (e.shiftKey) {
+        e.preventDefault();
+        toggleCardSelection(img.fullPath);
+        return;
+      }
+
+      // 若已有選取項目，單擊卡片視為選取切換
+      if (selectedPaths.size > 0) {
+        toggleCardSelection(img.fullPath);
+        return;
+      }
+
+      // 一般無選取時單擊開啟大圖
+      openLightbox(idx);
+    });
+
+    // 雙擊卡片永遠開啟大圖 (即使已有選取狀態)
+    card.addEventListener('dblclick', (e) => {
+      if (e.target.closest('.card-action-btn') || e.target.closest('.card-select-btn')) return;
+      openLightbox(idx);
+    });
+
+    // 快速動作按鈕事件
+    const copyBtn = card.querySelector('.copy-btn');
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      copyToClipboard(img.fullPath);
+      showToast(I18nModule.t('toast_path_copied', { name: img.fileName }), 'success');
+    });
+
+    const revealBtn = card.querySelector('.reveal-btn');
+    revealBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (vscode) {
+        vscode.postMessage({ type: 'revealFile', filePath: img.fullPath });
+      }
+    });
+
+    // 讀取圖片原始長寬並更新標籤
+    const imgEl = card.querySelector('.card-thumb');
+    imgEl.addEventListener('load', () => {
+      const dimEl = card.querySelector(`#dim-${idx}`);
+      if (dimEl) {
+        dimEl.textContent = `${imgEl.naturalWidth}×${imgEl.naturalHeight}`;
+      }
+    });
+
+    return card;
+  }
+
+  // 7.1 渲染畫廊縮圖網格（首屏 36 張瞬開 + RAF 漸進式分批掛載）
   function renderGallery() {
     galleryGridEl.innerHTML = '';
 
@@ -385,105 +488,40 @@
     emptyStateEl.style.display = 'none';
     galleryGridEl.style.display = 'grid';
 
-    filteredImages.forEach((img, idx) => {
-      const card = document.createElement('div');
-      card.className = 'image-card';
-      card.dataset.path = img.fullPath;
-      if (selectedPaths.has(img.fullPath)) {
-        card.classList.add('is-selected');
-      }
-      card.title = `${img.fileName} (${img.sizeFormatted})\n${I18nModule.t('card_path_prefix')}${img.relativePath}`;
+    const token = ++currentRenderToken;
+    const CHUNK_SIZE = 36;
+    const initialBatch = filteredImages.slice(0, CHUNK_SIZE);
 
-      // 縮圖與懸浮動作
-      card.innerHTML = `
-        <div class="card-thumb-wrapper">
-          <button class="card-select-btn" title="${I18nModule.t('card_select_title')}" data-path="${img.fullPath}">
-            <svg class="check-icon" viewBox="0 0 24 24" fill="none">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-          </button>
-          <img class="card-thumb" src="${img.uri}" loading="lazy" alt="${img.fileName}" />
-          <span class="card-ext-badge">${img.ext}</span>
-          <div class="card-actions">
-            <button class="card-action-btn copy-btn" title="${I18nModule.t('card_copy_path_title')}" data-index="${idx}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
-            </button>
-            <button class="card-action-btn reveal-btn" title="${I18nModule.t('card_reveal_title')}" data-index="${idx}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-            </button>
-          </div>
-        </div>
-        <div class="card-footer">
-          <div class="card-title">${img.fileName}</div>
-          <div class="card-meta">
-            <span class="card-dim" id="dim-${idx}">...</span>
-            <span class="card-size">${img.sizeFormatted}</span>
-          </div>
-        </div>
-      `;
-
-      // 點擊勾選圓圈
-      const selectBtn = card.querySelector('.card-select-btn');
-      selectBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleCardSelection(img.fullPath);
-      });
-
-      // 點擊卡片開啟大圖或進行選取
-      card.addEventListener('click', (e) => {
-        if (hasDraggedLeftBox) return;
-        if (e.target.closest('.card-action-btn') || e.target.closest('.card-select-btn')) return;
-
-        // Shift + 左鍵：加選/反選
-        if (e.shiftKey) {
-          e.preventDefault();
-          toggleCardSelection(img.fullPath);
-          return;
-        }
-
-        // 若已有選取項目，單擊卡片視為選取切換
-        if (selectedPaths.size > 0) {
-          toggleCardSelection(img.fullPath);
-          return;
-        }
-
-        // 一般無選取時單擊開啟大圖
-        openLightbox(idx);
-      });
-
-      // 雙擊卡片永遠開啟大圖 (即使已有選取狀態)
-      card.addEventListener('dblclick', (e) => {
-        if (e.target.closest('.card-action-btn') || e.target.closest('.card-select-btn')) return;
-        openLightbox(idx);
-      });
-
-      // 快速動作按鈕事件
-      const copyBtn = card.querySelector('.copy-btn');
-      copyBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        copyToClipboard(img.fullPath);
-        showToast(I18nModule.t('toast_path_copied', { name: img.fileName }), 'success');
-      });
-
-      const revealBtn = card.querySelector('.reveal-btn');
-      revealBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (vscode) {
-          vscode.postMessage({ type: 'revealFile', filePath: img.fullPath });
-        }
-      });
-
-      // 讀取圖片原始長寬並更新標籤
-      const imgEl = card.querySelector('.card-thumb');
-      imgEl.addEventListener('load', () => {
-        const dimEl = card.querySelector(`#dim-${idx}`);
-        if (dimEl) {
-          dimEl.textContent = `${imgEl.naturalWidth}×${imgEl.naturalHeight}`;
-        }
-      });
-
-      galleryGridEl.appendChild(card);
+    // 1. 瞬間渲染第一屏（36 張以內），保證 16ms 內即刻呈現介面
+    const fragment = document.createDocumentFragment();
+    initialBatch.forEach((img, idx) => {
+      fragment.appendChild(createImageCard(img, idx));
     });
+    galleryGridEl.appendChild(fragment);
+
+    // 2. 其餘卡片透過 requestAnimationFrame 漸進式分批掛載，徹底消除 DOM 阻塞
+    if (filteredImages.length > CHUNK_SIZE) {
+      let nextIndex = CHUNK_SIZE;
+
+      function renderNextChunk() {
+        if (token !== currentRenderToken) return;
+        if (nextIndex >= filteredImages.length) return;
+
+        const end = Math.min(nextIndex + CHUNK_SIZE, filteredImages.length);
+        const chunkFrag = document.createDocumentFragment();
+        for (let i = nextIndex; i < end; i++) {
+          chunkFrag.appendChild(createImageCard(filteredImages[i], i));
+        }
+        galleryGridEl.appendChild(chunkFrag);
+        nextIndex = end;
+
+        if (nextIndex < filteredImages.length) {
+          requestAnimationFrame(renderNextChunk);
+        }
+      }
+
+      requestAnimationFrame(renderNextChunk);
+    }
   }
 
   // 8. 複製文字至剪貼簿
@@ -639,6 +677,24 @@
       openLightbox(currentIndex + 1);
     } else {
       showToast(I18nModule.t('lightbox_last_image'), 'info');
+    }
+  }
+
+  /**
+   * 依檔案實體絕對路徑在清單中比對並自動開啟 Lightbox 大圖檢視
+   */
+  function openTargetImageByPath(targetPath) {
+    if (!targetPath) return;
+    const normTarget = targetPath.replace(/\\/g, '/').toLowerCase();
+    const targetIdx = filteredImages.findIndex(img => img.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+    if (targetIdx !== -1) {
+      setTimeout(() => {
+        openLightbox(targetIdx);
+        const cardEl = galleryGridEl.querySelector(`.image-card[data-path="${CSS.escape(filteredImages[targetIdx].fullPath)}"]`);
+        if (cardEl) {
+          cardEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+      }, 50);
     }
   }
 
@@ -1299,6 +1355,17 @@
         updateSelectionUI();
 
         applyFilterAndSort();
+
+        // 支援右鍵單圖直接開啟全螢幕大圖檢視
+        if (message.targetFilePath) {
+          openTargetImageByPath(message.targetFilePath);
+        }
+        break;
+
+      case 'openTargetImage':
+        if (message.filePath) {
+          openTargetImageByPath(message.filePath);
+        }
         break;
 
       case 'updateImages':

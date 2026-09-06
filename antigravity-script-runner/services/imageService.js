@@ -60,19 +60,29 @@ async function scanImages(rootDir, recursive = false, webview = null) {
       return;
     }
 
-    for (const entry of entries) {
-      const fullPath = path.join(currentDir, entry.name);
+    const subDirs = [];
+    const imageFiles = [];
 
+    for (const entry of entries) {
       if (entry.isDirectory()) {
         // 忽略常見系統與暫存隱藏資料夾
-        if (entry.name.startsWith('.') || entry.name === 'node_modules' || entry.name === '$RECYCLE.BIN') {
-          continue;
-        }
-        if (recursive) {
-          await walk(fullPath);
+        if (!entry.name.startsWith('.') && entry.name !== 'node_modules' && entry.name !== '$RECYCLE.BIN') {
+          subDirs.push(path.join(currentDir, entry.name));
         }
       } else if (entry.isFile()) {
         if (isImageFile(entry.name)) {
+          imageFiles.push(entry.name);
+        }
+      }
+    }
+
+    // 併發批次查詢檔案狀態（每批 32 個，大幅降低大圖庫 I/O 等待時間）
+    const BATCH_SIZE = 32;
+    for (let i = 0; i < imageFiles.length; i += BATCH_SIZE) {
+      const chunk = imageFiles.slice(i, i + BATCH_SIZE);
+      const chunkResults = await Promise.all(
+        chunk.map(async (fileName) => {
+          const fullPath = path.join(currentDir, fileName);
           try {
             const stat = await fsPromises.stat(fullPath);
             const relativePath = path.relative(rootDir, fullPath).replace(/\\/g, '/');
@@ -81,20 +91,31 @@ async function scanImages(rootDir, recursive = false, webview = null) {
               : vscode.Uri.file(fullPath).toString();
             const safeUri = `${rawUri}?v=${Math.floor(stat.mtimeMs)}`;
 
-            results.push({
-              fileName: entry.name,
+            return {
+              fileName: fileName,
               relativePath: relativePath,
               fullPath: fullPath,
               size: stat.size,
               sizeFormatted: formatBytes(stat.size),
               mtimeMs: stat.mtimeMs,
-              ext: path.extname(entry.name).toLowerCase().replace('.', ''),
+              ext: path.extname(fileName).toLowerCase().replace('.', ''),
               uri: safeUri
-            });
+            };
           } catch (statErr) {
             console.warn(`[ImageService] 無法取得檔案狀態: ${fullPath}`, statErr);
+            return null;
           }
-        }
+        })
+      );
+
+      for (const item of chunkResults) {
+        if (item) results.push(item);
+      }
+    }
+
+    if (recursive && subDirs.length > 0) {
+      for (const subDir of subDirs) {
+        await walk(subDir);
       }
     }
   }
