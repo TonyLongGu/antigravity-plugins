@@ -811,7 +811,6 @@
             return `
               <div class="script-item ${missingClass}" data-path="${ToastModule.escapeHtml(s.fullPath || s.rawPath)}" data-raw-path="${ToastModule.escapeHtml(s.rawPath || s.fullPath)}" title="${I18nModule.t('script_item_title')}">
                 <div class="script-file-info" title="${scriptInfoTitle}">
-                  <span class="script-file-icon">${Icons.terminal}</span>
                   <span class="script-file-name">${ToastModule.escapeHtml(s.name || s.fileName)}</span>
                   ${missingBadge}
                 </div>

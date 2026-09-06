@@ -1198,18 +1198,6 @@ body.is-pointer-dragging * {
   flex: 1;
 }
 
-.script-file-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #c084fc;
-  flex-shrink: 0;
-}
-
-.script-file-icon .lucide-icon {
-  width: 13px;
-  height: 13px;
-}
 
 .script-file-name {
   font-size: 11.5px;
