@@ -629,9 +629,10 @@
   }
 
   function closeDockedPlayer() {
-    playerAudioEl.pause();
-    playerAudioEl.src = '';
     currentIndex = -1;
+    playerAudioEl.pause();
+    playerAudioEl.removeAttribute('src');
+    playerAudioEl.load();
     dockedPlayerBarEl.style.display = 'none';
     document.body.classList.remove('has-player');
     updatePlayingCardState();
@@ -1069,6 +1070,10 @@
     playerAudioEl.addEventListener('play', () => updatePlayPauseState(true));
     playerAudioEl.addEventListener('pause', () => updatePlayPauseState(false));
     playerAudioEl.addEventListener('error', () => {
+      // 若播放器已關閉或 src 屬性已被移除/為空，視為正常卸載，直接忽略
+      if (currentIndex === -1 || !playerAudioEl.getAttribute('src')) {
+        return;
+      }
       const err = playerAudioEl.error;
       console.warn('[AudioViewer] 原生音訊元件回報錯誤:', err);
       if (currentIndex >= 0 && currentIndex < filteredAudios.length) {
