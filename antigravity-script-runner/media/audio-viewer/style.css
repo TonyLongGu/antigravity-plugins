@@ -1,0 +1,1364 @@
+/* ==============================================================================
+   Antigravity IDE - Audio Viewer (自訂聲音播放器與畫廊樣式系統)
+   全面對齊 image-viewer 與 video-viewer 原生深色調設計語彙與自適應工具列規範
+   ============================================================================== */
+
+:root {
+  --font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft JhengHei UI', 'PingFang TC', 'Noto Sans TC', sans-serif);
+  --font-mono: var(--vscode-editor-font-family, 'Cascadia Code', Consolas, Monaco, monospace);
+
+  /* 主題背景與前景色（純正深色調） */
+  --bg-primary: var(--vscode-editor-background, #1e1e1e);
+  --bg-secondary: var(--vscode-sideBar-background, #252526);
+  --bg-tertiary: rgba(255, 255, 255, 0.08);
+  --bg-card: var(--vscode-editorWidget-background, rgba(255, 255, 255, 0.04));
+  --bg-card-hover: rgba(255, 255, 255, 0.08);
+  --bg-input: var(--vscode-input-background, rgba(0, 0, 0, 0.3));
+  --bg-hover: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.08));
+  --bg-active: var(--vscode-list-activeSelectionBackground, #094771);
+
+  /* 邊框色系 */
+  --border-color: var(--vscode-widget-border, rgba(255, 255, 255, 0.12));
+  --border-color-subtle: rgba(255, 255, 255, 0.06);
+  --border-focus: var(--vscode-focusBorder, #007fd4);
+
+  /* 文字色系 */
+  --text-primary: var(--vscode-foreground, #cccccc);
+  --text-secondary: var(--vscode-descriptionForeground, #8b949e);
+  --text-muted: #808080;
+
+  /* 強調色系（音訊青藍與琥珀黃） */
+  --accent: #06b6d4;
+  --accent-hover: #38bdf8;
+  --accent-light: rgba(6, 182, 212, 0.15);
+  --accent-glow: rgba(6, 182, 212, 0.35);
+  --accent-amber: #f59e0b;
+  --cyan: #38bdf8;
+  --danger: #f85149;
+  --danger-hover: #da3633;
+  --success: #3fb950;
+
+  /* 尺寸與間距 Tokens */
+  --space-xs: 4px;
+  --space-sm: 6px;
+  --space-rg: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-full: 9999px;
+
+  --card-size: 220px;
+  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: 13px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.is-right-dragging,
+body.is-right-dragging * {
+  cursor: grabbing !important;
+}
+
+/* 主容器 */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+/* ==============================================================================
+   頂部工具列 (Header Toolbar) - 完全同步檢視圖片規格
+   ============================================================================== */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-rg);
+  padding: var(--space-rg) var(--space-lg);
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  z-index: 20;
+  min-height: 48px;
+}
+
+.toolbar-left, .toolbar-center, .toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-rg);
+}
+
+.folder-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  max-width: 320px;
+}
+
+.folder-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--accent-amber);
+  flex-shrink: 0;
+}
+
+.folder-name {
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+
+.badge-accent {
+  background: rgba(6, 182, 212, 0.15);
+  color: var(--accent);
+  border-color: rgba(6, 182, 212, 0.3);
+}
+
+.divider {
+  width: 1px;
+  height: 18px;
+  background-color: var(--border-color);
+  margin: 0 var(--space-xs);
+}
+
+/* 搜尋輸入框 */
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 8px;
+  width: 14px;
+  height: 14px;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.search-input {
+  width: 160px;
+  height: 28px;
+  padding: 0 24px 0 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+  transition: width 0.2s, border-color 0.2s;
+}
+
+.search-input:focus {
+  width: 220px;
+  border-color: var(--border-focus);
+}
+
+.search-clear {
+  position: absolute;
+  right: 6px;
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  display: none;
+}
+
+.search-clear:hover {
+  color: var(--text-primary);
+}
+
+/* 下拉選單 */
+.select-input {
+  height: 28px;
+  padding: 0 var(--space-rg);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+}
+
+.select-input:focus {
+  border-color: var(--border-focus);
+}
+
+/* 縮圖尺寸滑桿控制項 */
+.size-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.slider-input {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 90px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  outline: none;
+  cursor: pointer;
+}
+
+.slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.slider-input::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+/* 快捷圖示按鈕 */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.btn-icon:hover {
+  background: var(--bg-hover);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.btn-icon.active {
+  background: rgba(6, 182, 212, 0.18);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 語言切換按鈕 (Language Switch Button) */
+.btn-lang {
+  width: auto;
+  min-width: 32px;
+  height: 28px;
+  padding: 0 8px;
+  font-family: var(--vscode-editor-font-family, Consolas, Monaco, monospace);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 26px;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.14));
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  white-space: nowrap;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-lang:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.btn-lang:active {
+  transform: scale(0.95);
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+}
+
+#lang-indicator {
+  pointer-events: none;
+  user-select: none;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ==============================================================================
+   畫廊展示區 (Gallery Viewport & Grid)
+   ============================================================================== */
+.gallery-viewport {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--space-lg);
+  position: relative;
+  background-color: var(--bg-primary);
+  /* 預留空間給底部播放列 */
+  padding-bottom: 90px;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--card-size), 1fr));
+  gap: var(--space-md);
+  width: 100%;
+}
+
+/* 框選矩形框 */
+.selection-marquee {
+  position: absolute;
+  border: 1.5px dashed var(--accent);
+  background-color: rgba(6, 182, 212, 0.18);
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* 空狀態 */
+.empty-state {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 60vh;
+  gap: var(--space-md);
+  color: var(--text-secondary);
+  text-align: center;
+  padding: var(--space-lg);
+}
+
+.empty-state svg {
+  width: 64px;
+  height: 64px;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.empty-desc {
+  max-width: 480px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+/* ==============================================================================
+   音訊卡片 (Audio Card)
+   ============================================================================== */
+.audio-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform var(--transition-fast), border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+}
+
+.audio-card * {
+  -webkit-user-drag: none;
+}
+
+.audio-card:hover {
+  background-color: var(--bg-card-hover);
+  border-color: rgba(6, 182, 212, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 8px var(--accent-glow);
+}
+
+.audio-card.is-selected {
+  border-color: var(--accent);
+  background-color: var(--accent-light);
+  box-shadow: 0 0 0 1px var(--accent), 0 4px 12px rgba(6, 182, 212, 0.25);
+}
+
+.audio-card.is-playing {
+  border-color: var(--cyan);
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
+  background-color: rgba(6, 182, 212, 0.08);
+}
+
+/* 卡片上方封面/視覺區域 */
+.card-thumb-wrapper {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  background: linear-gradient(135deg, #18181b 0%, #27272a 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* 卡片黑膠視覺微型動畫 */
+.card-mini-disc {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #09090b 20%, #27272a 40%, #18181b 65%, #3f3f46 80%, #18181b 100%);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: transform 0.3s ease;
+}
+
+.card-mini-disc::after {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.audio-card.is-playing .card-mini-disc {
+  animation: spinDisc 3s linear infinite;
+}
+
+@keyframes spinDisc {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 懸停快速播放按鈕 */
+.card-play-overlay {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(1.5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+  z-index: 4;
+}
+
+.audio-card:hover .card-play-overlay,
+.audio-card.is-playing .card-play-overlay {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.card-play-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  color: #000;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), 0 0 10px var(--accent-glow);
+  transform: scale(0.95);
+  transition: transform var(--transition-fast), background-color var(--transition-fast);
+}
+
+.card-play-btn:hover {
+  background-color: var(--accent-hover);
+  transform: scale(1.08);
+}
+
+.card-play-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+.card-play-btn .icon-play {
+  margin-left: 2px;
+}
+
+/* 卡片上方懸浮標籤 (副檔名) - 全面對齊檢視影片磨砂毛玻璃與微光邊框樣式 */
+.card-ext-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  border-radius: 4px;
+  text-transform: uppercase;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  pointer-events: none;
+  letter-spacing: 0.5px;
+  z-index: 5;
+}
+
+/* 各音訊副檔名專屬微光配色 */
+.card-ext-badge[data-ext="mp3"] {
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.35);
+}
+.card-ext-badge[data-ext="wav"] {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.35);
+}
+.card-ext-badge[data-ext="flac"] {
+  color: #eab308;
+  border-color: rgba(234, 179, 8, 0.35);
+}
+.card-ext-badge[data-ext="aac"] {
+  color: #06b6d4;
+  border-color: rgba(6, 182, 212, 0.35);
+}
+.card-ext-badge[data-ext="m4a"] {
+  color: #818cf8;
+  border-color: rgba(129, 140, 248, 0.35);
+}
+.card-ext-badge[data-ext="ogg"] {
+  color: #a3e635;
+  border-color: rgba(163, 230, 53, 0.35);
+}
+.card-ext-badge[data-ext="opus"] {
+  color: #14b8a6;
+  border-color: rgba(20, 184, 166, 0.35);
+}
+.card-ext-badge[data-ext="weba"] {
+  color: #2dd4bf;
+  border-color: rgba(45, 212, 191, 0.35);
+}
+.card-ext-badge[data-ext="wma"] {
+  color: #fb923c;
+  border-color: rgba(251, 146, 60, 0.35);
+}
+.card-ext-badge[data-ext="aif"],
+.card-ext-badge[data-ext="aiff"] {
+  color: #c084fc;
+  border-color: rgba(192, 132, 252, 0.35);
+}
+
+/* 卡片上的時長標籤 (右下角) */
+.thumb-tag-duration {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  background-color: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  letter-spacing: 0.5px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* 播放中聲波動態長條 (左下角) */
+.playing-bars {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  display: none;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+  padding: 2px 4px;
+  background-color: rgba(0, 0, 0, 0.75);
+  border-radius: var(--radius-sm);
+  z-index: 5;
+}
+
+.audio-card.is-playing .playing-bars {
+  display: flex;
+}
+
+.playing-bar {
+  width: 3px;
+  background-color: var(--accent);
+  border-radius: 1px;
+  animation: bounceBar 0.8s ease-in-out infinite alternate;
+}
+
+.playing-bar:nth-child(1) { height: 6px; animation-delay: 0.1s; }
+.playing-bar:nth-child(2) { height: 12px; animation-delay: 0.3s; }
+.playing-bar:nth-child(3) { height: 8px; animation-delay: 0.2s; }
+.playing-bar:nth-child(4) { height: 14px; animation-delay: 0.4s; }
+
+@keyframes bounceBar {
+  0% { height: 3px; }
+  100% { height: 13px; }
+}
+
+/* 卡片勾選圈圈按鈕 - 完全比照檢視圖片左上角圓形按鈕 */
+.card-select-btn,
+.card-checkbox {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.65);
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  opacity: 0;
+  transition: all 0.15s ease;
+  padding: 0;
+  outline: none;
+}
+
+.card-select-btn .check-icon,
+.card-checkbox svg {
+  width: 14px;
+  height: 14px;
+  stroke: #ffffff;
+  stroke-width: 3;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+/* 滑鼠懸浮、選取或整體存在選取狀態時顯示圈圈按鈕 */
+.audio-card:hover .card-select-btn,
+.audio-card.is-selected .card-select-btn,
+body.has-selection .card-select-btn,
+.audio-card:hover .card-checkbox,
+.audio-card.is-selected .card-checkbox,
+body.has-selection .card-checkbox {
+  opacity: 1;
+}
+
+/* 卡片選中狀態高亮 */
+.audio-card.is-selected {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.45), 0 8px 20px rgba(0, 0, 0, 0.45) !important;
+  background: rgba(6, 182, 212, 0.08) !important;
+}
+
+.audio-card.is-selected .card-select-btn,
+.audio-card.is-selected .card-checkbox {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.audio-card.is-selected .card-select-btn .check-icon,
+.audio-card.is-selected .card-checkbox svg {
+  stroke: #000000;
+  opacity: 1;
+  display: block;
+}
+
+/* 卡片下方資訊 */
+.card-info {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.card-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+  width: 100%;
+}
+
+.card-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #979796;
+  font-family: var(--font-mono);
+  min-height: 22px;
+}
+
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.card-date {
+  font-size: 11px;
+  color: #979796;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+
+.card-action-btn {
+  background: transparent;
+  border: none;
+  color: #979796;
+  cursor: pointer;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.card-action-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-hover);
+}
+
+.card-action-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* ==============================================================================
+   底部懸浮批量操作工具列 (Batch Action Bar) - 完全比照檢視圖片規格
+   ============================================================================== */
+.batch-action-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(0);
+  background: rgba(26, 26, 26, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(6, 182, 212, 0.3);
+  border-radius: var(--radius-full);
+  padding: 6px 14px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  z-index: 100;
+  animation: slideUpBatch 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: bottom 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.has-player .batch-action-bar {
+  bottom: 84px;
+}
+
+@keyframes slideUpBatch {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.batch-info {
+  display: flex;
+  align-items: center;
+}
+
+.batch-count-badge {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--accent);
+  padding: 2px 8px;
+  background: rgba(6, 182, 212, 0.15);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+.batch-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.batch-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.batch-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.batch-btn svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.batch-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.batch-btn-primary {
+  background: rgba(6, 182, 212, 0.2);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.batch-btn-primary:hover {
+  background: var(--accent);
+  color: #000;
+}
+
+.batch-btn-danger {
+  background: rgba(244, 63, 94, 0.15);
+  border-color: rgba(244, 63, 94, 0.4);
+  color: #fb7185;
+}
+
+.batch-btn-danger:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+.batch-btn-ghost {
+  padding: 0 6px;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+
+.batch-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.batch-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ==============================================================================
+   底部常駐播放控制列 (Bottom Docked Audio Player)
+   ============================================================================== */
+.docked-player-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  min-height: 54px;
+  background: linear-gradient(to top, rgba(15, 15, 18, 0.98) 0%, rgba(24, 24, 27, 0.96) 100%);
+  backdrop-filter: blur(20px);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  padding: 0 16px 8px;
+  z-index: 1010;
+  box-sizing: border-box;
+  animation: barSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes barSlideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* 尋道進度條容器 (橫跨 100% 全寬度，上下加大 12px 命中熱區，完全比照 Video Viewer) */
+.progress-bar-container {
+  width: 100%;
+  height: 5px;
+  position: relative;
+  cursor: pointer;
+  border-radius: 2px;
+  background-color: rgba(255, 255, 255, 0.2);
+  margin-bottom: 8px;
+  transition: height var(--transition-fast);
+  touch-action: none;
+}
+
+/* 命中熱區偽元素擴大 (Prevent Miss-Clicks) */
+.progress-bar-container::before {
+  content: '';
+  position: absolute;
+  top: -12px;
+  bottom: -12px;
+  left: 0;
+  right: 0;
+  cursor: pointer;
+}
+
+.progress-bar-container:hover,
+.progress-bar-container.is-dragging {
+  height: 8px;
+}
+
+.progress-bar-buffered {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 0%;
+  background-color: rgba(255, 255, 255, 0.35);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.progress-bar-played {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent), var(--cyan));
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.progress-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #fff;
+  transform: translate(-50%, -50%) scale(0);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+  transition: transform var(--transition-fast);
+  z-index: 3;
+}
+
+.progress-bar-container:hover .progress-thumb,
+.progress-bar-container.is-dragging .progress-thumb {
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* 懸停時間提示框 (Tooltip) */
+.progress-tooltip {
+  position: absolute;
+  bottom: 16px;
+  transform: translateX(-50%);
+  padding: 2px 6px;
+  background: rgba(20, 20, 23, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: #fff;
+  pointer-events: none;
+  display: none;
+  white-space: nowrap;
+  z-index: 4;
+}
+
+/* 控制列單行排版 (比照 Video Viewer controls-row) */
+.controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+}
+
+.controls-left, .controls-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* 控制按鈕通用樣式 (完全比照 Video Viewer ctrl-btn) */
+.ctrl-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.ctrl-btn:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.ctrl-btn:focus,
+.ctrl-btn:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.ctrl-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ctrl-btn.active {
+  color: var(--cyan);
+  background-color: rgba(6, 182, 212, 0.15);
+}
+
+#playPauseBtn .icon-play {
+  margin-left: 2px;
+}
+
+#closePlayerBtn {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+#closePlayerBtn:hover {
+  color: #fff;
+}
+
+/* 快退快進標註文字 (青色等寬粗體) */
+.ctrl-subtext {
+  position: absolute;
+  bottom: 0px;
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--cyan);
+  pointer-events: none;
+}
+
+/* 時間顯示 (比照 Video Viewer time-display) */
+.time-display {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  margin-left: 4px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+#currentTimeText {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+#durationText {
+  color: var(--text-secondary);
+}
+
+/* 中間：當前播放曲目膠囊徽章 (自適應彈性伸縮，避免擠壓兩側) */
+.controls-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.player-track-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  max-width: 320px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.player-track-pill .player-disc-mini {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #09090b 20%, #27272a 45%, #18181b 65%, #3f3f46 85%, #18181b 100%);
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.player-track-pill .player-disc-mini.is-spinning {
+  animation: spinDisc 3s linear infinite;
+}
+
+.player-track-pill .player-disc-mini .disc-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  box-shadow: 0 0 4px var(--accent);
+}
+
+.player-track-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.player-track-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-track-meta {
+  font-size: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 音量控制群組（常駐顯示滑桿與青色 Thumb，完全比照 Video Viewer） */
+.volume-control-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.volume-slider-wrapper {
+  width: 72px;
+  display: flex;
+  align-items: center;
+}
+
+.volume-slider {
+  width: 70px;
+  height: 4px;
+  accent-color: var(--cyan);
+  cursor: pointer;
+  outline: none !important;
+  vertical-align: middle;
+}
+
+.volume-slider:focus,
+.volume-slider:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.volume-slider::-moz-focus-outer {
+  border: 0 !important;
+}
+
+/* 播放倍速下拉選單 */
+.speed-dropdown-wrapper {
+  position: relative;
+}
+
+.btn-text {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.speed-menu {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 8px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  padding: 4px;
+  min-width: 80px;
+  z-index: 1020;
+}
+
+.speed-item {
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: center;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.speed-item:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.speed-item.is-active {
+  background-color: var(--accent-light);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 響應式斷點保護：寬度不足時優先隱藏中間曲目資訊膠囊，杜絕右側任何按鈕被裁切 */
+@media (max-width: 860px) {
+  .player-track-pill {
+    max-width: 180px;
+  }
+  .player-track-meta {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .controls-center {
+    display: none;
+  }
+  .controls-left, .controls-right {
+    gap: 6px;
+  }
+  .volume-slider-wrapper {
+    width: 50px;
+  }
+  .volume-slider {
+    width: 48px;
+  }
+}
+
+@media (max-width: 540px) {
+  #rewindBtn, #forwardBtn {
+    display: none;
+  }
+  .volume-slider-wrapper {
+    display: none;
+  }
+}
+
+/* ==============================================================================
+   Toast 通知容器
+   ============================================================================== */
+.toast-container {
+  position: absolute;
+  top: 60px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  background-color: rgba(30, 30, 30, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  animation: toastIn 0.25s cubic-bezier(0.16, 1, 0.3, 1), toastOut 0.25s ease 2.75s forwards;
+}
+
+.toast svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.toast.toast-success svg { color: var(--success); }
+.toast.toast-error svg { color: var(--danger); }
+.toast.toast-info svg { color: var(--accent); }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-10px); }
+}

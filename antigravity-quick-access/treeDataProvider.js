@@ -39,6 +39,10 @@ class QuickAccessItem extends vscode.TreeItem {
         contextParts.push('isPy', 'isScript');
       } else if (['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg', '.bmp', '.ico', '.avif', '.tif', '.tiff', '.jfif'].includes(ext)) {
         contextParts.push('isImage');
+      } else if (['.mp3', '.wav', '.ogg', '.flac', '.aac', '.m4a', '.wma', '.aif', '.aiff', '.opus', '.weba'].includes(ext)) {
+        contextParts.push('isAudio');
+      } else if (['.mp4', '.webm', '.mkv', '.mov', '.avi', '.wmv', '.flv', '.m4v', '.ts', '.ogv'].includes(ext)) {
+        contextParts.push('isVideo');
       }
     }
     this.contextValue = contextParts.join(';');
@@ -241,7 +245,7 @@ class QuickAccessTreeDataProvider {
             command: {
               command: 'vscode.open',
               title: this.i18n ? this.i18n.t('open_file') : '開啟檔案',
-              arguments: [vscode.Uri.file(fsPath)]
+              arguments: [vscode.Uri.file(fsPath), { preserveFocus: true }]
             }
           }
         );
@@ -305,7 +309,7 @@ class QuickAccessTreeDataProvider {
               command: {
                 command: 'vscode.open',
                 title: this.i18n ? this.i18n.t('open_file') : '開啟檔案',
-                arguments: [vscode.Uri.file(fullPath)]
+                arguments: [vscode.Uri.file(fullPath), { preserveFocus: true }]
               }
             }
           );

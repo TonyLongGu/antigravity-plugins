@@ -345,7 +345,6 @@
       const q = searchKeyword.trim().toLowerCase();
       filtered = allConversations.filter(c =>
         (c.title && c.title.toLowerCase().includes(q)) ||
-        (c.workspace && c.workspace.toLowerCase().includes(q)) ||
         (c.id && c.id.toLowerCase().includes(q)) ||
         (c.mtimeStr && c.mtimeStr.toLowerCase().includes(q))
       );
@@ -359,7 +358,6 @@
     }
 
     const currentId = selectedConvId || currentData?.conversationId;
-    const wsPrefix = I18nModule.t('conv_item_ws_prefix');
 
     dom.customConvList.innerHTML = visibleList.map(item => {
       const isSelected = item.id === currentId;
@@ -368,10 +366,7 @@
       return `
         <div class="conv-item-card ${isSelected ? 'is-selected' : ''}" data-conv-id="${escapeHtml(item.id)}">
           <div class="conv-item-main">
-            <div class="conv-item-title-group">
-              <span class="conv-item-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</span>
-              ${item.workspace ? `<span class="conv-item-ws" title="${wsPrefix}${escapeHtml(item.workspace)}">${escapeHtml(item.workspace)}</span>` : ''}
-            </div>
+            <span class="conv-item-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</span>
             ${isSelected ? `<span class="conv-item-check">${Icons.check}</span>` : ''}
           </div>
           <div class="conv-item-meta">
@@ -602,6 +597,10 @@
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
+        const details = btn.closest('.context-item-details');
+        if (details) {
+          details.open = false;
+        }
         const fPath = btn.getAttribute('data-path');
         if (fPath) {
           vscode.postMessage({ type: 'openFile', payload: { filePath: fPath } });
@@ -613,6 +612,10 @@
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
+        const details = btn.closest('.context-item-details');
+        if (details) {
+          details.open = false;
+        }
         const targetPath = btn.getAttribute('data-path');
         if (targetPath) {
           vscode.postMessage({ type: 'revealInExplorer', payload: { targetPath } });
@@ -624,6 +627,10 @@
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
+        const details = btn.closest('.context-item-details');
+        if (details) {
+          details.open = false;
+        }
         const copyText = btn.getAttribute('data-copy');
         if (copyText) {
           vscode.postMessage({ type: 'copyText', payload: { text: copyText, label: I18nModule.t('btn_copy_name') } });

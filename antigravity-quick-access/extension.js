@@ -1,4 +1,5 @@
 const vscode = require('vscode');
+const fs = require('node:fs');
 const path = require('node:path');
 const I18n = require('./i18n');
 const StorageManager = require('./storageManager');
@@ -23,6 +24,12 @@ function activate(context) {
   });
   treeDataProvider.refresh();
 
+  // 即時快取 TreeView 當前選取項目，確保快捷鍵觸發時精準取得所選項
+  let lastSelectedElements = [];
+  const selectionWatcher = treeView.onDidChangeSelection((e) => {
+    lastSelectedElements = e.selection || [];
+  });
+
   // 輔助訊息顯示（使用 StatusBar 輕量反饋，避免彈窗干擾）
   const showFeedback = (msg) => {
     vscode.window.setStatusBarMessage(`$(bookmark) ${msg}`, 3000);
@@ -44,14 +51,16 @@ function activate(context) {
   };
 
   /**
-   * 取得 TreeView 中選取的所有項目（支援單選與多選）
-   * @param {QuickAccessItem} element
+   * 取得 TreeView 中選取的所有項目（支援單選、多選、treeView.selection 與 lastSelectedElements 回退）
+   * @param {QuickAccessItem} [element]
    * @param {QuickAccessItem[]} [elements]
    * @returns {QuickAccessItem[]}
    */
   const getSelectedElements = (element, elements) => {
     if (Array.isArray(elements) && elements.length > 0) return elements;
     if (element) return [element];
+    if (treeView?.selection && treeView.selection.length > 0) return [...treeView.selection];
+    if (lastSelectedElements && lastSelectedElements.length > 0) return [...lastSelectedElements];
     return [];
   };
 
@@ -225,6 +234,121 @@ function activate(context) {
     }
   };
 
+  // 12.1 註冊命令：檢視聲音 (View Audio)
+  const viewAudiosHandler = async (element, elements) => {
+    const selected = getSelectedElements(element, elements);
+    const target = selected[0];
+    const targetPath = target?.fsPath || (target instanceof vscode.Uri ? target.fsPath : null);
+    if (!targetPath) return;
+
+    try {
+      await vscode.commands.executeCommand('scriptRunner.viewFolderAudios', vscode.Uri.file(targetPath));
+    } catch {
+      vscode.window.showWarningMessage(i18n.t('msg_plugin_script_runner_required'));
+    }
+  };
+
+  // 12.2 註冊命令：檢視影片 (View Videos)
+  const viewVideosHandler = async (element, elements) => {
+    const selected = getSelectedElements(element, elements);
+    const target = selected[0];
+    const targetPath = target?.fsPath || (target instanceof vscode.Uri ? target.fsPath : null);
+    if (!targetPath) return;
+
+    try {
+      await vscode.commands.executeCommand('scriptRunner.viewFolderVideos', vscode.Uri.file(targetPath));
+    } catch {
+      vscode.window.showWarningMessage(i18n.t('msg_plugin_script_runner_required'));
+    }
+  };
+
+  // 12.3 註冊命令：刪除檔案 (Delete File，支援選取單選/多選、快捷鍵 Delete 觸發與強制確認視窗)
+  const deleteFileHandler = async (element, elements) => {
+    const selected = getSelectedElements(element, elements);
+    // 過濾非 category 節點且具有實體 fsPath 的項目
+    const validItems = selected.filter(item => {
+      if (!item) return false;
+      if (item.itemType === 'category') return false;
+      const p = item.fsPath || (item instanceof vscode.Uri ? item.fsPath : null);
+      return !!p;
+    });
+
+    if (validItems.length === 0) {
+      vscode.window.showInformationMessage(i18n.t('msg_select_file_delete'));
+      return;
+    }
+
+    // 取得所有唯一路徑
+    const targetPaths = Array.from(new Set(
+      validItems.map(item => item.fsPath || (item instanceof vscode.Uri ? item.fsPath : null)).filter(Boolean)
+    ));
+
+    if (targetPaths.length === 0) return;
+
+    // 準備確認訊息與按鈕
+    const confirmBtn = i18n.t('btn_delete_confirm');
+    let promptMsg = '';
+
+    if (targetPaths.length === 1) {
+      const p = targetPaths[0];
+      const itemName = path.basename(p) || p;
+      let isDir = false;
+      try {
+        isDir = fs.statSync(p).isDirectory();
+      } catch {}
+      promptMsg = isDir
+        ? i18n.t('confirm_delete_single_folder', { name: itemName })
+        : i18n.t('confirm_delete_single_file', { name: itemName });
+    } else {
+      promptMsg = i18n.t('confirm_delete_multi', { count: targetPaths.length });
+    }
+
+    const choice = await vscode.window.showWarningMessage(
+      promptMsg,
+      { modal: true },
+      confirmBtn
+    );
+
+    if (choice !== confirmBtn) {
+      return;
+    }
+
+    // 執行刪除 (移至資源回收筒)
+    const deletedPaths = [];
+    const errors = [];
+
+    for (const p of targetPaths) {
+      try {
+        await vscode.workspace.fs.delete(vscode.Uri.file(p), { recursive: true, useTrash: true });
+        deletedPaths.push(p);
+      } catch (err) {
+        try {
+          await vscode.workspace.fs.delete(vscode.Uri.file(p), { recursive: true, useTrash: false });
+          deletedPaths.push(p);
+        } catch (innerErr) {
+          errors.push(`${path.basename(p)}: ${innerErr.message || innerErr}`);
+        }
+      }
+    }
+
+    // 若刪除項目原本存於儲存清單中，自 storage 清除
+    if (deletedPaths.length > 0) {
+      await storageManager.removeItem(deletedPaths);
+      treeDataProvider.refresh();
+
+      if (deletedPaths.length === 1) {
+        const deletedName = path.basename(deletedPaths[0]);
+        showFeedback(i18n.t('msg_deleted_single', { name: deletedName }));
+      } else {
+        showFeedback(i18n.t('msg_deleted_multi', { count: deletedPaths.length }));
+      }
+    }
+
+    if (errors.length > 0) {
+      vscode.window.showErrorMessage(i18n.t('msg_delete_failed', { error: errors.join('; ') }));
+    }
+  };
+
   // 13. 註冊命令：執行批次檔 (Run Batch File)
   const runBatHandler = async (element, elements) => {
     const selected = getSelectedElements(element, elements);
@@ -355,6 +479,12 @@ function activate(context) {
     vscode.commands.registerCommand('antigravity.quickAccess.addScriptToRunner.en', addScriptToRunnerHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.viewImages', viewImagesHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.viewImages.en', viewImagesHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.viewAudios', viewAudiosHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.viewAudios.en', viewAudiosHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.viewVideos', viewVideosHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.viewVideos.en', viewVideosHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.deleteFile', deleteFileHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.deleteFile.en', deleteFileHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.runBat', runBatHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.runBat.en', runBatHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.runBatAdmin', runBatAdminHandler),
@@ -367,7 +497,8 @@ function activate(context) {
     vscode.commands.registerCommand('antigravity.quickAccess.runPy.en', runPyHandler),
     workspaceFoldersWatcher,
     fsWatcher,
-    configWatcher
+    configWatcher,
+    selectionWatcher
   );
 
   if (wsFileWatcher) {

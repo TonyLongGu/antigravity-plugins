@@ -440,7 +440,8 @@
         document.documentElement.style.setProperty('--thumb-size', `${state.thumbSize}px`);
       }
       if (state.sortBy) {
-        sortSelectEl.value = state.sortBy;
+        const optionExists = Array.from(sortSelectEl.options).some(opt => opt.value === state.sortBy);
+        sortSelectEl.value = optionExists ? state.sortBy : 'date-desc';
       }
       if (state.filterText) {
         searchInputEl.value = state.filterText;
@@ -975,6 +976,7 @@
     card.dataset.path = video.fullPath;
 
     const formatUpper = (video.ext || '').toUpperCase() || 'VIDEO';
+    const extLower = (video.ext || '').toLowerCase();
     const durInitial = (video.durationFormatted && video.durationFormatted !== '--:--') ? video.durationFormatted : '--:--';
     const isDecodable = isFormatBrowserDecodable(video.ext);
     const formatTagText = isDecodable ? formatUpper : `${formatUpper} • 外部播放`;
@@ -994,7 +996,7 @@
         <div class="card-play-badge">
           <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
         </div>
-        <div class="thumb-tag thumb-tag-format" title="${!isDecodable ? '非瀏覽器原生解碼格式，點擊右上角圖示即可調用系統播放器開啟' : ''}">${formatTagText}</div>
+        <div class="thumb-tag thumb-tag-format" data-ext="${extLower}" title="${!isDecodable ? '非瀏覽器原生解碼格式，點擊右上角圖示即可調用系統播放器開啟' : ''}">${formatTagText}</div>
         <div class="thumb-tag thumb-tag-duration" id="dur-${idx}">${durInitial}</div>
         <div class="thumb-tag thumb-tag-res" id="res-${idx}" style="display:none;"></div>
         <div class="card-select-btn" title="${I18nModule.t('card_select_title')}">
@@ -1002,23 +1004,20 @@
         </div>
       </div>
       <div class="card-info">
-        <div class="card-title-row">
-          <div class="card-title" title="${video.fullPath}">${video.fileName}</div>
+        <div class="card-title" title="${video.fullPath}">${video.fileName}</div>
+        <div class="card-meta-row">
           <div class="card-actions">
             <button class="card-action-btn copy-btn" title="${I18nModule.t('card_copy_btn_title')}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
             </button>
             <button class="card-action-btn open-ext-btn" title="${I18nModule.t('card_open_ext_title')}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
             </button>
             <button class="card-action-btn reveal-btn" title="${I18nModule.t('card_reveal_title')}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
             </button>
           </div>
-        </div>
-        <div class="card-meta-row">
-          <span>${video.relativePath !== video.fileName ? video.relativePath : formatUpper}</span>
-          <span>${video.sizeFormatted}</span>
+          <span class="card-date" title="${video.mtimeMs ? new Date(video.mtimeMs).toLocaleString() : ''}">${video.mtimeMs ? new Date(video.mtimeMs).toLocaleDateString() : ''}</span>
         </div>
       </div>
     `;
@@ -1119,6 +1118,9 @@
     if (openExtBtn) {
       openExtBtn.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (!playerVideoEl.paused) {
+          playerVideoEl.pause();
+        }
         if (vscode) {
           vscode.postMessage({ type: 'openWithDefaultApp', filePath: video.fullPath });
           showToast(I18nModule.t('toast_open_external', { file: video.fileName }), 'info');
@@ -1616,6 +1618,9 @@
     if (currentIndex >= 0 && currentIndex < filteredVideos.length) {
       const video = filteredVideos[currentIndex];
       if (video && video.fullPath) {
+        if (!playerVideoEl.paused) {
+          playerVideoEl.pause();
+        }
         if (vscode) {
           vscode.postMessage({
             type: 'openWithDefaultApp',
@@ -2111,6 +2116,9 @@
       } else if (e.key === 'o' || e.key === 'O') {
         if (selectedPaths.size === 1 && document.activeElement !== searchInputEl) {
           const path = Array.from(selectedPaths)[0];
+          if (!playerVideoEl.paused) {
+            playerVideoEl.pause();
+          }
           if (vscode) {
             vscode.postMessage({ type: 'openWithDefaultApp', filePath: path });
             showToast(I18nModule.t('toast_open_selected_external'), 'info');

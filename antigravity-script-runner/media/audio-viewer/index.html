@@ -3,11 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>影片檢視器</title>
+  <title>聲音檢視器</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="app-container">
+    <!-- 隱藏原生音訊核心 -->
+    <audio id="playerAudio" preload="auto"></audio>
+
     <!-- 頂部工具列 -->
     <header class="toolbar">
       <!-- 左側：資料夾與計數資訊 -->
@@ -18,7 +21,7 @@
           </svg>
           <span class="folder-name" id="folderName">載入中...</span>
         </div>
-        <span class="badge badge-accent" id="videoCountBadge">0 部影片</span>
+        <span class="badge badge-accent" id="audioCountBadge">0 首音訊</span>
         <span class="badge" id="filterCountBadge" style="display:none;">已篩選: 0</span>
       </div>
 
@@ -46,38 +49,22 @@
 
         <div class="divider"></div>
 
-        <!-- 縮圖尺寸滑桿 -->
+        <!-- 卡片尺寸滑桿 -->
         <div class="size-control">
           <span data-i18n="slider_size_label">尺寸</span>
-          <input type="range" id="sizeSlider" class="slider-input" min="180" max="460" value="280" data-i18n-title="thumb_size_slider_title" title="調整卡片尺寸 (180px - 460px，支援 Ctrl + 滑鼠滾輪)">
+          <input type="range" id="sizeSlider" class="slider-input" min="160" max="360" value="220" data-i18n-title="card_size_slider_title" title="調整卡片尺寸 (160px - 360px，支援 Ctrl + 滑鼠滾輪)">
         </div>
       </div>
 
-      <!-- 右側：縮圖開關、子資料夾開關、語言切換與動作按鈕 -->
+      <!-- 右側：子資料夾開關、語言切換與動作按鈕 -->
       <div class="toolbar-right">
-        <!-- 縮圖生成開關 (T) -->
-        <button id="thumbToggleBtn" class="btn-icon active" data-i18n-title="btn_thumb_toggle_title" title="縮圖生成開關 (快捷鍵 T，關閉可極速秒開大量檔案且 0 運算負擔)">
-          <svg class="icon-thumb-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect>
-            <circle cx="8.5" cy="8.5" r="1.5"></circle>
-            <polyline points="21 15 16 10 5 21"></polyline>
-          </svg>
-          <svg class="icon-thumb-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
-            <rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect>
-            <line x1="3" y1="3" x2="21" y2="21"></line>
-            <circle cx="8.5" cy="8.5" r="1.5"></circle>
-            <polyline points="21 15 16 10 11 15"></polyline>
-          </svg>
-          <span id="thumbToggleText" data-i18n="btn_thumb_toggle_text">縮圖</span>
-        </button>
-
         <!-- 包含子資料夾切換 -->
-        <button id="recursiveBtn" class="btn-icon" data-i18n-title="btn_recursive_title" title="包含子資料夾中的所有影片">
+        <button id="recursiveBtn" class="btn-icon" data-i18n-title="btn_recursive_title" title="包含子資料夾中的所有音訊">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="m3 3 7 7-7 7"></path>
             <path d="m13 7 4 4-4 4"></path>
           </svg>
-          <span data-i18n="btn_recursive_text">子資料夾</span>
+          <span data-i18n="btn_recursive">子資料夾</span>
         </button>
 
         <!-- 重新整理 -->
@@ -88,7 +75,7 @@
             <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path>
             <path d="M16 21h5v-5"></path>
           </svg>
-          <span data-i18n="btn_refresh_text">重新整理</span>
+          <span data-i18n="btn_refresh">重新整理</span>
         </button>
 
         <!-- 在系統檔案總管中開啟 -->
@@ -118,23 +105,24 @@
       <!-- 空資料夾/無符合搜尋狀態 -->
       <div class="empty-state" id="emptyState">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect>
-          <polyline points="10 9 15 12 10 15 10 9"></polyline>
+          <path d="M9 18V5l12-2v13"></path>
+          <circle cx="6" cy="18" r="3"></circle>
+          <circle cx="18" cy="16" r="3"></circle>
         </svg>
-        <div class="empty-title" id="emptyTitle" data-i18n="empty_title">此資料夾內沒有支援的影片</div>
-        <div class="empty-desc" id="emptyDesc" data-i18n="empty_hint">支援格式：MP4, WebM, MKV, MOV, AVI, WMV, FLV, M4V, TS, OGV 等。您可以嘗試開啟子資料夾搜尋或點擊重新整理。</div>
+        <div class="empty-title" id="emptyTitle" data-i18n="empty_title">此資料夾內沒有支援的音訊</div>
+        <div class="empty-desc" id="emptyDesc" data-i18n="empty_hint">支援格式：MP3, WAV, FLAC, M4A, OGG, AAC, WMA, AIFF, OPUS, WEBA 等。您可以嘗試開啟子資料夾搜尋或點擊重新整理。</div>
       </div>
     </main>
 
     <!-- 底部浮動批量操作工具列 (Batch Action Bar) -->
     <div class="batch-action-bar" id="batchActionBar" style="display: none;">
       <div class="batch-info">
-        <span class="batch-count-badge" id="batchSelectedCount">已選取 0 部</span>
+        <span class="batch-count-badge" id="batchSelectedCount">已選取 0 首</span>
       </div>
       <div class="batch-divider"></div>
       <div class="batch-buttons">
-        <!-- 複製路徑 (Format B: 純絕對路徑清單) -->
-        <button id="batchCopyPathsBtn" class="batch-btn batch-btn-primary" data-i18n-title="batch_copy_title" title="複製選取影片的絕對路徑列表（每行一個路徑，適合貼到 AI 對話）">
+        <!-- 複製路徑 -->
+        <button id="batchCopyPathsBtn" class="batch-btn batch-btn-primary" data-i18n-title="batch_copy_title" title="複製選取音訊的絕對路徑列表（每行一個路徑，適合貼到 AI 對話）">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
           <span data-i18n="batch_copy_text">複製路徑</span>
         </button>
@@ -153,91 +141,10 @@
         </button>
       </div>
     </div>
-  </div>
 
-  <!-- 高性能影片播放器浮層 (Video Player Modal) -->
-  <div class="player-modal" id="playerModal">
-    <!-- 頂部浮動工具列 -->
-    <div class="player-header">
-      <!-- 左側：檔名與元數據資訊 -->
-      <div class="player-header-left">
-        <div class="player-title-box">
-          <span class="player-title" id="playerTitle">-</span>
-          <span class="player-meta" id="playerMeta">-</span>
-        </div>
-      </div>
-
-      <!-- 中間：當前部數索引 -->
-      <div class="player-header-center">
-        <span class="badge" id="playerIndexBadge">1 / 1</span>
-      </div>
-
-      <!-- 右側：檢視操作按鈕組 -->
-      <div class="player-header-right">
-        <!-- 循環播放切換 -->
-        <button id="loopBtn" class="btn-icon" data-i18n-title="player_loop_title" title="循環播放開關 (R)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="m17 2 4 4-4 4"></path>
-            <path d="M3 11v-1a4 4 0 0 1 4-4h14"></path>
-            <path d="m7 22-4-4 4-4"></path>
-            <path d="M21 13v1a4 4 0 0 1-4 4H3"></path>
-          </svg>
-        </button>
-
-        <!-- 播放倍速下拉 -->
-        <div class="speed-dropdown-wrapper">
-          <button id="speedBtn" class="btn-icon btn-text" data-i18n-title="player_speed_title" title="切換播放速度">1.0x</button>
-          <div class="speed-menu" id="speedMenu" style="display: none;">
-            <div class="speed-item" data-speed="0.5">0.5x</div>
-            <div class="speed-item" data-speed="0.75">0.75x</div>
-            <div class="speed-item is-active" data-speed="1.0">1.0x</div>
-            <div class="speed-item" data-speed="1.25">1.25x</div>
-            <div class="speed-item" data-speed="1.5">1.5x</div>
-            <div class="speed-item" data-speed="2.0">2.0x</div>
-          </div>
-        </div>
-
-
-
-
-        <!-- 關閉並在畫廊選取 -->
-        <button id="selectAndCloseBtn" class="btn-icon" data-i18n-title="player_select_and_close_title" title="關閉播放器並在畫廊中選取此影片 (S / Enter)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-        </button>
-
-        <!-- 關閉播放器 (Esc 或滑鼠右鍵) -->
-        <button id="playerCloseBtn" class="btn-icon" data-i18n-title="player_close_title" title="關閉播放器 (Esc / 右鍵)">✕</button>
-      </div>
-    </div>
-
-    <!-- 播放器畫面主舞臺 -->
-    <div class="player-stage" id="playerStage">
-      <div class="player-video-wrapper" id="playerVideoWrapper">
-        <video id="playerVideo" playsinline preload="auto"></video>
-        <!-- 畫面中央播放/暫停動畫標記 -->
-        <div class="center-play-indicator" id="centerPlayIndicator">
-          <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-        </div>
-      </div>
-    </div>
-
-    <!-- 上一部 / 下一部 導航切換按鈕 -->
-    <button class="nav-arrow nav-prev" id="prevBtn" data-i18n-title="player_prev_title" title="上一部 (← / [)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="m15 18-6-6 6-6"></path>
-      </svg>
-    </button>
-    <button class="nav-arrow nav-next" id="nextBtn" data-i18n-title="player_next_title" title="下一部 (→ / ])">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="m9 18 6-6-6-6"></path>
-      </svg>
-    </button>
-
-    <!-- 底部專業控制列 -->
-    <div class="player-controls" id="playerControls">
-      <!-- 尋道進度條 (加大點擊命中熱區) -->
+    <!-- 底部常駐播放控制列 (Bottom Docked Audio Player) - 完全比照檢視影片 (Video Viewer) 排版 -->
+    <footer class="docked-player-bar" id="dockedPlayerBar" style="display: none;">
+      <!-- 1. 尋道進度條 (橫跨頂部全寬度，極致尋道精度) -->
       <div class="progress-bar-container" id="progressContainer" data-i18n-title="ctrl_progress_title" title="尋道跳轉 (點擊或拖曳)">
         <div class="progress-bar-buffered" id="progressBarBuffered"></div>
         <div class="progress-bar-played" id="progressBarPlayed"></div>
@@ -245,10 +152,11 @@
         <div class="progress-tooltip" id="progressTooltip">00:00</div>
       </div>
 
-      <!-- 控制列按鈕與資訊 -->
+      <!-- 2. 下方單行控制列 (比照 Video Viewer controls-row) -->
       <div class="controls-row">
+        <!-- 左側：播放控制與時間 -->
         <div class="controls-left">
-          <!-- 播放 / 暫停 -->
+          <!-- 播放 / 暫停 (Space) -->
           <button id="playPauseBtn" class="ctrl-btn" data-i18n-title="ctrl_play_pause_title" title="播放 / 暫停 (Space)">
             <svg class="icon-play" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
             <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
@@ -270,14 +178,67 @@
             <span class="ctrl-subtext">+5s</span>
           </button>
 
-          <!-- 時間顯示 -->
+          <!-- 上一首 -->
+          <button id="prevBtn" class="ctrl-btn" data-i18n-title="player_prev_title" title="上一首 (← / [)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="19 20 9 12 19 4 19 20"></polygon>
+              <line x1="5" y1="19" x2="5" y2="5"></line>
+            </svg>
+          </button>
+
+          <!-- 下一首 -->
+          <button id="nextBtn" class="ctrl-btn" data-i18n-title="player_next_title" title="下一首 (→ / ])">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="5 4 15 12 5 20 5 4"></polygon>
+              <line x1="19" y1="5" x2="19" y2="19"></line>
+            </svg>
+          </button>
+
+          <!-- 時間顯示 (比照 Video Viewer) -->
           <div class="time-display" id="timeDisplay">
             <span id="currentTimeText">00:00</span> / <span id="durationText">00:00</span>
           </div>
         </div>
 
+        <!-- 中間：當前播放曲目膠囊徽章 (自適應縮排，避免擁擠) -->
+        <div class="controls-center">
+          <div class="player-track-pill" id="playerTrackPill">
+            <div class="player-disc-mini" id="playerMiniDisc">
+              <div class="disc-dot"></div>
+            </div>
+            <div class="player-track-info">
+              <div class="player-track-title" id="playerTitle" title="">未播放</div>
+              <div class="player-track-meta" id="playerMeta">-</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右側：功能操作群組 -->
         <div class="controls-right">
-          <!-- 音量控制組 -->
+          <!-- 單曲循環開關 -->
+          <button id="loopBtn" class="ctrl-btn" data-i18n-title="player_loop_title" title="單曲循環開關 (R)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m17 2 4 4-4 4"></path>
+              <path d="M3 11v-1a4 4 0 0 1 4-4h14"></path>
+              <path d="m7 22-4-4 4-4"></path>
+              <path d="M21 13v1a4 4 0 0 1-4 4H3"></path>
+            </svg>
+          </button>
+
+          <!-- 播放倍速切換 -->
+          <div class="speed-dropdown-wrapper">
+            <button id="speedBtn" class="ctrl-btn btn-text" data-i18n-title="player_speed_title" title="切換播放速度">1.0x</button>
+            <div class="speed-menu" id="speedMenu" style="display: none;">
+              <div class="speed-item" data-speed="0.5">0.5x</div>
+              <div class="speed-item" data-speed="0.75">0.75x</div>
+              <div class="speed-item" data-speed="1.0">1.0x</div>
+              <div class="speed-item" data-speed="1.25">1.25x</div>
+              <div class="speed-item" data-speed="1.5">1.5x</div>
+              <div class="speed-item" data-speed="2.0">2.0x</div>
+            </div>
+          </div>
+
+          <!-- 音量控制組 (常駐顯示滑桿與青色手柄) -->
           <div class="volume-control-group">
             <button id="volumeBtn" class="ctrl-btn" data-i18n-title="ctrl_mute_title" title="靜音切換 (M)">
               <svg class="icon-vol-high" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -296,7 +257,7 @@
             </div>
           </div>
 
-          <!-- 以系統播放器開啟 -->
+          <!-- 以系統播放器開啟 (完全比照 Video Viewer) -->
           <button id="ctrlOpenExternalBtn" class="ctrl-btn" data-i18n-title="ctrl_open_external_title" title="以系統播放器開啟 (O)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
@@ -305,18 +266,11 @@
             </svg>
           </button>
 
-          <!-- 隱藏控制器按鈕 -->
-          <button id="ctrlHideBtn" class="ctrl-btn" data-i18n-title="ctrl_hide_title" title="隱藏控制器 (H，右鍵切換固定常駐)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-              <line x1="1" y1="1" x2="23" y2="23"></line>
-            </svg>
-          </button>
-
-
+          <!-- 停止播放並隱藏播放列 -->
+          <button id="closePlayerBtn" class="ctrl-btn" data-i18n-title="player_close_title" title="關閉播放器 (Esc)">✕</button>
         </div>
       </div>
-    </div>
+    </footer>
   </div>
 
   <!-- Toast 通知容器 -->

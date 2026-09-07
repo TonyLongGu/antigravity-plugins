@@ -2,7 +2,7 @@
 	"name": "antigravity-quick-access",
 	"displayName": "Antigravity 常用捷徑與暫存清單 (Quick Access)",
 	"description": "Google Antigravity IDE 檔案總管專屬快速存取與暫存視窗：支援滑鼠拖曳引用至 Chat 對話框與編輯器、檔案與資料夾樹狀展開、雙擊開啟、右鍵一鍵加入、工作區隱藏連動過濾與持久化儲存",
-	"version": "1.2.2",
+	"version": "1.2.5",
 	"publisher": "antigravity-toolkit",
 	"engines": {
 		"vscode": "^1.80.0"
@@ -11,12 +11,6 @@
 		"Other"
 	],
 	"main": "./extension.js",
-	"activationEvents": [
-		"onView:antigravity.quickAccessView",
-		"onCommand:antigravity.quickAccess.add",
-		"onCommand:antigravity.quickAccess.addPinned",
-		"onCommand:antigravity.quickAccess.addActive"
-	],
 	"contributes": {
 		"views": {
 			"explorer": [
@@ -24,6 +18,7 @@
 					"id": "antigravity.quickAccessView",
 					"name": "常用捷徑與暫存清單",
 					"type": "tree",
+					"icon": "media/icons/quick-access-icon.svg",
 					"order": 1
 				}
 			]
@@ -100,6 +95,24 @@
 				"title": "檢視圖片",
 				"category": "Quick Access",
 				"icon": "$(file-media)"
+			},
+			{
+				"command": "antigravity.quickAccess.viewAudios",
+				"title": "檢視聲音",
+				"category": "Quick Access",
+				"icon": "$(unmute)"
+			},
+			{
+				"command": "antigravity.quickAccess.viewVideos",
+				"title": "檢視影片",
+				"category": "Quick Access",
+				"icon": "$(device-camera-video)"
+			},
+			{
+				"command": "antigravity.quickAccess.deleteFile",
+				"title": "刪除檔案",
+				"category": "Quick Access",
+				"icon": "$(trash)"
 			},
 			{
 				"command": "antigravity.quickAccess.runBat",
@@ -198,6 +211,24 @@
 				"icon": "$(file-media)"
 			},
 			{
+				"command": "antigravity.quickAccess.viewAudios.en",
+				"title": "View Audio",
+				"category": "Quick Access",
+				"icon": "$(unmute)"
+			},
+			{
+				"command": "antigravity.quickAccess.viewVideos.en",
+				"title": "View Videos",
+				"category": "Quick Access",
+				"icon": "$(device-camera-video)"
+			},
+			{
+				"command": "antigravity.quickAccess.deleteFile.en",
+				"title": "Delete File",
+				"category": "Quick Access",
+				"icon": "$(trash)"
+			},
+			{
 				"command": "antigravity.quickAccess.runBat.en",
 				"title": "Run Batch File",
 				"category": "Quick Access",
@@ -226,6 +257,20 @@
 				"title": "Run Python Script",
 				"category": "Quick Access",
 				"icon": "$(play)"
+			}
+		],
+		"keybindings": [
+			{
+				"command": "antigravity.quickAccess.deleteFile",
+				"key": "delete",
+				"mac": "cmd+backspace",
+				"when": "focusedView == 'antigravity.quickAccessView' && !inputFocus"
+			},
+			{
+				"command": "antigravity.quickAccess.deleteFile",
+				"key": "shift+delete",
+				"mac": "cmd+backspace",
+				"when": "focusedView == 'antigravity.quickAccessView' && !inputFocus"
 			}
 		],
 		"menus": {
@@ -343,54 +388,84 @@
 					"group": "4_script_runner@1"
 				},
 				{
+					"command": "antigravity.quickAccess.viewAudios",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /(;folder|;isAudio)/ && config.antigravity.locale != 'en'",
+					"group": "4_script_runner@2"
+				},
+				{
+					"command": "antigravity.quickAccess.viewAudios.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /(;folder|;isAudio)/ && config.antigravity.locale == 'en'",
+					"group": "4_script_runner@2"
+				},
+				{
+					"command": "antigravity.quickAccess.viewVideos",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /(;folder|;isVideo)/ && config.antigravity.locale != 'en'",
+					"group": "4_script_runner@3"
+				},
+				{
+					"command": "antigravity.quickAccess.viewVideos.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /(;folder|;isVideo)/ && config.antigravity.locale == 'en'",
+					"group": "4_script_runner@3"
+				},
+				{
 					"command": "antigravity.quickAccess.runPy",
 					"when": "view == antigravity.quickAccessView && viewItem =~ /;isPy/ && config.antigravity.locale != 'en'",
-					"group": "4_script_runner@2"
+					"group": "4_script_runner@4"
 				},
 				{
 					"command": "antigravity.quickAccess.runPy.en",
 					"when": "view == antigravity.quickAccessView && viewItem =~ /;isPy/ && config.antigravity.locale == 'en'",
-					"group": "4_script_runner@2"
+					"group": "4_script_runner@4"
 				},
 				{
 					"command": "antigravity.quickAccess.runPs1",
 					"when": "view == antigravity.quickAccessView && viewItem =~ /;isPs1/ && config.antigravity.locale != 'en'",
-					"group": "4_script_runner@3"
+					"group": "4_script_runner@5"
 				},
 				{
 					"command": "antigravity.quickAccess.runPs1.en",
 					"when": "view == antigravity.quickAccessView && viewItem =~ /;isPs1/ && config.antigravity.locale == 'en'",
-					"group": "4_script_runner@3"
+					"group": "4_script_runner@5"
 				},
 				{
 					"command": "antigravity.quickAccess.runPs1Admin",
 					"when": "view == antigravity.quickAccessView && viewItem =~ /;isPs1/ && config.antigravity.locale != 'en'",
-					"group": "4_script_runner@4"
+					"group": "4_script_runner@6"
 				},
 				{
 					"command": "antigravity.quickAccess.runPs1Admin.en",
 					"when": "view == antigravity.quickAccessView && viewItem =~ /;isPs1/ && config.antigravity.locale == 'en'",
-					"group": "4_script_runner@4"
+					"group": "4_script_runner@6"
 				},
 				{
 					"command": "antigravity.quickAccess.runBat",
 					"when": "view == antigravity.quickAccessView && viewItem =~ /;isBat/ && config.antigravity.locale != 'en'",
-					"group": "4_script_runner@5"
+					"group": "4_script_runner@7"
 				},
 				{
 					"command": "antigravity.quickAccess.runBat.en",
 					"when": "view == antigravity.quickAccessView && viewItem =~ /;isBat/ && config.antigravity.locale == 'en'",
-					"group": "4_script_runner@5"
+					"group": "4_script_runner@7"
 				},
 				{
 					"command": "antigravity.quickAccess.runBatAdmin",
 					"when": "view == antigravity.quickAccessView && viewItem =~ /;isBat/ && config.antigravity.locale != 'en'",
-					"group": "4_script_runner@6"
+					"group": "4_script_runner@8"
 				},
 				{
 					"command": "antigravity.quickAccess.runBatAdmin.en",
 					"when": "view == antigravity.quickAccessView && viewItem =~ /;isBat/ && config.antigravity.locale == 'en'",
-					"group": "4_script_runner@6"
+					"group": "4_script_runner@8"
+				},
+				{
+					"command": "antigravity.quickAccess.deleteFile",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale != 'en'",
+					"group": "5_delete@1"
+				},
+				{
+					"command": "antigravity.quickAccess.deleteFile.en",
+					"when": "view == antigravity.quickAccessView && viewItem =~ /^(root-file|root-folder|sub-file|sub-folder)/ && config.antigravity.locale == 'en'",
+					"group": "5_delete@1"
 				}
 			],
 			"explorer/context": [

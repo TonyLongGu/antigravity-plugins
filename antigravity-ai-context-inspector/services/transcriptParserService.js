@@ -29,7 +29,6 @@ class TranscriptParserService {
     if (!fs.existsSync(dbPath)) return { title: null, workspace: null };
 
     let title = null;
-    let workspace = null;
     let fileHandle = null;
 
     try {
@@ -37,44 +36,7 @@ class TranscriptParserService {
       const fileSize = stat.size;
       fileHandle = await fsPromises.open(dbPath, 'r');
 
-      // 1. 輕量讀取檔案開頭 (最多 64KB) 提取專案工作區 Workspace
-      const headSize = Math.min(fileSize, 65536);
-      const headBuf = Buffer.alloc(headSize);
-      await fileHandle.read(headBuf, 0, headSize, 0);
-
-      const headStr = headBuf.toString('utf8');
-
-      // 1.1 優先在 trajectory_metadata_blob (包含 main 標籤的區塊) 尋找 IDE 原生工作區
-      const mainIdx = headStr.indexOf('main');
-      if (mainIdx !== -1) {
-        const mainSlice = headStr.slice(mainIdx, Math.min(headStr.length, mainIdx + 2048));
-        const pjMatch = mainSlice.match(/file:\/\/\/[a-zA-Z]:[\\/]+PJ[\\/]+([^\\/\r\n\x00-\x1f\"\'\<\>\:]+(?:[\\/]+[^\\/\r\n\x00-\x1f\"\'\<\>\:]+)?)/i);
-        if (pjMatch) {
-          workspace = pjMatch[1].replace(/\\/g, '/').replace(/\/+$/, '');
-        } else {
-          const anyMatch = mainSlice.match(/file:\/\/\/[a-zA-Z]:[\\/]+(?!Users[\\/]+[^\r\n\\/]+[\\/]+AppData)([^\\/\r\n\x00-\x1f\"\'\<\>\:]+(?:[\\/]+[^\\/\r\n\x00-\x1f\"\'\<\>\:]+)?)/i);
-          if (anyMatch) {
-            workspace = anyMatch[1].replace(/\\/g, '/').replace(/\/+$/, '');
-          }
-        }
-      }
-
-      // 1.2 若未命中，全域掃描排除 AppData/Temp/.gemini 的專案路徑
-      if (!workspace) {
-        const allMatches = headStr.matchAll(/file:\/\/\/[a-zA-Z]:[\\/]+(?:PJ[\\/]+)?([^\\/\r\n\x00-\x1f\"\'\<\>\:]+(?:[\\/]+[^\\/\r\n\x00-\x1f\"\'\<\>\:]+)?)/gi);
-        for (const m of allMatches) {
-          const p = m[0];
-          if (!p.includes('AppData') && !p.includes('.gemini') && !p.includes('Temp') && !p.includes('node_modules')) {
-            const ws = m[1].replace(/\\/g, '/').replace(/\/+$/, '');
-            if (ws && !ws.toLowerCase().startsWith('users/')) {
-              workspace = ws;
-              break;
-            }
-          }
-        }
-      }
-
-      // 2. 輕量讀取檔案尾部 (最多 256KB) 提取最新 Session 官方標題
+      // 1. 輕量讀取檔案尾部 (最多 256KB) 提取最新 Session 官方標題
       const tailReadSize = Math.min(fileSize, 262144);
       const tailOffset = Math.max(0, fileSize - tailReadSize);
       const tailBuf = Buffer.alloc(tailReadSize);
@@ -82,7 +44,7 @@ class TranscriptParserService {
 
       title = this._scanTitleInBuf(tailBuf);
 
-      // 3. 若尾部未命中且檔案大於尾部讀取區塊，回退讀取頭部 (最多 512KB)
+      // 2. 若尾部未命中且檔案大於尾部讀取區塊，回退讀取頭部 (最多 512KB)
       if (!title && fileSize > tailReadSize) {
         const fallbackSize = Math.min(fileSize, 524288);
         const fallbackBuf = Buffer.alloc(fallbackSize);
@@ -96,7 +58,7 @@ class TranscriptParserService {
       }
     }
 
-    return { title, workspace };
+    return { title, workspace: '' };
   }
 
   /**
@@ -148,39 +110,12 @@ class TranscriptParserService {
     const targetLog = fs.existsSync(transcriptPath) ? transcriptPath : (fs.existsSync(fullTranscriptPath) ? fullTranscriptPath : null);
 
     let title = '';
-    let workspace = '';
     let firstCleanedReq = '';
 
-    // 1. 最高優先：讀取 IDE 官方原生命名的會話主題與工作區（與 IDE 原生聊天記錄完全同步）
+    // 1. 最高優先：讀取 IDE 官方原生命名的會話主題（與 IDE 原生聊天記錄完全同步）
     const officialMeta = await this._extractOfficialMetadata(convId);
     if (officialMeta.title) {
       title = officialMeta.title;
-    }
-    if (officialMeta.workspace) {
-      workspace = officialMeta.workspace;
-    }
-
-    // 2. 次選：從 implementation_plan.md 或 walkthrough.md 提取明確任務總標題
-    if (!title) {
-      const planCandidates = [
-        path.join(convDir, 'implementation_plan.md'),
-        path.join(convDir, 'walkthrough.md')
-      ];
-      for (const p of planCandidates) {
-        if (fs.existsSync(p)) {
-          try {
-            const planContent = await fsPromises.readFile(p, 'utf-8');
-            const m = planContent.match(/^#\s*(.+)$/m);
-            if (m) {
-              const cleanedTitle = m[1].replace(/實作計畫|實施方案|開發完成|成果報告|Implementation Plan|Walkthrough/gi, '').trim();
-              if (cleanedTitle) {
-                title = cleanedTitle;
-                break;
-              }
-            }
-          } catch (e) {}
-        }
-      }
     }
 
     if (targetLog) {
@@ -204,32 +139,22 @@ class TranscriptParserService {
               continue;
             }
 
-            // 2. 首句使用者真實請求提取
+            // 2. 完全比照 IDE 原生規則：首句使用者真實請求提取（保留 @[路徑]，壓縮換行與空白，不濾除任何原生文字）
             if (!firstCleanedReq && parsed.type === 'USER_INPUT' && parsed.content) {
               const reqMatch = parsed.content.match(/<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/);
               if (reqMatch) {
                 const rawReq = reqMatch[1];
-                let cleanedText = rawReq
-                  .replace(/@\[[^\]]+\]/g, ' ')
-                  .replace(/@[^\s]+/g, ' ')
+                const cleanedText = rawReq
                   .replace(/[\r\n\t]+/g, ' ')
                   .replace(/\s{2,}/g, ' ')
                   .trim();
                 if (cleanedText.length > 0) {
-                  firstCleanedReq = cleanedText.slice(0, 50);
-                }
-              }
-
-              // 從使用者請求中的路徑或提及專案獲取工作區
-              if (!workspace && parsed.content) {
-                const wsUserMatch = parsed.content.match(/[a-zA-Z]:[\\/]+(?:PJ[\\/]+)?([^\\/\r\n]+[\\/]+[^\\/\r\n]+)/i);
-                if (wsUserMatch) {
-                  workspace = wsUserMatch[1].replace(/\\/g, '/');
+                  firstCleanedReq = cleanedText.slice(0, 100);
                 }
               }
             }
 
-            // 3. 官方任務主題 (USER Objective，排除歷史摘要後)
+            // 3. 次選官方任務主題 (USER Objective，排除歷史摘要後)
             if (!title && parsed.content && parsed.content.includes('USER Objective:')) {
               const mObj = parsed.content.match(/#\s*USER Objective:\s*([^\r\n]+)/);
               if (mObj && mObj[1].trim()) {
@@ -237,25 +162,7 @@ class TranscriptParserService {
               }
             }
 
-            // 4. 工作區資訊 (Workspace) 備用解析
-            if (!workspace && parsed.content) {
-              const docMatch = parsed.content.match(/(?:Active Document|open documents|file:\/\/+|@\[)[^\r\n]*?[a-zA-Z]:[\\/]+(?:PJ[\\/]+)?([^\\/\r\n]+[\\/]+[^\\/\r\n]+)/i);
-              if (docMatch) {
-                workspace = docMatch[1].replace(/\\/g, '/');
-              } else {
-                const pjMatch = parsed.content.match(/[a-zA-Z]:[\\/]+PJ[\\/]+([^\\/\r\n]+[\\/]+[^\\/\r\n]+)/i);
-                if (pjMatch) {
-                  workspace = pjMatch[1].replace(/\\/g, '/');
-                } else {
-                  const ruleMatch = parsed.content.match(/<RULE\[[a-zA-Z]:[\\/]+(?:PJ[\\/]+)?([^\\/\r\n]+[\\/]+[^\\/\r\n]+)/i);
-                  if (ruleMatch) {
-                    workspace = ruleMatch[1].replace(/\\/g, '/');
-                  }
-                }
-              }
-            }
-
-            if (title && workspace) break;
+            if (title && firstCleanedReq) break;
           } catch (e) {}
         }
       } catch (err) {
@@ -266,14 +173,38 @@ class TranscriptParserService {
       }
     }
 
+    // 若無官方標題，完全比照 IDE 原生展示第一句使用者請求
     if (!title && firstCleanedReq) {
       title = firstCleanedReq;
+    }
+
+    // 後備方案：從 implementation_plan.md 或 walkthrough.md 提取標題
+    if (!title) {
+      const planCandidates = [
+        path.join(convDir, 'implementation_plan.md'),
+        path.join(convDir, 'walkthrough.md')
+      ];
+      for (const p of planCandidates) {
+        if (fs.existsSync(p)) {
+          try {
+            const planContent = await fsPromises.readFile(p, 'utf-8');
+            const m = planContent.match(/^#\s*(.+)$/m);
+            if (m) {
+              const cleanedPlanTitle = m[1].replace(/實作計畫|實施方案|開發完成|成果報告|Implementation Plan|Walkthrough/gi, '').trim();
+              if (cleanedPlanTitle) {
+                title = cleanedPlanTitle;
+                break;
+              }
+            }
+          } catch (e) {}
+        }
+      }
     }
 
     const result = {
       id: convId,
       title: title || `對話任務 (${convId.slice(0, 8)})`,
-      workspace: workspace || '',
+      workspace: '',
       mtime: mtimeMs,
       mtimeStr: new Date(mtimeMs).toLocaleString(),
       dirPath: convDir

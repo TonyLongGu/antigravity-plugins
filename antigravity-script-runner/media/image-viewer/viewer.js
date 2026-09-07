@@ -299,7 +299,8 @@
         document.documentElement.style.setProperty('--thumb-size', `${state.thumbSize}px`);
       }
       if (state.sortBy) {
-        sortSelectEl.value = state.sortBy;
+        const optionExists = Array.from(sortSelectEl.options).some(opt => opt.value === state.sortBy);
+        sortSelectEl.value = optionExists ? state.sortBy : 'date-desc';
       }
       if (state.filterText) {
         searchInputEl.value = state.filterText;
@@ -386,7 +387,7 @@
           </svg>
         </button>
         <img class="card-thumb" src="${img.uri}" loading="lazy" alt="${img.fileName}" />
-        <span class="card-ext-badge">${img.ext}</span>
+        <span class="card-ext-badge" data-ext="${(img.ext || '').toLowerCase()}">${(img.ext || '').toUpperCase()}</span>
         <div class="card-actions">
           <button class="card-action-btn copy-btn" title="${I18nModule.t('card_copy_path_title')}" data-index="${idx}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>

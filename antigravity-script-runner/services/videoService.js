@@ -263,8 +263,8 @@ async function scanVideos(rootDir, recursive = false, webview = null) {
 
   await walk(rootDir);
 
-  // 預設按檔名自然排序（A-Z，支援數字自然順序）
-  results.sort((a, b) => a.fileName.localeCompare(b.fileName, undefined, { numeric: true, sensitivity: 'base' }));
+  // 預設按修改時間新到舊排序（時間 (新到舊)）
+  results.sort((a, b) => b.mtimeMs - a.mtimeMs);
 
   return results;
 }
