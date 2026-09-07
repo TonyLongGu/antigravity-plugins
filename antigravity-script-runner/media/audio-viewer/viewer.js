@@ -113,37 +113,43 @@
       } catch (e) {}
 
       if (initial && (initial === 'zh-TW' || initial === 'en')) {
-        this.currentLang = initial;
+        this.applyLanguage(initial, false);
       } else if (saved && (saved === 'zh-TW' || saved === 'en')) {
-        this.currentLang = saved;
+        this.applyLanguage(saved, false);
       } else {
-        this.currentLang = 'zh-TW';
+        this.applyLanguage('zh-TW', false);
       }
+    },
+
+    applyLanguage(lang, save = true) {
+      if (lang !== 'zh-TW' && lang !== 'en') return;
+      this.currentLang = lang;
+      if (save) {
+        try {
+          localStorage.setItem('antigravity_locale', lang);
+        } catch (e) {}
+      }
+      document.documentElement.lang = lang === 'zh-TW' ? 'zh-TW' : 'en';
       this.applyTranslations();
     },
 
     setLanguage(lang) {
-      if (lang !== 'zh-TW' && lang !== 'en') return;
-      this.currentLang = lang;
-      try {
-        localStorage.setItem('antigravity_locale', lang);
-      } catch (e) {}
+      this.applyLanguage(lang, true);
+    },
+
+    toggleLanguage() {
+      const next = this.currentLang === 'zh-TW' ? 'en' : 'zh-TW';
+      this.applyLanguage(next, true);
 
       if (vscode) {
         vscode.postMessage({
           type: 'setGlobalLocale',
-          locale: lang,
-          payload: { locale: lang }
+          locale: next,
+          payload: { locale: next }
         });
       }
 
-      this.applyTranslations();
       showToast(this.t('toast_lang_switched'), 'info');
-    },
-
-    toggleLanguage() {
-      const target = this.currentLang === 'zh-TW' ? 'en' : 'zh-TW';
-      this.setLanguage(target);
     },
 
     t(key, params = {}) {
@@ -1278,8 +1284,8 @@
           break;
 
         case 'localeChanged':
-          if (msg.locale) {
-            I18nModule.setLanguage(msg.locale);
+          if (msg.locale && (msg.locale === 'zh-TW' || msg.locale === 'en')) {
+            I18nModule.applyLanguage(msg.locale, true);
           }
           break;
 
