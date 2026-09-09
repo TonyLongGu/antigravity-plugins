@@ -899,6 +899,101 @@ details[open] > summary .item-chevron {
   fill: none;
 }
 
+/* 技能清單可折疊子分組樣式 (Collapsible Subgroups) */
+details.subgroup-details {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-xs);
+}
+
+summary.subgroup-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  cursor: pointer;
+  list-style: none;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+summary.subgroup-summary::-webkit-details-marker {
+  display: none;
+}
+
+summary.subgroup-summary:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.subgroup-title-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.subgroup-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  transition: transform 0.15s ease;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.subgroup-chevron .lucide-icon,
+.subgroup-chevron .codicon {
+  width: 11px;
+  height: 11px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+details[open] > summary .subgroup-chevron {
+  transform: rotate(90deg);
+}
+
+.subgroup-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.subgroup-icon .lucide-icon,
+.subgroup-icon .codicon {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+
+.subgroup-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding-top: var(--space-xs);
+}
+
 /* MCP 與清單水平並排項目樣式 */
 .mcp-row-item {
   background: var(--bg-item);

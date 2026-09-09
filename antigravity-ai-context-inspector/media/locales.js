@@ -51,6 +51,9 @@
       group_skills_workspace: '工作區專屬技能 ({count})',
       group_skills_global: '全域客製技能 ({count})',
       group_skills_builtin: 'IDE 內建技能 ({count})',
+      subgroup_toggle_tooltip: '點擊展開 / 收合分組',
+      subgroup_expand: '展開',
+      subgroup_collapse: '收合',
 
       // 卡片 4：MCP 伺服器
       card_mcp_title: 'MCP 伺服器與 API',
@@ -149,6 +152,9 @@
       group_skills_workspace: 'Workspace Skills ({count})',
       group_skills_global: 'Global Skills ({count})',
       group_skills_builtin: 'Built-in Skills ({count})',
+      subgroup_toggle_tooltip: 'Click to expand / collapse group',
+      subgroup_expand: 'Expand',
+      subgroup_collapse: 'Collapse',
 
       // Card 4: MCP Servers
       card_mcp_title: 'MCP Servers & Tools',

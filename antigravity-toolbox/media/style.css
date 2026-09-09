@@ -880,6 +880,13 @@ body.is-pointer-dragging * {
   user-select: none !important;
 }
 
+body.is-switch-dragging,
+body.is-switch-dragging * {
+  cursor: pointer !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
 .folder-drag-handle {
   display: flex;
   align-items: center;
@@ -990,8 +997,13 @@ body.is-pointer-dragging * {
   padding: 0;
   margin: 0;
   flex-shrink: 0;
-  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.12s ease;
   user-select: none;
+  touch-action: none;
+}
+
+.folder-switch:active {
+  transform: scale(0.92);
 }
 
 .folder-switch:hover {

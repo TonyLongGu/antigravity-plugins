@@ -34,10 +34,12 @@ class AiContextViewProvider {
       this._view = null;
     });
 
-    // 監聽側邊欄視圖可見度切換（從背景切回前台時自動刷新最新上下文）
+    // 監聽側邊欄視圖可見度切換（從背景切回前台時自動刷新最新上下文，切到後台時收合子卡片）
     webviewView.onDidChangeVisibility(() => {
       if (webviewView.visible) {
         this.pushData();
+      } else {
+        this.collapseSubcards();
       }
     });
 
@@ -77,6 +79,12 @@ class AiContextViewProvider {
 
     this._panel.webview.onDidReceiveMessage(async (msg) => {
       await this._handleMessage(msg);
+    });
+
+    this._panel.onDidChangeViewState((e) => {
+      if (!e.webviewPanel.active) {
+        this.collapseSubcards();
+      }
     });
 
     this._panel.onDidDispose(() => {
@@ -209,6 +217,16 @@ class AiContextViewProvider {
       }
     } catch (err) {
       vscode.window.showErrorMessage(`無法開啟: ${err.message}`);
+    }
+  }
+
+  collapseSubcards() {
+    const payload = { type: 'collapseSubcards' };
+    if (this._view) {
+      this._view.webview.postMessage(payload);
+    }
+    if (this._panel) {
+      this._panel.webview.postMessage(payload);
     }
   }
 
@@ -354,12 +372,28 @@ function activate(context) {
     context.subscriptions.push(agentsWatcher);
   } catch {}
 
-  // 4. 監聽 IDE 視窗焦點（切回視窗時輕量確認最新狀態）
+  // 4. 監聽 IDE 視窗焦點（切回視窗時輕量確認最新狀態；焦點離開時收合子卡片）
   context.subscriptions.push(
     vscode.window.onDidChangeWindowState((state) => {
       if (state.focused && activeProvider) {
         activeProvider.pushData(80);
+      } else if (!state.focused && activeProvider) {
+        activeProvider.collapseSubcards();
       }
+    })
+  );
+
+  // 5. 監聽活躍文字編輯器切換（切換至代碼檔案/工具時收合子卡片）
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor(() => {
+      activeProvider?.collapseSubcards();
+    })
+  );
+
+  // 6. 監聽活躍終端機切換（切換至終端機工具時收合子卡片）
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTerminal(() => {
+      activeProvider?.collapseSubcards();
     })
   );
 

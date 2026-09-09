@@ -223,23 +223,19 @@
   const pendingToggles = new Map(); // key: path -> { active: boolean, time: number }
 
   /**
-   * 切換專案在工作區的顯示/隱藏狀態（等冪意圖鎖定，0ms 即時反饋）
+   * 立即原地更新專案卡片的顯示/隱藏視覺狀態與樂觀計數器 (0ms 即時反饋)
    */
-  function toggleItemEnabled(item, folderData) {
-    const targetPath = item.getAttribute('data-path') || folderData?.path;
-    if (!targetPath) return;
+  function applyFolderItemVisualState(item, targetPath, nextActive) {
+    if (!item || !targetPath) return;
 
-    // 1. 取得當前視覺狀態並計算期望的下一個狀態
-    const isCurrentlyActive = item.classList.contains('is-active');
-    const nextActive = !isCurrentlyActive;
-
-    // 2. 登記最新操作意圖樂觀鎖（保護 1500ms，防止後端中途推送舊狀態覆蓋）
+    // 1. 登記操作意圖樂觀鎖（保護 1500ms，防止後端過期事件覆蓋）
     pendingToggles.set(targetPath, { active: nextActive, time: Date.now() });
 
-    // 3. 立即原地切換 UI（0ms 即時流暢反饋）
+    // 2. 原地切換卡片類別樣式
     item.classList.toggle('is-active', nextActive);
     item.classList.toggle('is-inactive', !nextActive);
 
+    // 3. 原地切換按鈕開關樣式
     const switchEl = item.querySelector('.folder-switch');
     if (switchEl) {
       switchEl.classList.toggle('is-checked', nextActive);
@@ -264,13 +260,198 @@
         WorkspaceModule.dom.folderListCount.textContent = `${actCount}/${totCount}`;
       }
     }
+  }
 
-    // 5. 發送等冪指令給後端（明確指定期望的 enabled 狀態）
+  /**
+   * 切換專案在工作區的顯示/隱藏狀態（相容舊呼叫）
+   */
+  function toggleItemEnabled(item, folderData) {
+    const targetPath = item.getAttribute('data-path') || folderData?.path;
+    if (!targetPath) return;
+
+    const isCurrentlyActive = item.classList.contains('is-active');
+    const nextActive = !isCurrentlyActive;
+
+    applyFolderItemVisualState(item, targetPath, nextActive);
+
     vscode.postMessage({
       type: 'toggleWorkspaceFolder',
       path: targetPath,
       enabled: nextActive,
     });
+  }
+
+  /**
+   * 開關滑動批次切換引擎 (可回縮動態範圍選取 Retractable Drag-to-Toggle)
+   * 壓住開關滑動批次切換，往回拖曳時自動取消並復原原始狀態，放開滑鼠時單次原子寫入
+   */
+  function startSwitchDragInteraction(initialItem, initialFolder, startEvent) {
+    if (startEvent.button !== 0) return; // 僅限滑鼠左鍵
+    startEvent.stopPropagation();
+    startEvent.preventDefault();
+
+    const initialPath = initialItem.getAttribute('data-path') || initialFolder?.path;
+    if (!initialPath) return;
+
+    // 1. 取得清單中所有專案項目節點
+    const allItemElements = Array.from(WorkspaceModule.dom.folderList.querySelectorAll('.folder-item'));
+    const initialIndex = allItemElements.indexOf(initialItem);
+    if (initialIndex === -1) return;
+
+    // 2. 快照所有專案在本次手勢觸發前的原始狀態 (originalStates: path -> boolean)
+    const originalStates = new Map();
+    allItemElements.forEach((el) => {
+      const p = el.getAttribute('data-path');
+      if (p) {
+        originalStates.set(p, el.classList.contains('is-active'));
+      }
+    });
+
+    // 3. 依起始專案開關原始狀態反轉決定本次手勢的目標狀態 (targetEnabled)
+    const initialOriginalState = originalStates.get(initialPath) ?? initialItem.classList.contains('is-active');
+    const targetEnabled = !initialOriginalState;
+
+    // 4. 立即對起始專案套用目標狀態 (0ms 即時反饋)
+    applyFolderItemVisualState(initialItem, initialPath, targetEnabled);
+
+    // 5. 快取所有專案的垂直絕對 Y 座標（抗頁面捲動與防 Layout Thrashing）
+    const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    const itemBounds = allItemElements.map((el, idx) => {
+      const rect = el.getBoundingClientRect();
+      return {
+        index: idx,
+        el,
+        path: el.getAttribute('data-path'),
+        top: rect.top + scrollY,
+        bottom: rect.bottom + scrollY,
+      };
+    });
+
+    document.body.classList.add('is-switch-dragging');
+
+    // 動態更新選取區間：[minIdx, maxIdx]
+    // 落在區間內的項目套用 targetEnabled；往回拖曳退出區間的項目自動復原為 originalState
+    let currentRangeMin = initialIndex;
+    let currentRangeMax = initialIndex;
+
+    const updateSelectionRange = (currentIndex) => {
+      const newMin = Math.max(0, Math.min(initialIndex, currentIndex));
+      const newMax = Math.min(itemBounds.length - 1, Math.max(initialIndex, currentIndex));
+
+      // 若選取區間無變化則略過
+      if (newMin === currentRangeMin && newMax === currentRangeMax) return;
+
+      // 遍歷所有受影響的項目區間（舊區間與新區間的聯集）
+      const checkMin = Math.min(currentRangeMin, newMin);
+      const checkMax = Math.max(currentRangeMax, newMax);
+
+      for (let i = checkMin; i <= checkMax; i++) {
+        const entry = itemBounds[i];
+        if (!entry || !entry.path) continue;
+
+        const isInNewRange = (i >= newMin && i <= newMax);
+        const expectedState = isInNewRange ? targetEnabled : (originalStates.get(entry.path) ?? false);
+        const currentState = entry.el.classList.contains('is-active');
+
+        if (currentState !== expectedState) {
+          applyFolderItemVisualState(entry.el, entry.path, expectedState);
+        }
+      }
+
+      currentRangeMin = newMin;
+      currentRangeMax = newMax;
+    };
+
+    const onPointerMove = (moveEvent) => {
+      moveEvent.preventDefault();
+      const currentScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+      const pageY = moveEvent.clientY + currentScrollY;
+
+      // 邊界微幅自動滾動
+      if (moveEvent.clientY < 35) {
+        window.scrollBy({ top: -10, behavior: 'auto' });
+      } else if (moveEvent.clientY > window.innerHeight - 35) {
+        window.scrollBy({ top: 10, behavior: 'auto' });
+      }
+
+      // 比對游標目前落在第幾個專案垂直區間
+      let currentIndex = -1;
+      for (let i = 0; i < itemBounds.length; i++) {
+        const b = itemBounds[i];
+        if (pageY >= b.top && pageY <= b.bottom) {
+          currentIndex = i;
+          break;
+        }
+      }
+
+      // 滑出邊界時自動吸附至首項或末項
+      if (currentIndex === -1 && itemBounds.length > 0) {
+        if (pageY < itemBounds[0].top) currentIndex = 0;
+        else if (pageY > itemBounds[itemBounds.length - 1].bottom) currentIndex = itemBounds.length - 1;
+      }
+
+      if (currentIndex !== -1) {
+        updateSelectionRange(currentIndex);
+      }
+    };
+
+    // 結束清理與事件註銷
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onPointerMove, { capture: true });
+      window.removeEventListener('pointerup', onPointerUp, { capture: true });
+      window.removeEventListener('pointercancel', onPointerUp, { capture: true });
+      window.removeEventListener('keydown', onKeyDown, { capture: true });
+      window.removeEventListener('blur', onPointerUp, { capture: true });
+      document.body.classList.remove('is-switch-dragging');
+    };
+
+    // Esc 鍵中途放棄：直接全數復原為初始狀態且不提交任何寫入
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        cleanup();
+        allItemElements.forEach((el) => {
+          const p = el.getAttribute('data-path');
+          if (p && originalStates.has(p)) {
+            const orig = originalStates.get(p);
+            if (el.classList.contains('is-active') !== orig) {
+              applyFolderItemVisualState(el, p, orig);
+            }
+          }
+        });
+      }
+    };
+
+    const onPointerUp = () => {
+      cleanup();
+
+      // 計算最終真正與原始狀態有差異的專案清單
+      const updates = [];
+      allItemElements.forEach((el) => {
+        const p = el.getAttribute('data-path');
+        if (p && originalStates.has(p)) {
+          const finalState = el.classList.contains('is-active');
+          if (finalState !== originalStates.get(p)) {
+            updates.push({ path: p, enabled: finalState });
+          }
+        }
+      });
+
+      // 僅在有實質狀態變更時發送單次原子寫入 IPC 訊息至後端
+      if (updates.length > 0) {
+        vscode.postMessage({
+          type: 'batchSetWorkspaceFolders',
+          updates,
+        });
+      }
+    };
+
+    window.addEventListener('pointermove', onPointerMove, { capture: true });
+    window.addEventListener('pointerup', onPointerUp, { capture: true });
+    window.addEventListener('pointercancel', onPointerUp, { capture: true });
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    window.addEventListener('blur', onPointerUp, { capture: true });
   }
 
   /**
@@ -654,9 +835,12 @@
           toggleSwitch.className = `folder-switch ${isEnabled ? 'is-checked' : ''}`;
           toggleSwitch.title = I18nModule.t('switch_title', { nextStatus });
           toggleSwitch.innerHTML = '<span class="switch-thumb"></span>';
+          toggleSwitch.addEventListener('pointerdown', (e) => {
+            startSwitchDragInteraction(item, f, e);
+          });
           toggleSwitch.addEventListener('click', (e) => {
             e.stopPropagation();
-            toggleItemEnabled(item, f);
+            e.preventDefault();
           });
 
           contentWrapper.appendChild(nameSpan);

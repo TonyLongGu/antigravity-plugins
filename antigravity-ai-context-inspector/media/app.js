@@ -55,6 +55,9 @@
   let ruleActiveTitleMode = savedState.ruleActiveTitleMode || 'title'; // 'title' (內文標題) | 'name' (檔案名稱)
   let ruleCondTitleMode = savedState.ruleCondTitleMode || 'title'; // 'title' (內文標題) | 'name' (檔案名稱)
   let skillTitleMode = savedState.skillTitleMode || 'title'; // 'title' (內文標題) | 'name' (技能名稱)
+  let workspaceSkillsOpen = (savedState.workspaceSkillsOpen !== false);
+  let globalSkillsOpen = (savedState.globalSkillsOpen !== false);
+  let builtinSkillsOpen = false; // 預設強制折疊
   let allConversations = [];
 
   // DOM 元素
@@ -109,7 +112,9 @@
       selectedConvId: selectedConvId,
       ruleActiveTitleMode: ruleActiveTitleMode,
       ruleCondTitleMode: ruleCondTitleMode,
-      skillTitleMode: skillTitleMode
+      skillTitleMode: skillTitleMode,
+      workspaceSkillsOpen: workspaceSkillsOpen,
+      globalSkillsOpen: globalSkillsOpen
     });
   }
 
@@ -422,9 +427,33 @@
     }
   }
 
+  // 收合所有展開的二級子卡片 (context-item-details)
+  function collapseAllSubcards() {
+    const openSubcards = document.querySelectorAll('.context-item-details[open]');
+    if (openSubcards.length > 0) {
+      openSubcards.forEach(el => {
+        el.open = false;
+      });
+    }
+  }
+
   // 渲染清單核心函式
   function renderAll() {
     if (!currentData) return;
+
+    // 紀錄當前子分組 open 狀態避免被重新渲染重設
+    const currentBuiltinEl = document.querySelector('.subgroup-details[data-subgroup="builtin"]');
+    if (currentBuiltinEl) {
+      builtinSkillsOpen = currentBuiltinEl.open;
+    }
+    const currentWsEl = document.querySelector('.subgroup-details[data-subgroup="workspace"]');
+    if (currentWsEl) {
+      workspaceSkillsOpen = currentWsEl.open;
+    }
+    const currentGlobalEl = document.querySelector('.subgroup-details[data-subgroup="global"]');
+    if (currentGlobalEl) {
+      globalSkillsOpen = currentGlobalEl.open;
+    }
 
     // 紀錄當前已展開項目的 Key，重新渲染時精確恢復 open 狀態
     const openedKeys = new Set();
@@ -437,8 +466,8 @@
     dom.modeLabel.textContent = currentMode === 'live' ? I18nModule.t('status_mode_live') : I18nModule.t('status_mode_snapshot');
     updateToggleButtons();
 
-    const isMultiWs = (currentData.workspaces && currentData.workspaces.length > 1);
-    const showSourceTag = isMultiWs || currentMode === 'snapshot';
+    // 常態顯示專案/來源標籤（單專案、多專案工作區或快照模式皆完整顯示，利於區分專案與全域規範）
+    const showSourceTag = true;
 
     // 1. 常駐規範
     const activeRules = currentData.rules?.alwaysActive || [];
@@ -546,16 +575,52 @@
       const builtin = allSkills.filter(s => s.type === 'builtin');
 
       if (workspace.length > 0) {
-        html += `<div class="subgroup-title">${Codicons.folder} ${I18nModule.t('group_skills_workspace', { count: workspace.length })}</div>`;
-        html += workspace.map(s => renderSkillItem(s, openedKeys, showSourceTag)).join('');
+        html += `
+          <details class="subgroup-details" data-subgroup="workspace" ${workspaceSkillsOpen ? 'open' : ''}>
+            <summary class="subgroup-summary" title="${escapeHtml(I18nModule.t('subgroup_toggle_tooltip'))}">
+              <div class="subgroup-title-left">
+                <span class="subgroup-chevron">${Codicons.chevronRight}</span>
+                <span class="subgroup-icon">${Codicons.folder}</span>
+                <span class="subgroup-label">${I18nModule.t('group_skills_workspace', { count: workspace.length })}</span>
+              </div>
+            </summary>
+            <div class="subgroup-list">
+              ${workspace.map(s => renderSkillItem(s, openedKeys, showSourceTag)).join('')}
+            </div>
+          </details>
+        `;
       }
       if (global.length > 0) {
-        html += `<div class="subgroup-title">${Codicons.globe} ${I18nModule.t('group_skills_global', { count: global.length })}</div>`;
-        html += global.map(s => renderSkillItem(s, openedKeys, false)).join('');
+        html += `
+          <details class="subgroup-details" data-subgroup="global" ${globalSkillsOpen ? 'open' : ''}>
+            <summary class="subgroup-summary" title="${escapeHtml(I18nModule.t('subgroup_toggle_tooltip'))}">
+              <div class="subgroup-title-left">
+                <span class="subgroup-chevron">${Codicons.chevronRight}</span>
+                <span class="subgroup-icon">${Codicons.globe}</span>
+                <span class="subgroup-label">${I18nModule.t('group_skills_global', { count: global.length })}</span>
+              </div>
+            </summary>
+            <div class="subgroup-list">
+              ${global.map(s => renderSkillItem(s, openedKeys, false)).join('')}
+            </div>
+          </details>
+        `;
       }
       if (builtin.length > 0) {
-        html += `<div class="subgroup-title">${Codicons.package} ${I18nModule.t('group_skills_builtin', { count: builtin.length })}</div>`;
-        html += builtin.map(s => renderSkillItem(s, openedKeys, false)).join('');
+        html += `
+          <details class="subgroup-details" data-subgroup="builtin" ${builtinSkillsOpen ? 'open' : ''}>
+            <summary class="subgroup-summary" title="${escapeHtml(I18nModule.t('subgroup_toggle_tooltip'))}">
+              <div class="subgroup-title-left">
+                <span class="subgroup-chevron">${Codicons.chevronRight}</span>
+                <span class="subgroup-icon">${Codicons.package}</span>
+                <span class="subgroup-label">${I18nModule.t('group_skills_builtin', { count: builtin.length })}</span>
+              </div>
+            </summary>
+            <div class="subgroup-list">
+              ${builtin.map(s => renderSkillItem(s, openedKeys, false)).join('')}
+            </div>
+          </details>
+        `;
       }
       dom.listSkills.innerHTML = html;
     }
@@ -635,6 +700,18 @@
         if (copyText) {
           vscode.postMessage({ type: 'copyText', payload: { text: copyText, label: I18nModule.t('btn_copy_name') } });
         }
+      });
+    });
+
+    // 綁定技能子分組展開/收合事件監聽
+    document.querySelectorAll('.subgroup-details').forEach(el => {
+      el.addEventListener('toggle', () => {
+        const type = el.getAttribute('data-subgroup');
+        const isOpen = el.open;
+        if (type === 'workspace') workspaceSkillsOpen = isOpen;
+        else if (type === 'global') globalSkillsOpen = isOpen;
+        else if (type === 'builtin') builtinSkillsOpen = isOpen;
+        saveState();
       });
     });
   }
@@ -836,6 +913,20 @@
       }
     });
 
+    // 焦點轉移 / 切換到其他工具時，自動收合所有展開的子卡片
+    window.addEventListener('blur', () => {
+      collapseAllSubcards();
+      closeConvPopover();
+    });
+
+    // 頁面切入背景 (Tab 或側邊欄切換) 時自動收合子卡片
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        collapseAllSubcards();
+        closeConvPopover();
+      }
+    });
+
     // 模式切換：當前環境即時掃描
     dom.btnLive.addEventListener('click', () => {
       currentMode = 'live';
@@ -852,10 +943,10 @@
       vscode.postMessage({ type: 'fetchData', payload: { mode: 'snapshot', conversationId: selectedConvId } });
     });
 
-    // 全部摺疊卡片
+    // 全部摺疊卡片（忽略技能子分組卡片 subgroup-details，維持其既有開關結構）
     if (dom.btnCollapseAll) {
       dom.btnCollapseAll.addEventListener('click', () => {
-        document.querySelectorAll('.container details').forEach(el => {
+        document.querySelectorAll('.container details:not(.subgroup-details)').forEach(el => {
           el.open = false;
         });
       });
@@ -926,6 +1017,9 @@
         if (event.data.locale && event.data.locale !== I18nModule.currentLang) {
           I18nModule.applyLanguage(event.data.locale, true);
         }
+      } else if (type === 'collapseSubcards') {
+        collapseAllSubcards();
+        closeConvPopover();
       }
     });
 

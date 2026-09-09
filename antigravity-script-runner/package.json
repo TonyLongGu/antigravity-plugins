@@ -11,9 +11,7 @@
 		"Other"
 	],
 	"main": "./extension.js",
-	"activationEvents": [
-		"*"
-	],
+	"activationEvents": [],
 	"contributes": {
 		"configuration": {
 			"title": "腳本右鍵執行工具 (Script Runner)",

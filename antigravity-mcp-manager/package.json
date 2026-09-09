@@ -11,9 +11,7 @@
 		"Other"
 	],
 	"main": "./extension.js",
-	"activationEvents": [
-		"*"
-	],
+	"activationEvents": [],
 	"contributes": {
 		"configuration": {
 			"title": "Antigravity",
@@ -47,7 +45,8 @@
 				{
 					"type": "webview",
 					"id": "antigravity.mcpManagerView",
-					"name": "MCP 控制台"
+					"name": "MCP 控制台",
+					"icon": "media/icons/mcp-icon.svg"
 				}
 			]
 		},

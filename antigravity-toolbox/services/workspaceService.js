@@ -389,6 +389,64 @@ function setWorkspaceFolderEnabled(targetPath, targetEnabled = null, provider = 
 }
 
 /**
+ * 批次設定專案在工作區中的啟用 (顯示) / 停用 (隱藏) 狀態（單次原子寫入，維持原始排序）
+ * @param {Array<{ path: string, enabled: boolean }>} updates 欲更新的專案路徑與目標啟用狀態陣列
+ * @param {object} [provider]
+ */
+function batchSetWorkspaceFoldersEnabled(updates, provider = null) {
+  if (!Array.isArray(updates) || updates.length === 0) return true;
+
+  const ctx = loadWorkspaceContext(provider);
+  if (!ctx) {
+    const msg = '目前尚未開啟任何 .code-workspace 多專案工作區！';
+    if (provider?.pushToast) provider.pushToast(msg, 'warning');
+    else vscode.window.showWarningMessage(msg);
+    return false;
+  }
+
+  const { wsPath, wsDir, json } = ctx;
+  const orderList = syncFolderOrder(json, wsDir);
+  const comparator = createFolderComparator(orderList, wsDir);
+
+  if (!Array.isArray(json.folders)) json.folders = [];
+  if (!Array.isArray(json.disabledFolders)) json.disabledFolders = [];
+
+  let hasChanged = false;
+
+  updates.forEach(({ path: targetPath, enabled: targetEnabled }) => {
+    if (!targetPath || typeof targetEnabled !== 'boolean') return;
+
+    const targetCanonical = getCanonicalPath(targetPath, wsDir).toLowerCase();
+    const findIdx = (arr) => arr.findIndex((f) => getCanonicalPath(f.path || '', wsDir).toLowerCase() === targetCanonical);
+
+    const activeIndex = findIdx(json.folders);
+    const disabledIndex = findIdx(json.disabledFolders);
+
+    if (activeIndex === -1 && disabledIndex === -1) return;
+
+    if (targetEnabled && disabledIndex !== -1) {
+      // 移至 folders 啟用清單
+      const [movedItem] = json.disabledFolders.splice(disabledIndex, 1);
+      json.folders.push(movedItem);
+      hasChanged = true;
+    } else if (!targetEnabled && activeIndex !== -1) {
+      // 移至 disabledFolders 隱藏清單
+      const [movedItem] = json.folders.splice(activeIndex, 1);
+      json.disabledFolders.push(movedItem);
+      hasChanged = true;
+    }
+  });
+
+  if (hasChanged) {
+    json.folders.sort(comparator);
+    json.disabledFolders.sort(comparator);
+    saveWorkspaceJson(wsPath, json);
+  }
+
+  return true;
+}
+
+/**
  * 相容舊呼叫：切換專案在工作區中的啟用 / 停用狀態
  * @param {string} targetPath 專案路徑
  * @param {object} [provider]
@@ -655,6 +713,7 @@ module.exports = {
   saveWorkspaceJson,
   analyzeWorkspace,
   setWorkspaceFolderEnabled,
+  batchSetWorkspaceFoldersEnabled,
   toggleWorkspaceFolder,
   showOnlyFirstWorkspaceFolder,
   showAllWorkspaceFolders,

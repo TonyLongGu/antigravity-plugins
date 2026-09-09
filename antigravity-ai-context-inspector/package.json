@@ -2,7 +2,7 @@
 	"name": "antigravity-ai-context-inspector",
 	"displayName": "AI 上下文檢視器 (AI Context Inspector)",
 	"description": "Google Antigravity IDE 側邊欄擴充套件：即時檢視每次對話 AI 載入之 Rules、Skills、MCP API 與工作區綁定狀態，支援即時配置掃描與對話快照歷史還原",
-	"version": "1.1.6",
+	"version": "1.1.7",
 	"publisher": "antigravity-toolkit",
 	"engines": {
 		"vscode": "^1.80.0"
@@ -11,9 +11,7 @@
 		"Other"
 	],
 	"main": "./extension.js",
-	"activationEvents": [
-		"*"
-	],
+	"activationEvents": [],
 	"contributes": {
 		"configuration": {
 			"title": "Antigravity",
@@ -47,7 +45,8 @@
 				{
 					"type": "webview",
 					"id": "antigravity.aiContextView",
-					"name": "AI Context"
+					"name": "AI Context",
+					"icon": "media/icons/inspector-icon.svg"
 				}
 			]
 		},

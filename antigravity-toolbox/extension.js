@@ -131,6 +131,12 @@ class ToolboxViewProvider {
         this.pushStatus(60);
         break;
 
+      case 'batchSetWorkspaceFolders':
+      case 'batchSetWorkspaceFoldersEnabled':
+        workspaceService.batchSetWorkspaceFoldersEnabled(msg.updates, this);
+        this.pushStatus(60);
+        break;
+
       case 'showOnlyFirstFolder':
         workspaceService.showOnlyFirstWorkspaceFolder(this);
         this.pushStatus(50);

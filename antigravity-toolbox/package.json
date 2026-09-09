@@ -11,9 +11,7 @@
 		"Other"
 	],
 	"main": "./extension.js",
-	"activationEvents": [
-		"*"
-	],
+	"activationEvents": [],
 	"contributes": {
 		"configuration": {
 			"title": "Antigravity",
@@ -47,7 +45,8 @@
 				{
 					"type": "webview",
 					"id": "antigravity.toolboxView",
-					"name": "快捷控制台"
+					"name": "快捷控制台",
+					"icon": "media/icons/toolbox-icon.svg"
 				}
 			]
 		},
