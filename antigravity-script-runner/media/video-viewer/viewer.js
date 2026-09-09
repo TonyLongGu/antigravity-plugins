@@ -36,6 +36,7 @@
   let idleTimer = null;
   let currentSpeed = 1.0;
   let isLooping = false;
+  let isAutoNext = false; // 預設關閉：播完單部即停止，不自動跳下一部
   let isMuted = false;
   let lastVolume = 0.5;
 
@@ -69,6 +70,7 @@
   const playerTitleEl = document.getElementById('playerTitle');
   const playerMetaEl = document.getElementById('playerMeta');
   const playerIndexBadgeEl = document.getElementById('playerIndexBadge');
+  const autoNextBtnEl = document.getElementById('autoNextBtn');
   const loopBtnEl = document.getElementById('loopBtn');
   const speedBtnEl = document.getElementById('speedBtn');
   const speedMenuEl = document.getElementById('speedMenu');
@@ -92,8 +94,6 @@
   const playPauseBtnEl = document.getElementById('playPauseBtn');
   const iconPlayEl = playPauseBtnEl.querySelector('.icon-play');
   const iconPauseEl = playPauseBtnEl.querySelector('.icon-pause');
-  const rewindBtnEl = document.getElementById('rewindBtn');
-  const forwardBtnEl = document.getElementById('forwardBtn');
   const currentTimeTextEl = document.getElementById('currentTimeText');
   const durationTextEl = document.getElementById('durationText');
 
@@ -209,6 +209,8 @@
       updateRecursiveButton();
       updateThumbToggleButton();
       updateSelectionUI();
+      updateAutoNextUI();
+      updateLoopUI();
 
       if (folderNameStr) {
         folderNameEl.textContent = folderNameStr;
@@ -272,25 +274,9 @@
     updateSelectionUI();
   }
 
-  // 5. Toast 訊息提示 (全面對齊 image-viewer 樣式與圖標)
+  // 5. Toast 訊息提示 (已依需求移除彈窗訊息，杜絕遮擋畫面內容)
   function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-
-    let iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
-    if (type === 'success') {
-      iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-    } else if (type === 'warn') {
-      iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
-    }
-
-    toast.innerHTML = `${iconSvg}<span>${message}</span>`;
-    toastContainerEl.appendChild(toast);
-
-    setTimeout(() => {
-      toast.classList.add('hiding');
-      setTimeout(() => toast.remove(), 250);
-    }, 2800);
+    // 彈窗訊息已停用
   }
 
   // 6. 時間格式化 (秒 -> MM:SS 或 HH:MM:SS)
@@ -1011,7 +997,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
             </button>
             <button class="card-action-btn open-ext-btn" title="${I18nModule.t('card_open_ext_title')}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.033 9.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56V7.648a.645.645 0 0 1 .967-.56z"></path><path d="M12 17v4"></path><path d="M8 21h8"></path><rect x="2" y="3" width="20" height="14" rx="2"></rect></svg>
             </button>
             <button class="card-action-btn reveal-btn" title="${I18nModule.t('card_reveal_title')}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
@@ -1237,6 +1223,8 @@
     playerVideoEl.playbackRate = currentSpeed;
     playerVideoEl.loop = isLooping;
     syncVolumeUI();
+    updateAutoNextUI();
+    updateLoopUI();
 
     playerModalEl.classList.add('active');
     document.body.classList.add('in-player');
@@ -1300,6 +1288,9 @@
 
   function togglePlayPause() {
     if (playerVideoEl.paused || playerVideoEl.ended) {
+      if (playerVideoEl.ended || (playerVideoEl.duration > 0 && playerVideoEl.currentTime >= playerVideoEl.duration)) {
+        playerVideoEl.currentTime = 0;
+      }
       playerVideoEl.play().catch(() => {});
       triggerCenterPlayAnimation(true);
     } else {
@@ -1500,13 +1491,27 @@
   });
 
   playerVideoEl.addEventListener('ended', () => {
-    if (!isLooping) {
+    if (isLooping) {
+      playerVideoEl.currentTime = 0;
+      playerVideoEl.play().catch(() => {});
+      return;
+    }
+
+    if (isAutoNext) {
       if (currentIndex < filteredVideos.length - 1) {
         nextVideo();
       } else {
+        showToast(I18nModule.t('toast_last_video'), 'info');
         updatePlayPauseUI(false);
       }
+      return;
     }
+
+    // 預設行為：播放一次就停止
+    updatePlayPauseUI(false);
+    currentTimeTextEl.textContent = formatTime(playerVideoEl.duration || 0);
+    progressBarPlayedEl.style.width = '100%';
+    progressThumbEl.style.left = '100%';
   });
 
   playerVideoEl.addEventListener('error', () => {
@@ -1538,8 +1543,6 @@
     showToast(seconds > 0 ? I18nModule.t('toast_forward', { sec: seconds }) : I18nModule.t('toast_rewind', { sec: Math.abs(seconds) }), 'info');
   }
 
-  rewindBtnEl.addEventListener('click', () => seekDelta(-5));
-  forwardBtnEl.addEventListener('click', () => seekDelta(5));
   playPauseBtnEl.addEventListener('click', togglePlayPause);
   prevBtnEl.addEventListener('click', prevVideo);
   nextBtnEl.addEventListener('click', nextVideo);
@@ -1575,17 +1578,53 @@
   });
 
   // 16. 播放倍速與循環
-  loopBtnEl.addEventListener('click', () => {
-    isLooping = !isLooping;
-    playerVideoEl.loop = isLooping;
-    if (isLooping) {
-      loopBtnEl.classList.add('active');
-      showToast(I18nModule.t('toast_loop_on'), 'info');
-    } else {
-      loopBtnEl.classList.remove('active');
-      showToast(I18nModule.t('toast_loop_off'), 'info');
+  function toggleAutoNext() {
+    isAutoNext = !isAutoNext;
+    updateAutoNextUI();
+    try {
+      localStorage.setItem('antigravity_video_autonext', String(isAutoNext));
+    } catch (e) {}
+    if (vscode) {
+      vscode.postMessage({ type: 'saveAutoNext', autoNext: isAutoNext });
     }
-  });
+    showToast(isAutoNext ? I18nModule.t('toast_autonext_on') : I18nModule.t('toast_autonext_off'), 'info');
+  }
+
+  function updateAutoNextUI() {
+    if (autoNextBtnEl) {
+      autoNextBtnEl.classList.toggle('active', isAutoNext);
+      autoNextBtnEl.title = isAutoNext
+        ? I18nModule.t('player_autonext_title_on')
+        : I18nModule.t('player_autonext_title_off');
+    }
+  }
+
+  function toggleLoop() {
+    isLooping = !isLooping;
+    updateLoopUI();
+    try {
+      localStorage.setItem('antigravity_video_loop', String(isLooping));
+    } catch (e) {}
+    if (vscode) {
+      vscode.postMessage({ type: 'saveLoop', loop: isLooping });
+    }
+    showToast(isLooping ? I18nModule.t('toast_loop_on') : I18nModule.t('toast_loop_off'), 'info');
+  }
+
+  function updateLoopUI() {
+    playerVideoEl.loop = isLooping;
+    if (loopBtnEl) {
+      loopBtnEl.classList.toggle('active', isLooping);
+      loopBtnEl.title = isLooping
+        ? I18nModule.t('player_loop_title_on')
+        : I18nModule.t('player_loop_title_off');
+    }
+  }
+
+  if (autoNextBtnEl) {
+    autoNextBtnEl.addEventListener('click', toggleAutoNext);
+  }
+  loopBtnEl.addEventListener('click', toggleLoop);
 
   speedBtnEl.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -2082,8 +2121,13 @@
       } else if (e.key === ']' || e.key === 'PageDown') {
         nextVideo();
         e.preventDefault();
+      } else if (e.key === 'c' || e.key === 'C') {
+        if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+          toggleAutoNext();
+          e.preventDefault();
+        }
       } else if (e.key === 'r' || e.key === 'R') {
-        loopBtnEl.click();
+        toggleLoop();
         e.preventDefault();
       } else if (e.key === 's' || e.key === 'S' || e.key === 'Enter') {
         selectAndCloseBtnEl.click();
@@ -2220,6 +2264,25 @@
           isMuted = initMuted;
         }
         syncVolumeUI();
+
+        if (typeof message.autoNext === 'boolean') {
+          isAutoNext = message.autoNext;
+        } else {
+          try {
+            const savedAuto = localStorage.getItem('antigravity_video_autonext');
+            if (savedAuto !== null) isAutoNext = savedAuto === 'true';
+          } catch (_) {}
+        }
+        if (typeof message.loop === 'boolean') {
+          isLooping = message.loop;
+        } else {
+          try {
+            const savedLoop = localStorage.getItem('antigravity_video_loop');
+            if (savedLoop !== null) isLooping = savedLoop === 'true';
+          } catch (_) {}
+        }
+        updateAutoNextUI();
+        updateLoopUI();
 
         folderNameEl.textContent = folderNameStr;
         folderInfoEl.title = currentFolder;

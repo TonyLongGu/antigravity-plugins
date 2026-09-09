@@ -162,22 +162,6 @@
             <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
           </button>
 
-          <!-- 快退 5 秒 -->
-          <button id="rewindBtn" class="ctrl-btn" data-i18n-title="ctrl_rewind_title" title="快退 5 秒 (J / ←)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/>
-            </svg>
-            <span class="ctrl-subtext">-5s</span>
-          </button>
-
-          <!-- 快進 5 秒 -->
-          <button id="forwardBtn" class="ctrl-btn" data-i18n-title="ctrl_forward_title" title="快進 5 秒 (L / →)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M13 17l5-5-5-5M6 17l5-5-5-5"/>
-            </svg>
-            <span class="ctrl-subtext">+5s</span>
-          </button>
-
           <!-- 上一首 -->
           <button id="prevBtn" class="ctrl-btn" data-i18n-title="player_prev_title" title="上一首 (← / [)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -215,6 +199,14 @@
 
         <!-- 右側：功能操作群組 -->
         <div class="controls-right">
+          <!-- 自動連續播放開關 (預設關閉：播完單曲即停止) -->
+          <button id="autoNextBtn" class="ctrl-btn" data-i18n-title="player_autonext_title" title="自動播放下一首開關 (C)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h11M3 12h8M3 18h8"/>
+              <polygon points="16 10 22 14 16 18 16 10" fill="currentColor"/>
+            </svg>
+          </button>
+
           <!-- 單曲循環開關 -->
           <button id="loopBtn" class="ctrl-btn" data-i18n-title="player_loop_title" title="單曲循環開關 (R)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -260,9 +252,10 @@
           <!-- 以系統播放器開啟 (完全比照 Video Viewer) -->
           <button id="ctrlOpenExternalBtn" class="ctrl-btn" data-i18n-title="ctrl_open_external_title" title="以系統播放器開啟 (O)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-              <polyline points="15 3 21 3 21 9"></polyline>
-              <line x1="10" y1="14" x2="21" y2="3"></line>
+              <path d="M15.033 9.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56V7.648a.645.645 0 0 1 .967-.56z"></path>
+              <path d="M12 17v4"></path>
+              <path d="M8 21h8"></path>
+              <rect x="2" y="3" width="20" height="14" rx="2"></rect>
             </svg>
           </button>
 

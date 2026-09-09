@@ -245,25 +245,9 @@
   const selectAndCloseBtnEl = document.getElementById('selectAndCloseBtn');
   const toastContainerEl = document.getElementById('toastContainer');
 
-  // 4. Toast 通知系統
+  // 4. Toast 通知系統 (已依需求移除彈窗訊息，杜絕遮擋畫面內容)
   function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-
-    let iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
-    if (type === 'success') {
-      iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-    } else if (type === 'warn') {
-      iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
-    }
-
-    toast.innerHTML = `${iconSvg}<span>${message}</span>`;
-    toastContainerEl.appendChild(toast);
-
-    setTimeout(() => {
-      toast.classList.add('hiding');
-      setTimeout(() => toast.remove(), 250);
-    }, 2800);
+    // 彈窗訊息已停用
   }
 
   // 5. 狀態持久化 (State Persistence)

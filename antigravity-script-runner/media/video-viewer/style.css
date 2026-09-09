@@ -984,8 +984,9 @@ body.has-selection .card-select-btn,
 
 .speed-menu {
   position: absolute;
-  top: 34px;
+  bottom: 100%;
   right: 0;
+  margin-bottom: 8px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 8px;
@@ -1262,6 +1263,11 @@ body.has-selection .card-select-btn,
   background-color: rgba(255, 255, 255, 0.15);
 }
 
+.ctrl-btn.active {
+  color: var(--cyan);
+  background-color: rgba(6, 182, 212, 0.15);
+}
+
 .ctrl-btn:focus,
 .ctrl-btn:focus-visible {
   outline: none !important;
@@ -1439,10 +1445,10 @@ body.has-selection .card-select-btn,
    浮動通知 (Toast Notification - 全面對齊 image-viewer 質感)
    ============================================================================== */
 .toast-container {
+  display: none !important;
   position: fixed;
   bottom: 20px;
   right: 20px;
-  display: flex;
   flex-direction: column;
   gap: var(--space-xs);
   z-index: 9999;

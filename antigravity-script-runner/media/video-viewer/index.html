@@ -174,32 +174,6 @@
 
       <!-- 右側：檢視操作按鈕組 -->
       <div class="player-header-right">
-        <!-- 循環播放切換 -->
-        <button id="loopBtn" class="btn-icon" data-i18n-title="player_loop_title" title="循環播放開關 (R)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="m17 2 4 4-4 4"></path>
-            <path d="M3 11v-1a4 4 0 0 1 4-4h14"></path>
-            <path d="m7 22-4-4 4-4"></path>
-            <path d="M21 13v1a4 4 0 0 1-4 4H3"></path>
-          </svg>
-        </button>
-
-        <!-- 播放倍速下拉 -->
-        <div class="speed-dropdown-wrapper">
-          <button id="speedBtn" class="btn-icon btn-text" data-i18n-title="player_speed_title" title="切換播放速度">1.0x</button>
-          <div class="speed-menu" id="speedMenu" style="display: none;">
-            <div class="speed-item" data-speed="0.5">0.5x</div>
-            <div class="speed-item" data-speed="0.75">0.75x</div>
-            <div class="speed-item is-active" data-speed="1.0">1.0x</div>
-            <div class="speed-item" data-speed="1.25">1.25x</div>
-            <div class="speed-item" data-speed="1.5">1.5x</div>
-            <div class="speed-item" data-speed="2.0">2.0x</div>
-          </div>
-        </div>
-
-
-
-
         <!-- 關閉並在畫廊選取 -->
         <button id="selectAndCloseBtn" class="btn-icon" data-i18n-title="player_select_and_close_title" title="關閉播放器並在畫廊中選取此影片 (S / Enter)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -254,22 +228,6 @@
             <svg class="icon-pause" viewBox="0 0 24 24" fill="currentColor" style="display:none;"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
           </button>
 
-          <!-- 快退 5 秒 -->
-          <button id="rewindBtn" class="ctrl-btn" data-i18n-title="ctrl_rewind_title" title="快退 5 秒 (J / ←)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/>
-            </svg>
-            <span class="ctrl-subtext">-5s</span>
-          </button>
-
-          <!-- 快進 5 秒 -->
-          <button id="forwardBtn" class="ctrl-btn" data-i18n-title="ctrl_forward_title" title="快進 5 秒 (L / →)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M13 17l5-5-5-5M6 17l5-5-5-5"/>
-            </svg>
-            <span class="ctrl-subtext">+5s</span>
-          </button>
-
           <!-- 時間顯示 -->
           <div class="time-display" id="timeDisplay">
             <span id="currentTimeText">00:00</span> / <span id="durationText">00:00</span>
@@ -277,6 +235,36 @@
         </div>
 
         <div class="controls-right">
+          <!-- 自動連續播放開關 (預設關閉：播完單部即停止) -->
+          <button id="autoNextBtn" class="ctrl-btn" data-i18n-title="player_autonext_title" title="自動播放下一部開關 (C)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h11M3 12h8M3 18h8"/>
+              <polygon points="16 10 22 14 16 18 16 10" fill="currentColor"/>
+            </svg>
+          </button>
+
+          <!-- 循環播放開關 -->
+          <button id="loopBtn" class="ctrl-btn" data-i18n-title="player_loop_title" title="循環播放開關 (R)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m17 2 4 4-4 4"></path>
+              <path d="M3 11v-1a4 4 0 0 1 4-4h14"></path>
+              <path d="m7 22-4-4 4-4"></path>
+              <path d="M21 13v1a4 4 0 0 1-4 4H3"></path>
+            </svg>
+          </button>
+
+          <!-- 播放倍速切換 -->
+          <div class="speed-dropdown-wrapper">
+            <button id="speedBtn" class="ctrl-btn btn-text" data-i18n-title="player_speed_title" title="切換播放速度">1.0x</button>
+            <div class="speed-menu" id="speedMenu" style="display: none;">
+              <div class="speed-item" data-speed="0.5">0.5x</div>
+              <div class="speed-item" data-speed="0.75">0.75x</div>
+              <div class="speed-item is-active" data-speed="1.0">1.0x</div>
+              <div class="speed-item" data-speed="1.25">1.25x</div>
+              <div class="speed-item" data-speed="1.5">1.5x</div>
+              <div class="speed-item" data-speed="2.0">2.0x</div>
+            </div>
+          </div>
           <!-- 音量控制組 -->
           <div class="volume-control-group">
             <button id="volumeBtn" class="ctrl-btn" data-i18n-title="ctrl_mute_title" title="靜音切換 (M)">
@@ -299,9 +287,10 @@
           <!-- 以系統播放器開啟 -->
           <button id="ctrlOpenExternalBtn" class="ctrl-btn" data-i18n-title="ctrl_open_external_title" title="以系統播放器開啟 (O)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-              <polyline points="15 3 21 3 21 9"></polyline>
-              <line x1="10" y1="14" x2="21" y2="3"></line>
+              <path d="M15.033 9.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56V7.648a.645.645 0 0 1 .967-.56z"></path>
+              <path d="M12 17v4"></path>
+              <path d="M8 21h8"></path>
+              <rect x="2" y="3" width="20" height="14" rx="2"></rect>
             </svg>
           </button>
 

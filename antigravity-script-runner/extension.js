@@ -705,6 +705,16 @@ class VideoViewerPanel {
           }
         }
         break;
+      case 'saveAutoNext':
+        if (VideoViewerPanel.globalState && typeof msg.autoNext === 'boolean') {
+          await VideoViewerPanel.globalState.update('antigravity.videoViewer.autoNext', msg.autoNext);
+        }
+        break;
+      case 'saveLoop':
+        if (VideoViewerPanel.globalState && typeof msg.loop === 'boolean') {
+          await VideoViewerPanel.globalState.update('antigravity.videoViewer.loop', msg.loop);
+        }
+        break;
       case 'deleteFiles':
         if (Array.isArray(msg.filePaths) && msg.filePaths.length > 0) {
           const count = msg.filePaths.length;
@@ -794,6 +804,12 @@ class VideoViewerPanel {
         const savedLastVolume = VideoViewerPanel.globalState
           ? VideoViewerPanel.globalState.get('antigravity.videoViewer.lastVolume', 0.5)
           : 0.5;
+        const savedAutoNext = VideoViewerPanel.globalState
+          ? VideoViewerPanel.globalState.get('antigravity.videoViewer.autoNext', false)
+          : false;
+        const savedLoop = VideoViewerPanel.globalState
+          ? VideoViewerPanel.globalState.get('antigravity.videoViewer.loop', false)
+          : false;
         this.panel.webview.postMessage({
           type: 'initData',
           folderPath: this.folderPath,
@@ -805,6 +821,8 @@ class VideoViewerPanel {
           volume: savedVolume,
           muted: savedMuted,
           lastVolume: savedLastVolume,
+          autoNext: savedAutoNext,
+          loop: savedLoop,
           targetFilePath: this.initialVideoPath
         });
         this.initialVideoPath = null;
@@ -969,6 +987,16 @@ class AudioViewerPanel {
           }
         }
         break;
+      case 'saveAutoNext':
+        if (AudioViewerPanel.globalState && typeof msg.autoNext === 'boolean') {
+          await AudioViewerPanel.globalState.update('antigravity.audioViewer.autoNext', msg.autoNext);
+        }
+        break;
+      case 'saveLoop':
+        if (AudioViewerPanel.globalState && typeof msg.loop === 'boolean') {
+          await AudioViewerPanel.globalState.update('antigravity.audioViewer.loop', msg.loop);
+        }
+        break;
       case 'deleteFiles':
         if (Array.isArray(msg.filePaths) && msg.filePaths.length > 0) {
           const count = msg.filePaths.length;
@@ -1055,6 +1083,12 @@ class AudioViewerPanel {
         const savedLastVolume = AudioViewerPanel.globalState
           ? AudioViewerPanel.globalState.get('antigravity.audioViewer.lastVolume', 0.5)
           : 0.5;
+        const savedAutoNext = AudioViewerPanel.globalState
+          ? AudioViewerPanel.globalState.get('antigravity.audioViewer.autoNext', false)
+          : false;
+        const savedLoop = AudioViewerPanel.globalState
+          ? AudioViewerPanel.globalState.get('antigravity.audioViewer.loop', false)
+          : false;
         this.panel.webview.postMessage({
           type: 'initData',
           folderPath: this.folderPath,
@@ -1065,6 +1099,8 @@ class AudioViewerPanel {
           volume: savedVolume,
           muted: savedMuted,
           lastVolume: savedLastVolume,
+          autoNext: savedAutoNext,
+          loop: savedLoop,
           targetFilePath: this.initialAudioPath
         });
         this.initialAudioPath = null;

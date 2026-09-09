@@ -1306,9 +1306,6 @@ body.has-player .batch-action-bar {
 }
 
 @media (max-width: 540px) {
-  #rewindBtn, #forwardBtn {
-    display: none;
-  }
   .volume-slider-wrapper {
     display: none;
   }
@@ -1318,10 +1315,10 @@ body.has-player .batch-action-bar {
    Toast 通知容器
    ============================================================================== */
 .toast-container {
+  display: none !important;
   position: absolute;
   top: 60px;
   right: 20px;
-  display: flex;
   flex-direction: column;
   gap: 8px;
   z-index: 100;

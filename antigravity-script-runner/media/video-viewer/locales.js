@@ -55,7 +55,12 @@
       card_reveal_title: '在系統檔案總管中顯示',
 
       // 播放器工具列與控制
+      player_autonext_title: '自動播放下一部開關 (C)',
+      player_autonext_title_on: '自動連播：已開啟 (點擊關閉 / C)',
+      player_autonext_title_off: '自動連播：已關閉（播放一次即停止，點擊開啟 / C）',
       player_loop_title: '循環播放開關 (R)',
+      player_loop_title_on: '循環播放：已開啟 (點擊關閉 / R)',
+      player_loop_title_off: '循環播放：已關閉 (點擊開啟 / R)',
       player_speed_title: '切換播放速度',
       player_select_and_close_title: '關閉播放器並在畫廊中選取此影片 (S / Enter)',
       player_close_title: '關閉播放器 (Esc / 右鍵)',
@@ -80,6 +85,8 @@
       toast_play_error: '播放失敗：{desc}',
       toast_forward: '快進 +{sec}s',
       toast_rewind: '快退 {sec}s',
+      toast_autonext_on: '已開啟自動連播（播完自動播下一部）',
+      toast_autonext_off: '已關閉自動連播（播放一次即停止）',
       toast_loop_on: '已開啟循環',
       toast_loop_off: '已關閉循環',
       toast_speed: '播放速度：{speed}x',
@@ -142,7 +149,12 @@
       card_reveal_title: 'Reveal in System File Explorer',
 
       // Player Toolbar & Controls
+      player_autonext_title: 'Toggle Auto-play Next (C)',
+      player_autonext_title_on: 'Auto-play Next: ON (Click to turn off / C)',
+      player_autonext_title_off: 'Auto-play Next: OFF (Stop after playing once, click to turn on / C)',
       player_loop_title: 'Toggle loop playback (R)',
+      player_loop_title_on: 'Loop: ON (Click to turn off / R)',
+      player_loop_title_off: 'Loop: OFF (Click to turn on / R)',
       player_speed_title: 'Change playback speed',
       player_select_and_close_title: 'Close player and select this video in gallery (S / Enter)',
       player_close_title: 'Close player (Esc / Right-click)',
@@ -167,6 +179,8 @@
       toast_play_error: 'Playback error: {desc}',
       toast_forward: 'Forward +{sec}s',
       toast_rewind: 'Rewind {sec}s',
+      toast_autonext_on: 'Auto-play next enabled (Continuous playback)',
+      toast_autonext_off: 'Auto-play next disabled (Stop after playing once)',
       toast_loop_on: 'Loop enabled',
       toast_loop_off: 'Loop disabled',
       toast_speed: 'Playback speed: {speed}x',

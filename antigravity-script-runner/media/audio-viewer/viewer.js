@@ -29,6 +29,7 @@
   let isSeeking = false;
   let currentSpeed = 1.0;
   let isLooping = false;
+  let isAutoNext = false; // 預設關閉：播完單曲即停止，不自動跳下一首
   let isMuted = false;
   let currentVolume = 0.5;
   let lastVolume = 0.5;
@@ -69,8 +70,6 @@
 
   const prevBtnEl = document.getElementById('prevBtn');
   const nextBtnEl = document.getElementById('nextBtn');
-  const rewindBtnEl = document.getElementById('rewindBtn');
-  const forwardBtnEl = document.getElementById('forwardBtn');
   const playPauseBtnEl = document.getElementById('playPauseBtn');
   const iconPlayEl = playPauseBtnEl.querySelector('.icon-play');
   const iconPauseEl = playPauseBtnEl.querySelector('.icon-pause');
@@ -83,6 +82,7 @@
   const currentTimeTextEl = document.getElementById('currentTimeText');
   const durationTextEl = document.getElementById('durationText');
 
+  const autoNextBtnEl = document.getElementById('autoNextBtn');
   const loopBtnEl = document.getElementById('loopBtn');
   const speedBtnEl = document.getElementById('speedBtn');
   const speedMenuEl = document.getElementById('speedMenu');
@@ -187,32 +187,16 @@
 
       updateCountBadges();
       updateBatchBar();
+      updateAutoNextUI();
+      updateLoopUI();
     }
   };
 
   // ============================================================================
-  // 5. Toast 訊息提示系統
+  // 5. Toast 訊息提示系統 (已依需求移除彈窗訊息，杜絕遮擋畫面內容)
   // ============================================================================
   function showToast(message, type = 'info') {
-    if (!toastContainerEl) return;
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
-
-    let iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
-    if (type === 'success') {
-      iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
-    } else if (type === 'error') {
-      iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
-    }
-
-    toast.innerHTML = `${iconSvg}<span>${message}</span>`;
-    toastContainerEl.appendChild(toast);
-
-    setTimeout(() => {
-      if (toast.parentNode) {
-        toast.parentNode.removeChild(toast);
-      }
-    }, 3000);
+    // 彈窗訊息已停用
   }
 
   // ============================================================================
@@ -291,7 +275,7 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
               </button>
               <button class="card-action-btn" data-action="external" title="${I18nModule.t('card_open_ext_title')}">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.033 9.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56V7.648a.645.645 0 0 1 .967-.56z"></path><path d="M12 17v4"></path><path d="M8 21h8"></path><rect x="2" y="3" width="20" height="14" rx="2"></rect></svg>
               </button>
               <button class="card-action-btn" data-action="reveal" title="${I18nModule.t('card_reveal_title')}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
@@ -491,6 +475,9 @@
     }
 
     if (playerAudioEl.paused) {
+      if (playerAudioEl.ended || (playerAudioEl.duration > 0 && playerAudioEl.currentTime >= playerAudioEl.duration)) {
+        playerAudioEl.currentTime = 0;
+      }
       playerAudioEl.play().catch(handlePlayError);
     } else {
       playerAudioEl.pause();
@@ -551,6 +538,7 @@
       playTrack(currentIndex + 1);
     } else {
       showToast(I18nModule.t('toast_last_audio'), 'info');
+      updatePlayPauseState(false);
     }
   }
 
@@ -580,11 +568,47 @@
     showToast(I18nModule.t('toast_speed', { speed }), 'info');
   }
 
+  function toggleAutoNext() {
+    isAutoNext = !isAutoNext;
+    updateAutoNextUI();
+    try {
+      localStorage.setItem('antigravity_audio_autonext', String(isAutoNext));
+    } catch (e) {}
+    if (vscode) {
+      vscode.postMessage({ type: 'saveAutoNext', autoNext: isAutoNext });
+    }
+    showToast(isAutoNext ? I18nModule.t('toast_autonext_on') : I18nModule.t('toast_autonext_off'), 'info');
+  }
+
+  function updateAutoNextUI() {
+    if (autoNextBtnEl) {
+      autoNextBtnEl.classList.toggle('active', isAutoNext);
+      autoNextBtnEl.title = isAutoNext
+        ? I18nModule.t('player_autonext_title_on')
+        : I18nModule.t('player_autonext_title_off');
+    }
+  }
+
   function toggleLoop() {
     isLooping = !isLooping;
-    playerAudioEl.loop = isLooping;
-    loopBtnEl.classList.toggle('active', isLooping);
+    updateLoopUI();
+    try {
+      localStorage.setItem('antigravity_audio_loop', String(isLooping));
+    } catch (e) {}
+    if (vscode) {
+      vscode.postMessage({ type: 'saveLoop', loop: isLooping });
+    }
     showToast(isLooping ? I18nModule.t('toast_loop_on') : I18nModule.t('toast_loop_off'), 'info');
+  }
+
+  function updateLoopUI() {
+    playerAudioEl.loop = isLooping;
+    if (loopBtnEl) {
+      loopBtnEl.classList.toggle('active', isLooping);
+      loopBtnEl.title = isLooping
+        ? I18nModule.t('player_loop_title_on')
+        : I18nModule.t('player_loop_title_off');
+    }
   }
 
   function updateVolume(val) {
@@ -968,7 +992,11 @@
         const action = actionBtn.dataset.action;
         if (action === 'play-btn') {
           e.stopPropagation();
-          playTrack(idx);
+          if (currentIndex === idx) {
+            togglePlayPause();
+          } else {
+            playTrack(idx);
+          }
           return;
         } else if (action === 'copy') {
           e.stopPropagation();
@@ -1024,8 +1052,7 @@
     playPauseBtnEl.addEventListener('click', togglePlayPause);
     prevBtnEl.addEventListener('click', playPrev);
     nextBtnEl.addEventListener('click', playNext);
-    rewindBtnEl.addEventListener('click', () => seekRelative(-5));
-    forwardBtnEl.addEventListener('click', () => seekRelative(5));
+    if (autoNextBtnEl) autoNextBtnEl.addEventListener('click', toggleAutoNext);
     loopBtnEl.addEventListener('click', toggleLoop);
     closePlayerBtnEl.addEventListener('click', closeDockedPlayer);
 
@@ -1090,9 +1117,22 @@
       handlePlayError(err || new Error('音訊解碼失敗'));
     });
     playerAudioEl.addEventListener('ended', () => {
-      if (!isLooping) {
-        playNext();
+      if (isLooping) {
+        playerAudioEl.currentTime = 0;
+        playerAudioEl.play().catch(handlePlayError);
+        return;
       }
+
+      if (isAutoNext) {
+        playNext();
+        return;
+      }
+
+      // 預設行為：播放一次就停止
+      updatePlayPauseState(false);
+      currentTimeTextEl.textContent = formatTime(playerAudioEl.duration || 0);
+      progressBarPlayedEl.style.width = '100%';
+      progressThumbEl.style.left = '100%';
     });
 
     playerAudioEl.addEventListener('timeupdate', () => {
@@ -1187,6 +1227,11 @@
         case 'KeyM':
           toggleMute();
           break;
+        case 'KeyC':
+          if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+            toggleAutoNext();
+          }
+          break;
         case 'KeyR':
           toggleLoop();
           break;
@@ -1261,6 +1306,25 @@
             lastVolume = msg.lastVolume;
           }
           updateVolumeIcon();
+
+          if (typeof msg.autoNext === 'boolean') {
+            isAutoNext = msg.autoNext;
+          } else {
+            try {
+              const savedAuto = localStorage.getItem('antigravity_audio_autonext');
+              if (savedAuto !== null) isAutoNext = savedAuto === 'true';
+            } catch (e) {}
+          }
+          if (typeof msg.loop === 'boolean') {
+            isLooping = msg.loop;
+          } else {
+            try {
+              const savedLoop = localStorage.getItem('antigravity_audio_loop');
+              if (savedLoop !== null) isLooping = savedLoop === 'true';
+            } catch (e) {}
+          }
+          updateAutoNextUI();
+          updateLoopUI();
 
           applyFilterAndSort();
 
