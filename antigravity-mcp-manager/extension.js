@@ -242,6 +242,11 @@ class MCPManagerViewProvider {
       }
     } catch (err) {
       console.error('MCP Manager Data Refresh Error:', err);
+      if (this._statusBarItem) {
+        this._statusBarItem.text = '$(plug) MCP: 讀取失敗';
+        this._statusBarItem.tooltip = `MCP 設定讀取失敗：${err.message}`;
+        this._statusBarItem.show();
+      }
       const errorPayload = { type: 'error', message: err.message };
       if (this._view) this._view.webview.postMessage(errorPayload);
       if (this._panel) this._panel.webview.postMessage(errorPayload);
@@ -304,6 +309,7 @@ async function activate(context) {
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 40);
   statusBarItem.command = 'antigravity.mcp.focusView';
   statusBarItem.text = `$(plug) MCP: 載入中...`;
+  statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
   const provider = new MCPManagerViewProvider(context.extensionUri, statusBarItem);

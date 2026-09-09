@@ -11,7 +11,9 @@
 		"Other"
 	],
 	"main": "./extension.js",
-	"activationEvents": [],
+	"activationEvents": [
+		"onStartupFinished"
+	],
 	"contributes": {
 		"configuration": {
 			"title": "Antigravity",
