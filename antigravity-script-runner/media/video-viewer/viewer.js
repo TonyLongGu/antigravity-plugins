@@ -993,14 +993,17 @@
         <div class="card-title" title="${video.fullPath}">${video.fileName}</div>
         <div class="card-meta-row">
           <div class="card-actions">
+            <button class="card-action-btn locate-ide-btn" title="${I18nModule.t('card_locate_ide_title')}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
+            </button>
             <button class="card-action-btn copy-btn" title="${I18nModule.t('card_copy_btn_title')}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
             </button>
-            <button class="card-action-btn open-ext-btn" title="${I18nModule.t('card_open_ext_title')}">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.033 9.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56V7.648a.645.645 0 0 1 .967-.56z"></path><path d="M12 17v4"></path><path d="M8 21h8"></path><rect x="2" y="3" width="20" height="14" rx="2"></rect></svg>
-            </button>
             <button class="card-action-btn reveal-btn" title="${I18nModule.t('card_reveal_title')}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+            </button>
+            <button class="card-action-btn open-ext-btn" title="${I18nModule.t('card_open_ext_title')}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.033 9.44a.647.647 0 0 1 0 1.12l-4.065 2.352a.645.645 0 0 1-.968-.56V7.648a.645.645 0 0 1 .967-.56z"></path><path d="M12 17v4"></path><path d="M8 21h8"></path><rect x="2" y="3" width="20" height="14" rx="2"></rect></svg>
             </button>
           </div>
           <span class="card-date" title="${video.mtimeMs ? new Date(video.mtimeMs).toLocaleString() : ''}">${video.mtimeMs ? new Date(video.mtimeMs).toLocaleDateString() : ''}</span>
@@ -1092,13 +1095,6 @@
     });
 
     // 快速複製路徑
-    const copyBtn = card.querySelector('.copy-btn');
-    copyBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      copyToClipboard(video.fullPath);
-      showToast(I18nModule.t('toast_copy_success', { file: video.fileName }), 'success');
-    });
-
     // 以系統播放器開啟
     const openExtBtn = card.querySelector('.open-ext-btn');
     if (openExtBtn) {
@@ -1114,6 +1110,17 @@
       });
     }
 
+    // 跳轉到 IDE 檔案總管
+    const locateIdeBtn = card.querySelector('.locate-ide-btn');
+    if (locateIdeBtn) {
+      locateIdeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (vscode) {
+          vscode.postMessage({ type: 'revealInIde', filePath: video.fullPath });
+        }
+      });
+    }
+
     // 在系統總管中定位
     const revealBtn = card.querySelector('.reveal-btn');
     revealBtn.addEventListener('click', (e) => {
@@ -1121,6 +1128,14 @@
       if (vscode) {
         vscode.postMessage({ type: 'revealFile', filePath: video.fullPath });
       }
+    });
+
+    // 複製路徑
+    const copyBtn = card.querySelector('.copy-btn');
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      copyToClipboard(video.fullPath);
+      showToast(I18nModule.t('toast_copy_success', { file: video.fileName }), 'success');
     });
 
     return card;

@@ -39,8 +39,9 @@
 
       // 卡片動作
       card_select_title: '選取圖片 (Shift+點選加選)',
-      card_copy_path_title: '複製路徑',
+      card_locate_ide_title: '跳轉到檔案總管',
       card_reveal_title: '在系統檔案總管顯示',
+      card_copy_path_title: '複製路徑',
       card_path_prefix: '路徑: ',
 
       // 底部批量操作
@@ -116,8 +117,9 @@
 
       // 卡片動作
       card_select_title: 'Select image (Shift + click to add)',
-      card_copy_path_title: 'Copy Path',
+      card_locate_ide_title: 'Reveal in IDE Explorer',
       card_reveal_title: 'Reveal in System File Explorer',
+      card_copy_path_title: 'Copy Path',
       card_path_prefix: 'Path: ',
 
       // 底部批量操作

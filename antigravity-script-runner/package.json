@@ -2,7 +2,7 @@
 	"name": "antigravity-script-runner",
 	"displayName": "腳本右鍵執行工具 (Script Runner)",
 	"description": "在 Antigravity IDE 檔案總管與編輯器為 .bat、.cmd、.ps1、.py 腳本提供右鍵與右上角 ▶ 按鈕執行功能（在內建 PowerShell 終端機安全執行）",
-	"version": "1.5.0",
+	"version": "1.6.1",
 	"publisher": "antigravity-toolkit",
 	"engines": {
 		"vscode": "^1.80.0"
@@ -13,6 +13,38 @@
 	"main": "./extension.js",
 	"activationEvents": [],
 	"contributes": {
+		"customEditors": [
+			{
+				"viewType": "scriptRunner.imageViewer",
+				"displayName": "圖片檢視器 (Image Viewer)",
+				"selector": [
+					{
+						"filenamePattern": "*.{png,jpg,jpeg,webp,gif,svg,bmp,ico,avif,tif,tiff,jfif,PNG,JPG,JPEG,WEBP,GIF,SVG,BMP,ICO,AVIF,TIF,TIFF,JFIF}"
+					}
+				],
+				"priority": "default"
+			},
+			{
+				"viewType": "scriptRunner.audioViewer",
+				"displayName": "聲音檢視器 (Audio Viewer)",
+				"selector": [
+					{
+						"filenamePattern": "*.{mp3,wav,ogg,flac,aac,m4a,wma,aif,aiff,opus,weba,MP3,WAV,OGG,FLAC,AAC,M4A,WMA,AIF,AIFF,OPUS,WEBA}"
+					}
+				],
+				"priority": "default"
+			},
+			{
+				"viewType": "scriptRunner.videoViewer",
+				"displayName": "影片播放器 (Video Viewer)",
+				"selector": [
+					{
+						"filenamePattern": "*.{mp4,webm,mkv,mov,avi,wmv,flv,m4v,ts,ogv,MP4,WEBM,MKV,MOV,AVI,WMV,FLV,M4V,TS,OGV}"
+					}
+				],
+				"priority": "default"
+			}
+		],
 		"configuration": {
 			"title": "腳本右鍵執行工具 (Script Runner)",
 			"properties": {

@@ -81,6 +81,63 @@ function getRunnerConfig() {
 }
 
 /**
+ * 多媒體自訂編輯器 Provider (實作 vscode.CustomReadonlyEditorProvider)
+ */
+class MediaCustomEditorProvider {
+  /**
+   * @param {vscode.ExtensionContext} context
+   * @param {'image'|'audio'|'video'} type
+   */
+  constructor(context, type) {
+    this.context = context;
+    this.type = type;
+  }
+
+  /**
+   * @param {vscode.Uri} uri
+   * @returns {vscode.CustomDocument}
+   */
+  openCustomDocument(uri) {
+    return {
+      uri,
+      dispose() {}
+    };
+  }
+
+  /**
+   * @param {vscode.CustomDocument} document
+   * @param {vscode.WebviewPanel} webviewPanel
+   */
+  async resolveCustomEditor(document, webviewPanel) {
+    const fileUri = document.uri;
+    const folderUri = vscode.Uri.file(path.dirname(fileUri.fsPath));
+
+    const localResourceRoots = [
+      this.context.extensionUri,
+      folderUri
+    ];
+    if (vscode.workspace.workspaceFolders) {
+      for (const wf of vscode.workspace.workspaceFolders) {
+        localResourceRoots.push(wf.uri);
+      }
+    }
+
+    webviewPanel.webview.options = {
+      enableScripts: true,
+      localResourceRoots
+    };
+
+    if (this.type === 'image') {
+      new ImageViewerPanel(webviewPanel, this.context.extensionUri, folderUri, fileUri.fsPath);
+    } else if (this.type === 'audio') {
+      new AudioViewerPanel(webviewPanel, this.context.extensionUri, folderUri, fileUri.fsPath);
+    } else if (this.type === 'video') {
+      new VideoViewerPanel(webviewPanel, this.context.extensionUri, folderUri, fileUri.fsPath);
+    }
+  }
+}
+
+/**
  * 擴充套件啟動進入點
  * @param {vscode.ExtensionContext} context
  */
@@ -314,7 +371,30 @@ function activate(context) {
   AudioViewerPanel.globalState = context.globalState;
   VideoViewerPanel.globalState = context.globalState;
 
+  const customEditorOptions = {
+    webviewOptions: {
+      retainContextWhenHidden: true
+    },
+    supportsMultipleEditorsPerDocument: false
+  };
+
   context.subscriptions.push(
+    // 註冊 IDE 檔案總管預設開檔自訂編輯器 (Custom Editors)
+    vscode.window.registerCustomEditorProvider(
+      'scriptRunner.imageViewer',
+      new MediaCustomEditorProvider(context, 'image'),
+      customEditorOptions
+    ),
+    vscode.window.registerCustomEditorProvider(
+      'scriptRunner.audioViewer',
+      new MediaCustomEditorProvider(context, 'audio'),
+      customEditorOptions
+    ),
+    vscode.window.registerCustomEditorProvider(
+      'scriptRunner.videoViewer',
+      new MediaCustomEditorProvider(context, 'video'),
+      customEditorOptions
+    ),
     vscode.commands.registerCommand('scriptRunner.viewFolderImages', viewFolderImagesHandler),
     vscode.commands.registerCommand('scriptRunner.viewFolderImages.en', viewFolderImagesHandler),
     vscode.commands.registerCommand('scriptRunner.viewFolderAudios', viewFolderAudiosHandler),
@@ -436,7 +516,7 @@ class FolderWatcher {
  * 內容區圖片檢視器 WebviewPanel 控制器
  */
 class ImageViewerPanel {
-  static currentPanels = new Map();
+  static currentPanels = new Set();
   static globalState = null;
 
   /**
@@ -444,7 +524,7 @@ class ImageViewerPanel {
    * @param {string} locale
    */
   static broadcastLocale(locale) {
-    for (const panelInstance of ImageViewerPanel.currentPanels.values()) {
+    for (const panelInstance of ImageViewerPanel.currentPanels) {
       if (panelInstance && panelInstance.panel) {
         panelInstance.panel.webview.postMessage({ type: 'localeChanged', locale });
       }
@@ -459,16 +539,17 @@ class ImageViewerPanel {
    */
   static async createOrShow(extensionUri, folderUri, initialImagePath = null) {
     const folderPath = folderUri.fsPath;
-    const existing = ImageViewerPanel.currentPanels.get(folderPath);
-    if (existing) {
-      existing.panel.reveal(vscode.ViewColumn.Active);
-      if (initialImagePath) {
-        existing.panel.webview.postMessage({
-          type: 'openTargetImage',
-          filePath: initialImagePath
-        });
+    for (const existing of ImageViewerPanel.currentPanels) {
+      if (existing.folderPath === folderPath && existing.panel) {
+        existing.panel.reveal(vscode.ViewColumn.Active);
+        if (initialImagePath) {
+          existing.panel.webview.postMessage({
+            type: 'openTargetImage',
+            filePath: initialImagePath
+          });
+        }
+        return;
       }
-      return;
     }
 
     const folderName = path.basename(folderPath);
@@ -486,8 +567,7 @@ class ImageViewerPanel {
       }
     );
 
-    const instance = new ImageViewerPanel(panel, extensionUri, folderUri, initialImagePath);
-    ImageViewerPanel.currentPanels.set(folderPath, instance);
+    new ImageViewerPanel(panel, extensionUri, folderUri, initialImagePath);
   }
 
   constructor(panel, extensionUri, folderUri, initialImagePath = null) {
@@ -499,6 +579,7 @@ class ImageViewerPanel {
     this.initialImagePath = initialImagePath;
     this.isRecursive = false;
     this._disposables = [];
+    this._isDisposed = false;
 
     // 自動監聽資料夾內容異動（防抖節流並靜默無感重新整理）
     this.folderWatcher = new FolderWatcher(
@@ -511,15 +592,21 @@ class ImageViewerPanel {
     this.panel.webview.onDidReceiveMessage((msg) => this._handleMessage(msg), null, this._disposables);
 
     this.panel.webview.html = this._getHtmlForWebview(this.panel.webview);
+    ImageViewerPanel.currentPanels.add(this);
   }
 
   dispose() {
+    if (this._isDisposed) return;
+    this._isDisposed = true;
+
     if (this.folderWatcher) {
       this.folderWatcher.dispose();
       this.folderWatcher = null;
     }
-    ImageViewerPanel.currentPanels.delete(this.folderPath);
-    this.panel.dispose();
+    ImageViewerPanel.currentPanels.delete(this);
+    try {
+      this.panel.dispose();
+    } catch (_) {}
     while (this._disposables.length) {
       const d = this._disposables.pop();
       if (d) d.dispose();
@@ -544,6 +631,15 @@ class ImageViewerPanel {
       case 'revealFile':
         if (msg.filePath) {
           await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(msg.filePath));
+        }
+        break;
+      case 'revealInIde':
+        if (msg.filePath) {
+          try {
+            await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(msg.filePath));
+          } catch (err) {
+            console.error('[ImageViewer] revealInExplorer 失敗:', err);
+          }
         }
         break;
       case 'saveThumbSize':
@@ -684,7 +780,7 @@ class ImageViewerPanel {
  * 內容區影片檢視器 WebviewPanel 控制器
  */
 class VideoViewerPanel {
-  static currentPanels = new Map();
+  static currentPanels = new Set();
   static globalState = null;
 
   /**
@@ -692,7 +788,7 @@ class VideoViewerPanel {
    * @param {string} locale
    */
   static broadcastLocale(locale) {
-    for (const panelInstance of VideoViewerPanel.currentPanels.values()) {
+    for (const panelInstance of VideoViewerPanel.currentPanels) {
       if (panelInstance && panelInstance.panel) {
         panelInstance.panel.webview.postMessage({ type: 'localeChanged', locale });
       }
@@ -707,16 +803,17 @@ class VideoViewerPanel {
    */
   static async createOrShow(extensionUri, folderUri, initialVideoPath = null) {
     const folderPath = folderUri.fsPath;
-    const existing = VideoViewerPanel.currentPanels.get(folderPath);
-    if (existing) {
-      existing.panel.reveal(vscode.ViewColumn.Active);
-      if (initialVideoPath) {
-        existing.panel.webview.postMessage({
-          type: 'openTargetVideo',
-          filePath: initialVideoPath
-        });
+    for (const existing of VideoViewerPanel.currentPanels) {
+      if (existing.folderPath === folderPath && existing.panel) {
+        existing.panel.reveal(vscode.ViewColumn.Active);
+        if (initialVideoPath) {
+          existing.panel.webview.postMessage({
+            type: 'openTargetVideo',
+            filePath: initialVideoPath
+          });
+        }
+        return;
       }
-      return;
     }
 
     const folderName = path.basename(folderPath);
@@ -734,8 +831,7 @@ class VideoViewerPanel {
       }
     );
 
-    const instance = new VideoViewerPanel(panel, extensionUri, folderUri, initialVideoPath);
-    VideoViewerPanel.currentPanels.set(folderPath, instance);
+    new VideoViewerPanel(panel, extensionUri, folderUri, initialVideoPath);
   }
 
   constructor(panel, extensionUri, folderUri, initialVideoPath = null) {
@@ -747,6 +843,7 @@ class VideoViewerPanel {
     this.initialVideoPath = initialVideoPath;
     this.isRecursive = false;
     this._disposables = [];
+    this._isDisposed = false;
 
     // 增加伺服器活躍引用計數
     videoStreamServer.retain();
@@ -762,17 +859,23 @@ class VideoViewerPanel {
     this.panel.webview.onDidReceiveMessage((msg) => this._handleMessage(msg), null, this._disposables);
 
     this.panel.webview.html = this._getHtmlForWebview(this.panel.webview);
+    VideoViewerPanel.currentPanels.add(this);
   }
 
   dispose() {
+    if (this._isDisposed) return;
+    this._isDisposed = true;
+
     if (this.folderWatcher) {
       this.folderWatcher.dispose();
       this.folderWatcher = null;
     }
     // 釋放伺服器活躍引用計數（歸零則啟動延遲自動休眠）
     videoStreamServer.release();
-    VideoViewerPanel.currentPanels.delete(this.folderPath);
-    this.panel.dispose();
+    VideoViewerPanel.currentPanels.delete(this);
+    try {
+      this.panel.dispose();
+    } catch (_) {}
     while (this._disposables.length) {
       const d = this._disposables.pop();
       if (d) d.dispose();
@@ -797,6 +900,15 @@ class VideoViewerPanel {
       case 'revealFile':
         if (msg.filePath) {
           await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(msg.filePath));
+        }
+        break;
+      case 'revealInIde':
+        if (msg.filePath) {
+          try {
+            await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(msg.filePath));
+          } catch (err) {
+            console.error('[VideoViewer] revealInExplorer 失敗:', err);
+          }
         }
         break;
       case 'saveThumbSize':
@@ -990,7 +1102,7 @@ class VideoViewerPanel {
  * 內容區聲音檢視器 WebviewPanel 控制器
  */
 class AudioViewerPanel {
-  static currentPanels = new Map();
+  static currentPanels = new Set();
   static globalState = null;
 
   /**
@@ -998,7 +1110,7 @@ class AudioViewerPanel {
    * @param {string} locale
    */
   static broadcastLocale(locale) {
-    for (const panelInstance of AudioViewerPanel.currentPanels.values()) {
+    for (const panelInstance of AudioViewerPanel.currentPanels) {
       if (panelInstance && panelInstance.panel) {
         panelInstance.panel.webview.postMessage({ type: 'localeChanged', locale });
       }
@@ -1013,16 +1125,17 @@ class AudioViewerPanel {
    */
   static async createOrShow(extensionUri, folderUri, initialAudioPath = null) {
     const folderPath = folderUri.fsPath;
-    const existing = AudioViewerPanel.currentPanels.get(folderPath);
-    if (existing) {
-      existing.panel.reveal(vscode.ViewColumn.Active);
-      if (initialAudioPath) {
-        existing.panel.webview.postMessage({
-          type: 'openTargetAudio',
-          filePath: initialAudioPath
-        });
+    for (const existing of AudioViewerPanel.currentPanels) {
+      if (existing.folderPath === folderPath && existing.panel) {
+        existing.panel.reveal(vscode.ViewColumn.Active);
+        if (initialAudioPath) {
+          existing.panel.webview.postMessage({
+            type: 'openTargetAudio',
+            filePath: initialAudioPath
+          });
+        }
+        return;
       }
-      return;
     }
 
     const folderName = path.basename(folderPath);
@@ -1040,8 +1153,7 @@ class AudioViewerPanel {
       }
     );
 
-    const instance = new AudioViewerPanel(panel, extensionUri, folderUri, initialAudioPath);
-    AudioViewerPanel.currentPanels.set(folderPath, instance);
+    new AudioViewerPanel(panel, extensionUri, folderUri, initialAudioPath);
   }
 
   constructor(panel, extensionUri, folderUri, initialAudioPath = null) {
@@ -1053,6 +1165,7 @@ class AudioViewerPanel {
     this.initialAudioPath = initialAudioPath;
     this.isRecursive = false;
     this._disposables = [];
+    this._isDisposed = false;
 
     // 增加伺服器活躍引用計數
     audioStreamServer.retain();
@@ -1068,17 +1181,23 @@ class AudioViewerPanel {
     this.panel.webview.onDidReceiveMessage((msg) => this._handleMessage(msg), null, this._disposables);
 
     this.panel.webview.html = this._getHtmlForWebview(this.panel.webview);
+    AudioViewerPanel.currentPanels.add(this);
   }
 
   dispose() {
+    if (this._isDisposed) return;
+    this._isDisposed = true;
+
     if (this.folderWatcher) {
       this.folderWatcher.dispose();
       this.folderWatcher = null;
     }
     // 釋放伺服器活躍引用計數（歸零則啟動延遲自動休眠）
     audioStreamServer.release();
-    AudioViewerPanel.currentPanels.delete(this.folderPath);
-    this.panel.dispose();
+    AudioViewerPanel.currentPanels.delete(this);
+    try {
+      this.panel.dispose();
+    } catch (_) {}
     while (this._disposables.length) {
       const d = this._disposables.pop();
       if (d) d.dispose();
@@ -1103,6 +1222,15 @@ class AudioViewerPanel {
       case 'revealFile':
         if (msg.filePath) {
           await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(msg.filePath));
+        }
+        break;
+      case 'revealInIde':
+        if (msg.filePath) {
+          try {
+            await vscode.commands.executeCommand('revealInExplorer', vscode.Uri.file(msg.filePath));
+          } catch (err) {
+            console.error('[AudioViewer] revealInExplorer 失敗:', err);
+          }
         }
         break;
       case 'saveCardSize':

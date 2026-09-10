@@ -52,6 +52,7 @@
       card_select_title: '選取此影片',
       card_copy_btn_title: '複製完整路徑',
       card_open_ext_title: '以系統播放器開啟 (O)',
+      card_locate_ide_title: '跳轉到檔案總管',
       card_reveal_title: '在系統檔案總管中顯示',
 
       // 播放器工具列與控制
@@ -146,6 +147,7 @@
       card_select_title: 'Select video',
       card_copy_btn_title: 'Copy full path',
       card_open_ext_title: 'Open with system player (O)',
+      card_locate_ide_title: 'Reveal in IDE Explorer',
       card_reveal_title: 'Reveal in System File Explorer',
 
       // Player Toolbar & Controls

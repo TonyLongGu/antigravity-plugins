@@ -374,6 +374,9 @@
         <img class="card-thumb" src="${img.uri}" loading="lazy" alt="${img.fileName}" />
         <span class="card-ext-badge" data-ext="${(img.ext || '').toLowerCase()}">${(img.ext || '').toUpperCase()}</span>
         <div class="card-actions">
+          <button class="card-action-btn locate-ide-btn" title="${I18nModule.t('card_locate_ide_title')}" data-index="${idx}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg>
+          </button>
           <button class="card-action-btn copy-btn" title="${I18nModule.t('card_copy_path_title')}" data-index="${idx}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
           </button>
@@ -427,12 +430,15 @@
     });
 
     // 快速動作按鈕事件
-    const copyBtn = card.querySelector('.copy-btn');
-    copyBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      copyToClipboard(img.fullPath);
-      showToast(I18nModule.t('toast_path_copied', { name: img.fileName }), 'success');
-    });
+    const locateIdeBtn = card.querySelector('.locate-ide-btn');
+    if (locateIdeBtn) {
+      locateIdeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (vscode) {
+          vscode.postMessage({ type: 'revealInIde', filePath: img.fullPath });
+        }
+      });
+    }
 
     const revealBtn = card.querySelector('.reveal-btn');
     revealBtn.addEventListener('click', (e) => {
@@ -440,6 +446,13 @@
       if (vscode) {
         vscode.postMessage({ type: 'revealFile', filePath: img.fullPath });
       }
+    });
+
+    const copyBtn = card.querySelector('.copy-btn');
+    copyBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      copyToClipboard(img.fullPath);
+      showToast(I18nModule.t('toast_path_copied', { name: img.fileName }), 'success');
     });
 
     // 讀取圖片原始長寬並更新標籤
