@@ -110,7 +110,7 @@ class QuotaService {
    */
   _getLsProcesses() {
     return new Promise((resolve) => {
-      const cmd = `powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process -Filter \\"Name = 'language_server_windows_x64.exe'\\" | Select-Object ProcessId, CommandLine | ConvertTo-Json"`;
+      const cmd = `powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process -Filter \\"Name = 'language_server_windows_x64.exe'\\" | Sort-Object CreationDate -Descending | Select-Object ProcessId, CommandLine | ConvertTo-Json"`;
       exec(cmd, (err, stdout) => {
         if (err || !stdout) return resolve([]);
         try {
@@ -165,7 +165,7 @@ class QuotaService {
         path: `/exa.language_server_pb.LanguageServerService/${methodName}`,
         method: 'POST',
         rejectUnauthorized: false,
-        timeout: 1500,
+        timeout: 3000,
         headers: {
           'Content-Type': 'application/json',
           'x-codeium-csrf-token': csrf,
@@ -219,13 +219,51 @@ class QuotaService {
     }
 
     const extractBucket = (group, windowType) => {
-      const bucket = group?.buckets?.find(b => b.window === windowType || b.bucketId?.includes(windowType));
+      const targetWindow = (windowType || '').toLowerCase();
+      const bucket = group?.buckets?.find(b => {
+        const win = (b.window || '').toLowerCase();
+        const id = (b.bucketId || '').toLowerCase();
+        const title = (b.displayName || '').toLowerCase();
+        return win === targetWindow || id.includes(targetWindow) || title.includes(targetWindow);
+      });
+
       if (!bucket) {
+        const isWeekly = targetWindow === 'weekly';
+        // 若該帳號方案根本未提供 5 小時配額 (例如非 Pro 帳號)，標記為 exists: false
+        if (!isWeekly) {
+          return {
+            exists: false,
+            percent: null,
+            rawFraction: null,
+            resetTime: null,
+            refreshText: '不適用',
+            dailyBudget: null,
+            deviation: null,
+            isWarning: false
+          };
+        }
+
+        // 若為每週配額但找不到，嘗試歷史快取
+        const groupKey = (group?.displayName || '').toLowerCase().includes('claude') ? 'claude' : 'gemini';
+        const cachedGroup = this._cachedQuota?.[groupKey];
+        const cachedBucket = cachedGroup?.weekly;
+
+        if (cachedBucket && cachedBucket.percent !== undefined && cachedBucket.percent !== UNLIMITED && cachedBucket.percent !== -1) {
+          return {
+            ...cachedBucket,
+            exists: true,
+            refreshText: cachedBucket.refreshText || '額度充足'
+          };
+        }
+
         return {
-          percent: -1,
-          rawFraction: -1,
+          exists: true,
+          percent: 100,
+          rawFraction: 1.0,
           resetTime: null,
-          refreshText: '無限制',
+          refreshText: '額度充足',
+          dailyBudget: { isUnlimited: false, usablePercent: 100, displayText: '100%' },
+          deviation: { isUnlimited: false, usablePercent: 0, displayText: '+0.0%' },
           isWarning: false
         };
       }
@@ -238,10 +276,11 @@ class QuotaService {
 
       const pct = Math.round(frac * 100);
       return {
+        exists: true,
         percent: pct,
         rawFraction: frac,
         resetTime: bucket.resetTime || null,
-        refreshText: this._formatResetTime(bucket.resetTime, pct === -1),
+        refreshText: this._formatResetTime(bucket.resetTime, pct === UNLIMITED),
         dailyBudget: this.calculateDailyBudget(pct, bucket.resetTime || null),
         deviation: this.calculateDeviation(pct, bucket.resetTime || null),
         isWarning: pct <= 20
@@ -254,18 +293,18 @@ class QuotaService {
     const c5h = extractBucket(claudeGroup, '5h');
 
     // 計算主要即時受限配額 (Primary Active Quota: 取較低/有實質約束的那個)
-    const getPrimary = (bWk, b5h, defaultType = '5h') => {
-      if (bWk.percent !== -1 && b5h.percent !== -1) {
+    const getPrimary = (bWk, b5h, defaultType = 'weekly') => {
+      if (bWk?.exists && b5h?.exists && bWk.percent !== null && b5h.percent !== null) {
         return b5h.percent <= bWk.percent
           ? { ...b5h, type: '5h' }
           : { ...bWk, type: 'weekly' };
       }
-      if (b5h.percent !== -1) return { ...b5h, type: '5h' };
-      if (bWk.percent !== -1) return { ...bWk, type: 'weekly' };
-      return { percent: -1, type: defaultType, refreshText: '無限制', isWarning: false, resetTime: null };
+      if (bWk?.exists && bWk.percent !== null) return { ...bWk, type: 'weekly' };
+      if (b5h?.exists && b5h.percent !== null) return { ...b5h, type: '5h' };
+      return { exists: false, percent: 100, type: defaultType, refreshText: '額度充足', isWarning: false, resetTime: null };
     };
 
-    const gPri = getPrimary(gWk, g5h, '5h');
+    const gPri = getPrimary(gWk, g5h, 'weekly');
     const cPri = getPrimary(cWk, c5h, 'weekly');
 
     return {
@@ -302,15 +341,23 @@ class QuotaService {
     const tierName = userStatus?.planStatus?.planInfo?.planName || userStatus?.userTier?.name || 'Pro';
     const isPaidTier = !userStatus?.userTier?.id?.includes('free') && /pro|team|enterprise|ultimate/i.test(tierName);
 
+    // 優先繼承歷史快取的每週配額與重置時間（Last Known Good State）
+    const cachedGeminiWeekly = this._cachedQuota?.gemini?.weekly;
+    const cachedClaudeWeekly = this._cachedQuota?.claude?.weekly;
+
     let geminiFiveHourFraction = UNLIMITED;
     let geminiFiveHourReset = null;
-    let geminiWeeklyFraction = isPaidTier ? UNLIMITED : 1.0;
-    let geminiWeeklyReset = null;
+    let geminiWeeklyFraction = (cachedGeminiWeekly && cachedGeminiWeekly.rawFraction !== undefined && cachedGeminiWeekly.rawFraction !== UNLIMITED && cachedGeminiWeekly.rawFraction !== -1)
+      ? cachedGeminiWeekly.rawFraction
+      : 1.0;
+    let geminiWeeklyReset = cachedGeminiWeekly?.resetTime || null;
 
     let claudeFiveHourFraction = UNLIMITED;
     let claudeFiveHourReset = null;
-    let claudeWeeklyFraction = 1.0;
-    let claudeWeeklyReset = null;
+    let claudeWeeklyFraction = (cachedClaudeWeekly && cachedClaudeWeekly.rawFraction !== undefined && cachedClaudeWeekly.rawFraction !== UNLIMITED && cachedClaudeWeekly.rawFraction !== -1)
+      ? cachedClaudeWeekly.rawFraction
+      : 1.0;
+    let claudeWeeklyReset = cachedClaudeWeekly?.resetTime || null;
 
     const extractFraction = (quota) => {
       if (quota.remainingFraction !== undefined && quota.remainingFraction !== null) {
@@ -358,13 +405,28 @@ class QuotaService {
     const claude5hPct = toPercent(claudeFiveHourFraction);
     const claudeWeeklyPct = toPercent(claudeWeeklyFraction);
 
-    const gPri = gemini5hPct !== UNLIMITED
-      ? { percent: gemini5hPct, type: '5h', refreshText: this._formatResetTime(geminiFiveHourReset), resetTime: geminiFiveHourReset, isWarning: gemini5hPct <= 20 }
-      : { percent: geminiWeeklyPct, type: 'weekly', refreshText: this._formatResetTime(geminiWeeklyReset, geminiWeeklyPct === UNLIMITED), resetTime: geminiWeeklyReset, isWarning: geminiWeeklyPct <= 20 };
+    const cachedG5hExists = this._cachedQuota?.gemini?.fiveHour?.exists;
+    const cachedC5hExists = this._cachedQuota?.claude?.fiveHour?.exists;
+    const geminiHas5h = cachedG5hExists !== undefined ? cachedG5hExists : (geminiFiveHourFraction !== UNLIMITED && geminiFiveHourReset !== null);
+    const claudeHas5h = cachedC5hExists !== undefined ? cachedC5hExists : (claudeFiveHourFraction !== UNLIMITED && claudeFiveHourReset !== null);
 
-    const cPri = claudeWeeklyPct !== UNLIMITED
-      ? { percent: claudeWeeklyPct, type: 'weekly', refreshText: this._formatResetTime(claudeWeeklyReset), resetTime: claudeWeeklyReset, isWarning: claudeWeeklyPct <= 20 }
-      : { percent: claude5hPct, type: '5h', refreshText: this._formatResetTime(claudeFiveHourReset), resetTime: claudeFiveHourReset, isWarning: claude5hPct <= 20 };
+    const getFallbackPrimary = (pctWk, resetWk, has5h, pct5h, reset5h, defaultType = 'weekly') => {
+      if (pctWk !== UNLIMITED && has5h && pct5h !== UNLIMITED) {
+        return pct5h <= pctWk
+          ? { exists: true, percent: pct5h, type: '5h', refreshText: this._formatResetTime(reset5h), resetTime: reset5h, isWarning: pct5h <= 20 }
+          : { exists: true, percent: pctWk, type: 'weekly', refreshText: this._formatResetTime(resetWk, pctWk === UNLIMITED), resetTime: resetWk, isWarning: pctWk <= 20 };
+      }
+      if (pctWk !== UNLIMITED) {
+        return { exists: true, percent: pctWk, type: 'weekly', refreshText: this._formatResetTime(resetWk, pctWk === UNLIMITED), resetTime: resetWk, isWarning: pctWk <= 20 };
+      }
+      if (has5h && pct5h !== UNLIMITED) {
+        return { exists: true, percent: pct5h, type: '5h', refreshText: this._formatResetTime(reset5h), resetTime: reset5h, isWarning: pct5h <= 20 };
+      }
+      return { exists: false, percent: 100, type: defaultType, refreshText: '額度充足', isWarning: false, resetTime: null };
+    };
+
+    const gPri = getFallbackPrimary(geminiWeeklyPct, geminiWeeklyReset, geminiHas5h, gemini5hPct, geminiFiveHourReset, 'weekly');
+    const cPri = getFallbackPrimary(claudeWeeklyPct, claudeWeeklyReset, claudeHas5h, claude5hPct, claudeFiveHourReset, 'weekly');
 
     return {
       success: true,
@@ -373,14 +435,46 @@ class QuotaService {
       gemini: {
         name: 'Gemini Models',
         primary: gPri,
-        fiveHour: { percent: gemini5hPct, rawFraction: geminiFiveHourFraction, refreshText: this._formatResetTime(geminiFiveHourReset), resetTime: geminiFiveHourReset, isWarning: gemini5hPct <= 20 },
-        weekly: { percent: geminiWeeklyPct, rawFraction: geminiWeeklyFraction, refreshText: this._formatResetTime(geminiWeeklyReset, geminiWeeklyPct === UNLIMITED), resetTime: geminiWeeklyReset, dailyBudget: this.calculateDailyBudget(geminiWeeklyPct, geminiWeeklyReset), deviation: this.calculateDeviation(geminiWeeklyPct, geminiWeeklyReset), isWarning: geminiWeeklyPct <= 20 }
+        fiveHour: {
+          exists: geminiHas5h,
+          percent: geminiHas5h ? gemini5hPct : null,
+          rawFraction: geminiHas5h ? geminiFiveHourFraction : null,
+          refreshText: geminiHas5h ? this._formatResetTime(geminiFiveHourReset) : '不適用',
+          resetTime: geminiHas5h ? geminiFiveHourReset : null,
+          isWarning: geminiHas5h ? gemini5hPct <= 20 : false
+        },
+        weekly: {
+          exists: true,
+          percent: geminiWeeklyPct,
+          rawFraction: geminiWeeklyFraction,
+          refreshText: this._formatResetTime(geminiWeeklyReset, geminiWeeklyPct === UNLIMITED),
+          resetTime: geminiWeeklyReset,
+          dailyBudget: this.calculateDailyBudget(geminiWeeklyPct, geminiWeeklyReset),
+          deviation: this.calculateDeviation(geminiWeeklyPct, geminiWeeklyReset),
+          isWarning: geminiWeeklyPct <= 20
+        }
       },
       claude: {
         name: 'Claude and GPT models',
         primary: cPri,
-        fiveHour: { percent: claude5hPct, rawFraction: claudeFiveHourFraction, refreshText: this._formatResetTime(claudeFiveHourReset), resetTime: claudeFiveHourReset, isWarning: claude5hPct <= 20 },
-        weekly: { percent: claudeWeeklyPct, rawFraction: claudeWeeklyFraction, refreshText: this._formatResetTime(claudeWeeklyReset), resetTime: claudeWeeklyReset, dailyBudget: this.calculateDailyBudget(claudeWeeklyPct, claudeWeeklyReset), deviation: this.calculateDeviation(claudeWeeklyPct, claudeWeeklyReset), isWarning: claudeWeeklyPct <= 20 }
+        fiveHour: {
+          exists: claudeHas5h,
+          percent: claudeHas5h ? claude5hPct : null,
+          rawFraction: claudeHas5h ? claudeFiveHourFraction : null,
+          refreshText: claudeHas5h ? this._formatResetTime(claudeFiveHourReset) : '不適用',
+          resetTime: claudeHas5h ? claudeFiveHourReset : null,
+          isWarning: claudeHas5h ? claude5hPct <= 20 : false
+        },
+        weekly: {
+          exists: true,
+          percent: claudeWeeklyPct,
+          rawFraction: claudeWeeklyFraction,
+          refreshText: this._formatResetTime(claudeWeeklyReset),
+          resetTime: claudeWeeklyReset,
+          dailyBudget: this.calculateDailyBudget(claudeWeeklyPct, claudeWeeklyReset),
+          deviation: this.calculateDeviation(claudeWeeklyPct, claudeWeeklyReset),
+          isWarning: claudeWeeklyPct <= 20
+        }
       }
     };
   }
@@ -588,15 +682,15 @@ class QuotaService {
       },
       gemini: {
         name: 'Gemini Models',
-        primary: { percent: 100, type: '5h', refreshText: '檢查中...', isWarning: false },
-        fiveHour: { percent: 100, refreshText: '檢查中...', isWarning: false },
-        weekly: { percent: 100, refreshText: '檢查中...', dailyBudget: { displayText: '檢查中...' }, isWarning: false }
+        primary: { exists: true, percent: 100, type: 'weekly', refreshText: '檢查中...', isWarning: false },
+        fiveHour: { exists: false, percent: null, refreshText: '檢查中...', isWarning: false },
+        weekly: { exists: true, percent: 100, refreshText: '檢查中...', dailyBudget: { displayText: '檢查中...' }, isWarning: false }
       },
       claude: {
         name: 'Claude and GPT models',
-        primary: { percent: 100, type: 'weekly', refreshText: '檢查中...', isWarning: false },
-        fiveHour: { percent: 100, refreshText: '檢查中...', isWarning: false },
-        weekly: { percent: 100, refreshText: '檢查中...', dailyBudget: { displayText: '檢查中...' }, isWarning: false }
+        primary: { exists: true, percent: 100, type: 'weekly', refreshText: '檢查中...', isWarning: false },
+        fiveHour: { exists: false, percent: null, refreshText: '檢查中...', isWarning: false },
+        weekly: { exists: true, percent: 100, refreshText: '檢查中...', dailyBudget: { displayText: '檢查中...' }, isWarning: false }
       }
     };
   }
