@@ -2387,6 +2387,17 @@
           I18nModule.applyLanguage(message.locale, true);
         }
         break;
+
+      case 'refocus':
+        window.focus();
+        if (playerModalEl && playerModalEl.classList.contains('active')) {
+          if (typeof playerModalEl.focus === 'function') {
+            playerModalEl.focus();
+          }
+        } else {
+          document.body.focus();
+        }
+        break;
     }
   });
 

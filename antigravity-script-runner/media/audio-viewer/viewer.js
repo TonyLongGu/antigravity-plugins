@@ -1418,6 +1418,11 @@
         case 'toast':
           showToast(msg.text || '', msg.level || 'info');
           break;
+
+        case 'refocus':
+          window.focus();
+          document.body.focus();
+          break;
       }
     });
 

@@ -579,6 +579,13 @@ class ImageViewerPanel {
             });
             await this._sendImages(true);
           }
+          // 對話框關閉後（無論確認刪除或取消），重新將焦點歸還給 Webview 面板
+          setTimeout(() => {
+            if (this.panel && this.panel.visible) {
+              this.panel.reveal(this.panel.viewColumn || vscode.ViewColumn.Active, false);
+              this.panel.webview.postMessage({ type: 'refocus' });
+            }
+          }, 80);
         }
         break;
       case 'saveRotatedImages':
@@ -855,6 +862,13 @@ class VideoViewerPanel {
             });
             await this._sendVideos(true);
           }
+          // 對話框關閉後（無論確認刪除或取消），重新將焦點歸還給 Webview 面板
+          setTimeout(() => {
+            if (this.panel && this.panel.visible) {
+              this.panel.reveal(this.panel.viewColumn || vscode.ViewColumn.Active, false);
+              this.panel.webview.postMessage({ type: 'refocus' });
+            }
+          }, 80);
         }
         break;
       case 'openWithDefaultApp':
@@ -1149,6 +1163,13 @@ class AudioViewerPanel {
             });
             await this._sendAudios(true);
           }
+          // 對話框關閉後（無論確認刪除或取消），重新將焦點歸還給 Webview 面板
+          setTimeout(() => {
+            if (this.panel && this.panel.visible) {
+              this.panel.reveal(this.panel.viewColumn || vscode.ViewColumn.Active, false);
+              this.panel.webview.postMessage({ type: 'refocus' });
+            }
+          }, 80);
         }
         break;
       case 'openWithDefaultApp':

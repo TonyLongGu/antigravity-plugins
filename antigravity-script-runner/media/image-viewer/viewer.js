@@ -617,6 +617,12 @@
     rotation = 0;
     lightboxModalEl.classList.add('active');
 
+    // 確保放大圖容器獲得焦點，能直接接收鍵盤快捷鍵 (如 Delete, 左右鍵, Esc)
+    window.focus();
+    if (typeof lightboxModalEl.focus === 'function') {
+      lightboxModalEl.focus();
+    }
+
     // 導航按鈕狀態
     prevBtnEl.style.opacity = currentIndex > 0 ? '1' : '0.3';
     nextBtnEl.style.opacity = currentIndex < filteredImages.length - 1 ? '1' : '0.3';
@@ -1420,6 +1426,17 @@
       case 'localeChanged':
         if (message.locale && (message.locale === 'zh-TW' || message.locale === 'en')) {
           I18nModule.applyLanguage(message.locale, true);
+        }
+        break;
+
+      case 'refocus':
+        window.focus();
+        if (lightboxModalEl && lightboxModalEl.classList.contains('active')) {
+          if (typeof lightboxModalEl.focus === 'function') {
+            lightboxModalEl.focus();
+          }
+        } else {
+          document.body.focus();
         }
         break;
     }
