@@ -344,6 +344,95 @@ function activate(context) {
 }
 
 /**
+ * 輕量資料夾檔案異動監聽器 (支援 Windows 遞迴監聽與智慧防抖)
+ */
+class FolderWatcher {
+  /**
+   * @param {string} folderPath 欲監聽的資料夾絕對路徑
+   * @param {Function} onChange 當檢測到相符變更時的回呼函式
+   * @param {Set<string>|null} filterExts 關注的副檔名集合
+   * @param {number} debounceMs 防抖毫秒數，預設 600ms
+   */
+  constructor(folderPath, onChange, filterExts = null, debounceMs = 600) {
+    this.folderPath = folderPath;
+    this.onChange = onChange;
+    this.filterExts = filterExts;
+    this.debounceMs = debounceMs;
+    this.timer = null;
+    this.watcher = null;
+    this._isDisposed = false;
+
+    this._start();
+  }
+
+  _start() {
+    try {
+      if (!fs.existsSync(this.folderPath)) return;
+
+      // 在 Windows 環境下，{ recursive: true } 底層調用 ReadDirectoryChangesW，支援遞迴監聽
+      this.watcher = fs.watch(this.folderPath, { recursive: true }, (eventType, filename) => {
+        if (this._isDisposed) return;
+
+        if (filename) {
+          const lower = filename.toLowerCase();
+          // 過濾常見系統暫存檔、編輯器鎖定檔與版本控制目錄
+          if (
+            lower.startsWith('.') ||
+            lower.includes('/.') ||
+            lower.includes('\\.') ||
+            lower.endsWith('.tmp') ||
+            lower.endsWith('.crdownload') ||
+            lower.endsWith('.part') ||
+            lower.endsWith('~')
+          ) {
+            return;
+          }
+
+          // 若指定了副檔名白名單，且檔案具有副檔名，非白名單副檔名則略過
+          if (this.filterExts) {
+            const ext = path.extname(lower);
+            // 注意：若沒有副檔名 (ext === '')，可能是資料夾被新增/重命名/刪除，仍需觸發重新整理
+            if (ext && !this.filterExts.has(ext)) {
+              return;
+            }
+          }
+        }
+
+        // 防抖節流 (Debounce)
+        if (this.timer) {
+          clearTimeout(this.timer);
+        }
+        this.timer = setTimeout(() => {
+          if (!this._isDisposed) {
+            this.onChange();
+          }
+        }, this.debounceMs);
+      });
+
+      this.watcher.on('error', (err) => {
+        console.warn(`[FolderWatcher] 監聽器警告 (${this.folderPath}):`, err);
+      });
+    } catch (err) {
+      console.warn(`[FolderWatcher] 無法建立監聽器 (${this.folderPath}):`, err);
+    }
+  }
+
+  dispose() {
+    this._isDisposed = true;
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    if (this.watcher) {
+      try {
+        this.watcher.close();
+      } catch (_) {}
+      this.watcher = null;
+    }
+  }
+}
+
+/**
  * 內容區圖片檢視器 WebviewPanel 控制器
  */
 class ImageViewerPanel {
@@ -411,6 +500,13 @@ class ImageViewerPanel {
     this.isRecursive = false;
     this._disposables = [];
 
+    // 自動監聽資料夾內容異動（防抖節流並靜默無感重新整理）
+    this.folderWatcher = new FolderWatcher(
+      this.folderPath,
+      () => this._sendImages(true, true),
+      imageService.SUPPORTED_IMAGE_EXTS
+    );
+
     this.panel.onDidDispose(() => this.dispose(), null, this._disposables);
     this.panel.webview.onDidReceiveMessage((msg) => this._handleMessage(msg), null, this._disposables);
 
@@ -418,6 +514,10 @@ class ImageViewerPanel {
   }
 
   dispose() {
+    if (this.folderWatcher) {
+      this.folderWatcher.dispose();
+      this.folderWatcher = null;
+    }
     ImageViewerPanel.currentPanels.delete(this.folderPath);
     this.panel.dispose();
     while (this._disposables.length) {
@@ -517,13 +617,14 @@ class ImageViewerPanel {
     }
   }
 
-  async _sendImages(isUpdate = false) {
+  async _sendImages(isUpdate = false, isSilent = false) {
     try {
       const images = await imageService.scanImages(this.folderPath, this.isRecursive, this.panel.webview);
       if (isUpdate) {
         this.panel.webview.postMessage({
           type: 'updateImages',
-          images
+          images,
+          isSilent
         });
       } else {
         const savedThumbSize = ImageViewerPanel.globalState
@@ -643,6 +744,13 @@ class VideoViewerPanel {
     // 增加伺服器活躍引用計數
     videoStreamServer.retain();
 
+    // 自動監聽資料夾內容異動（防抖節流並靜默無感重新整理）
+    this.folderWatcher = new FolderWatcher(
+      this.folderPath,
+      () => this._sendVideos(true, true),
+      videoService.SUPPORTED_VIDEO_EXTS
+    );
+
     this.panel.onDidDispose(() => this.dispose(), null, this._disposables);
     this.panel.webview.onDidReceiveMessage((msg) => this._handleMessage(msg), null, this._disposables);
 
@@ -650,6 +758,10 @@ class VideoViewerPanel {
   }
 
   dispose() {
+    if (this.folderWatcher) {
+      this.folderWatcher.dispose();
+      this.folderWatcher = null;
+    }
     // 釋放伺服器活躍引用計數（歸零則啟動延遲自動休眠）
     videoStreamServer.release();
     VideoViewerPanel.currentPanels.delete(this.folderPath);
@@ -780,13 +892,14 @@ class VideoViewerPanel {
     }
   }
 
-  async _sendVideos(isUpdate = false) {
+  async _sendVideos(isUpdate = false, isSilent = false) {
     try {
       const videos = await videoService.scanVideos(this.folderPath, this.isRecursive, this.panel.webview);
       if (isUpdate) {
         this.panel.webview.postMessage({
           type: 'updateVideos',
-          videos
+          videos,
+          isSilent
         });
       } else {
         const savedThumbSize = VideoViewerPanel.globalState
@@ -930,6 +1043,13 @@ class AudioViewerPanel {
     // 增加伺服器活躍引用計數
     audioStreamServer.retain();
 
+    // 自動監聽資料夾內容異動（防抖節流並靜默無感重新整理）
+    this.folderWatcher = new FolderWatcher(
+      this.folderPath,
+      () => this._sendAudios(true, true),
+      audioService.SUPPORTED_AUDIO_EXTS
+    );
+
     this.panel.onDidDispose(() => this.dispose(), null, this._disposables);
     this.panel.webview.onDidReceiveMessage((msg) => this._handleMessage(msg), null, this._disposables);
 
@@ -937,6 +1057,10 @@ class AudioViewerPanel {
   }
 
   dispose() {
+    if (this.folderWatcher) {
+      this.folderWatcher.dispose();
+      this.folderWatcher = null;
+    }
     // 釋放伺服器活躍引用計數（歸零則啟動延遲自動休眠）
     audioStreamServer.release();
     AudioViewerPanel.currentPanels.delete(this.folderPath);
@@ -1062,13 +1186,14 @@ class AudioViewerPanel {
     }
   }
 
-  async _sendAudios(isUpdate = false) {
+  async _sendAudios(isUpdate = false, isSilent = false) {
     try {
       const audios = await audioService.scanAudios(this.folderPath, this.isRecursive, this.panel.webview);
       if (isUpdate) {
         this.panel.webview.postMessage({
           type: 'updateAudios',
-          audios
+          audios,
+          isSilent
         });
       } else {
         const savedCardSize = AudioViewerPanel.globalState

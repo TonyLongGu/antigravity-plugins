@@ -2337,7 +2337,11 @@
         }
         break;
 
-      case 'updateVideos':
+      case 'updateVideos': {
+        const currentPlayingVideo = (currentIndex >= 0 && currentIndex < filteredVideos.length)
+          ? filteredVideos[currentIndex]
+          : null;
+
         allVideos = message.videos || [];
         videoCountBadgeEl.textContent = I18nModule.t('video_count_badge', { count: allVideos.length });
 
@@ -2348,15 +2352,22 @@
 
         applyFilterAndSort();
 
-        if (playerModalEl.classList.contains('active') && currentIndex >= 0) {
-          if (currentIndex >= filteredVideos.length) {
-            closePlayer();
-          } else {
+        // 若大播放器正開啟，依據絕對路徑精準校正 currentIndex 與數量，若被外部刪除則關閉
+        if (playerModalEl.classList.contains('active') && currentPlayingVideo) {
+          const newIdx = filteredVideos.findIndex(v => v.fullPath === currentPlayingVideo.fullPath);
+          if (newIdx !== -1) {
+            currentIndex = newIdx;
             playerIndexBadgeEl.textContent = `${currentIndex + 1} / ${filteredVideos.length}`;
+          } else {
+            closePlayer();
           }
         }
-        showToast(I18nModule.t('toast_refresh_success', { count: allVideos.length }), 'success');
+
+        if (!message.isSilent) {
+          showToast(I18nModule.t('toast_refresh_success', { count: allVideos.length }), 'success');
+        }
         break;
+      }
 
       case 'toast':
         showToast(message.text, message.level || 'info');

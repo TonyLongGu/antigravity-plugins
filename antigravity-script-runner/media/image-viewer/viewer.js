@@ -243,6 +243,7 @@
   const zoomFitBtnEl = document.getElementById('zoomFitBtn');
   const zoomActualBtnEl = document.getElementById('zoomActualBtn');
   const selectAndCloseBtnEl = document.getElementById('selectAndCloseBtn');
+  const lightboxDeleteBtnEl = document.getElementById('lightboxDeleteBtn');
   const toastContainerEl = document.getElementById('toastContainer');
 
   // 4. Toast 通知系統 (已依需求移除彈窗訊息，杜絕遮擋畫面內容)
@@ -1244,6 +1245,23 @@
     }
   });
 
+  // 刪除當前大圖檢視的圖片 (送往後端彈出確認視窗後移至資源回收筒)
+  function deleteCurrentLightboxImage() {
+    if (currentIndex >= 0 && currentIndex < filteredImages.length) {
+      const cur = filteredImages[currentIndex];
+      if (vscode) {
+        vscode.postMessage({
+          type: 'deleteFiles',
+          filePaths: [cur.fullPath]
+        });
+      }
+    }
+  }
+
+  if (lightboxDeleteBtnEl) {
+    lightboxDeleteBtnEl.addEventListener('click', deleteCurrentLightboxImage);
+  }
+
   // 14. 全域鍵盤快速鍵
   window.addEventListener('keydown', (e) => {
     // 若在大圖檢視模式
@@ -1268,6 +1286,9 @@
         e.preventDefault();
       } else if (e.key === 's' || e.key === 'S' || e.key === 'Enter') {
         selectAndCloseBtnEl.click();
+        e.preventDefault();
+      } else if (e.key === 'Delete' || e.key === 'Del') {
+        deleteCurrentLightboxImage();
         e.preventDefault();
       }
     } else {
@@ -1353,7 +1374,11 @@
         }
         break;
 
-      case 'updateImages':
+      case 'updateImages': {
+        const currentViewingImage = (currentIndex >= 0 && currentIndex < filteredImages.length)
+          ? filteredImages[currentIndex]
+          : null;
+
         allImages = message.images || [];
         imgCountBadgeEl.textContent = I18nModule.t('img_count_badge', { count: allImages.length });
 
@@ -1365,16 +1390,28 @@
 
         applyFilterAndSort();
 
-        // 若大圖視窗正開啟，同步更新當前資訊
-        if (lightboxModalEl.classList.contains('active') && currentIndex >= 0) {
-          if (currentIndex >= filteredImages.length) {
-            closeLightbox();
-          } else {
+        // 若大圖視窗正開啟，依據絕對路徑精準校正 currentIndex 與數量，若被刪除則切換至下一張或關閉
+        if (lightboxModalEl.classList.contains('active') && currentViewingImage) {
+          const newIdx = filteredImages.findIndex(img => img.fullPath === currentViewingImage.fullPath);
+          if (newIdx !== -1) {
+            currentIndex = newIdx;
             lightboxIndexBadgeEl.textContent = `${currentIndex + 1} / ${filteredImages.length}`;
+          } else {
+            // 正在檢視的圖片被刪除：若仍有剩餘圖片則平滑顯示下一張（或最後一張），若無圖片則退出檢視器
+            if (filteredImages.length > 0) {
+              const targetIdx = Math.min(currentIndex, filteredImages.length - 1);
+              openLightbox(targetIdx);
+            } else {
+              closeLightbox();
+            }
           }
         }
-        showToast(I18nModule.t('toast_refresh_done', { count: allImages.length }), 'success');
+
+        if (!message.isSilent) {
+          showToast(I18nModule.t('toast_refresh_done', { count: allImages.length }), 'success');
+        }
         break;
+      }
 
       case 'toast':
         showToast(message.text, message.level || 'info');

@@ -570,6 +570,17 @@ body.is-right-dragging {
   color: #ffffff;
 }
 
+#lightboxDeleteBtn:hover {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #ef4444;
+}
+
+#lightboxDeleteBtn svg {
+  width: 14px;
+  height: 14px;
+}
+
 .lightbox-title-box {
   display: flex;
   flex-direction: column;

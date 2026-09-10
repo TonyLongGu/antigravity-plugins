@@ -1369,11 +1369,36 @@
           }
           break;
 
-        case 'updateAudios':
+        case 'updateAudios': {
+          const currentPlayingAudio = (currentIndex >= 0 && currentIndex < filteredAudios.length)
+            ? filteredAudios[currentIndex]
+            : null;
+
           allAudios = Array.isArray(msg.audios) ? msg.audios : [];
+
+          // 清理已被刪除或不存在的選取路徑
+          selectedPaths.forEach(p => {
+            if (!allAudios.some(a => a.fullPath === p)) selectedPaths.delete(p);
+          });
+          updateSelectionUI();
+
           applyFilterAndSort();
-          showToast(I18nModule.t('toast_refresh_success', { count: allAudios.length }), 'success');
+
+          // 保持當前播放中曲目的 index 同步與元資料更新
+          if (currentPlayingAudio) {
+            const newIdx = filteredAudios.findIndex(a => a.fullPath === currentPlayingAudio.fullPath);
+            if (newIdx !== -1) {
+              currentIndex = newIdx;
+              playerMetaEl.textContent = `${(filteredAudios[currentIndex].ext || 'AUDIO').toUpperCase()} • ${filteredAudios[currentIndex].sizeFormatted} • ${currentIndex + 1} / ${filteredAudios.length}`;
+            }
+          }
+          updatePlayingCardState();
+
+          if (!msg.isSilent) {
+            showToast(I18nModule.t('toast_refresh_success', { count: allAudios.length }), 'success');
+          }
           break;
+        }
 
         case 'openTargetAudio':
           if (msg.filePath) {
