@@ -570,6 +570,17 @@
 
   function toggleAutoNext() {
     isAutoNext = !isAutoNext;
+    // 互斥邏輯：開啟自動連播時，自動取消單曲循環
+    if (isAutoNext && isLooping) {
+      isLooping = false;
+      updateLoopUI();
+      try {
+        localStorage.setItem('antigravity_audio_loop', 'false');
+      } catch (e) {}
+      if (vscode) {
+        vscode.postMessage({ type: 'saveLoop', loop: false });
+      }
+    }
     updateAutoNextUI();
     try {
       localStorage.setItem('antigravity_audio_autonext', String(isAutoNext));
@@ -591,6 +602,17 @@
 
   function toggleLoop() {
     isLooping = !isLooping;
+    // 互斥邏輯：開啟單曲循環時，自動取消自動連播
+    if (isLooping && isAutoNext) {
+      isAutoNext = false;
+      updateAutoNextUI();
+      try {
+        localStorage.setItem('antigravity_audio_autonext', 'false');
+      } catch (e) {}
+      if (vscode) {
+        vscode.postMessage({ type: 'saveAutoNext', autoNext: false });
+      }
+    }
     updateLoopUI();
     try {
       localStorage.setItem('antigravity_audio_loop', String(isLooping));
@@ -1322,6 +1344,16 @@
               const savedLoop = localStorage.getItem('antigravity_audio_loop');
               if (savedLoop !== null) isLooping = savedLoop === 'true';
             } catch (e) {}
+          }
+          // 互斥安全防護：若歷史儲存狀態兩者同時開啟，以單曲循環為優先，自動關閉自動連播
+          if (isLooping && isAutoNext) {
+            isAutoNext = false;
+            try {
+              localStorage.setItem('antigravity_audio_autonext', 'false');
+            } catch (e) {}
+            if (vscode) {
+              vscode.postMessage({ type: 'saveAutoNext', autoNext: false });
+            }
           }
           updateAutoNextUI();
           updateLoopUI();

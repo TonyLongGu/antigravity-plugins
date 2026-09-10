@@ -1292,12 +1292,12 @@
     }
   });
 
-  // 視窗大小改變時自動最適化與置中
-  window.addEventListener('resize', () => {
-    if (lightboxModalEl.classList.contains('active')) {
-      fitToScreen(false);
-    }
-  });
+  // 視窗大小改變時保持目前縮放與平移位置（停用自動重置，避免打斷使用者滾輪放大查看細節的狀態；若需最適視窗可點擊工具列按鈕或按快捷鍵 0）
+  // window.addEventListener('resize', () => {
+  //   if (lightboxModalEl.classList.contains('active')) {
+  //     fitToScreen(false);
+  //   }
+  // });
 
   // ==============================================================================
   // 15. Extension Host 後端通訊監聽 (IPC Message Handler)

@@ -1580,6 +1580,17 @@
   // 16. 播放倍速與循環
   function toggleAutoNext() {
     isAutoNext = !isAutoNext;
+    // 互斥邏輯：開啟自動連播時，自動取消循環播放
+    if (isAutoNext && isLooping) {
+      isLooping = false;
+      updateLoopUI();
+      try {
+        localStorage.setItem('antigravity_video_loop', 'false');
+      } catch (e) {}
+      if (vscode) {
+        vscode.postMessage({ type: 'saveLoop', loop: false });
+      }
+    }
     updateAutoNextUI();
     try {
       localStorage.setItem('antigravity_video_autonext', String(isAutoNext));
@@ -1601,6 +1612,17 @@
 
   function toggleLoop() {
     isLooping = !isLooping;
+    // 互斥邏輯：開啟循環播放時，自動取消自動連播
+    if (isLooping && isAutoNext) {
+      isAutoNext = false;
+      updateAutoNextUI();
+      try {
+        localStorage.setItem('antigravity_video_autonext', 'false');
+      } catch (e) {}
+      if (vscode) {
+        vscode.postMessage({ type: 'saveAutoNext', autoNext: false });
+      }
+    }
     updateLoopUI();
     try {
       localStorage.setItem('antigravity_video_loop', String(isLooping));
@@ -2280,6 +2302,16 @@
             const savedLoop = localStorage.getItem('antigravity_video_loop');
             if (savedLoop !== null) isLooping = savedLoop === 'true';
           } catch (_) {}
+        }
+        // 互斥安全防護：若歷史儲存狀態兩者同時開啟，以循環播放為優先，自動關閉自動連播
+        if (isLooping && isAutoNext) {
+          isAutoNext = false;
+          try {
+            localStorage.setItem('antigravity_video_autonext', 'false');
+          } catch (_) {}
+          if (vscode) {
+            vscode.postMessage({ type: 'saveAutoNext', autoNext: false });
+          }
         }
         updateAutoNextUI();
         updateLoopUI();
