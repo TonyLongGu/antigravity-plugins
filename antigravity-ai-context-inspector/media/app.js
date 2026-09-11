@@ -640,11 +640,10 @@
     } else {
       dom.listMcp.innerHTML = mcpServers.map(s => {
         const tools = s.tools || [];
-        const scopeShort = (s.scope || '').replace(/MCP Server/gi, 'Global').replace(/Workspace \(([^)]+)\)/, '$1');
+        const scopeShort = (s.scope || '').replace(/Global MCP|MCP Server/gi, 'Global').replace(/Workspace \(([^)]+)\)/, '$1');
         return `
           <div class="mcp-row-item ${s.isInvoked ? 'highlight-invoked' : ''}">
             <div class="mcp-info-left">
-              <span class="mcp-server-icon">${Codicons.server}</span>
               <span class="mcp-name">${escapeHtml(s.name)}</span>
               <span class="mcp-scope-tag" title="${escapeHtml(s.scope || '')}">${escapeHtml(scopeShort || 'Global')}</span>
             </div>

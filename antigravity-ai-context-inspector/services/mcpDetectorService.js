@@ -40,7 +40,7 @@ class McpDetectorService {
 
           servers.push({
             name: serverName,
-            scope: 'Global MCP',
+            scope: 'Global',
             path: serverPath,
             toolCount: tools.length,
             tools: tools,
