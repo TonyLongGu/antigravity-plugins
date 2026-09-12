@@ -292,13 +292,6 @@ async function updateStatusBar(forceRefresh = false) {
     md.isTrusted = true;
     md.appendMarkdown(i18n.t('tooltip_title'));
 
-    if (data?.account?.email) {
-      const email = data.account.email;
-      const name = data.account.name ? ` (${data.account.name})` : '';
-      const tier = data.account.tier ? ` · ${data.account.tier}` : '';
-      md.appendMarkdown(`> **👤 ${i18n.t('tooltip_account_label')}:** \`${email}\`${name}${tier}\n\n`);
-    }
-
     const gWkRefresh = formatResetTime(data?.gemini?.weekly?.resetTime, gWk === UNLIMITED, i18n.t('plenty'));
     const g5hRefresh = gHas5h ? formatResetTime(data?.gemini?.fiveHour?.resetTime, g5h === UNLIMITED, i18n.t('plenty')) : '';
     const gDaily = formatCalculatedText(data?.gemini?.weekly?.dailyBudget, gWk);
