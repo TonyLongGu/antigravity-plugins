@@ -338,6 +338,12 @@ body.is-right-dragging {
   background: var(--bg-card-hover);
 }
 
+.image-card:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow), 0 6px 16px rgba(0, 0, 0, 0.35);
+}
+
 /* 縮圖視窗 */
 .card-thumb-wrapper {
   position: relative;

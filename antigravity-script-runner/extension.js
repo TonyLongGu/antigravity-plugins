@@ -81,6 +81,20 @@ function getRunnerConfig() {
 }
 
 /**
+ * 跨平台安全路徑比對（在 Windows 忽略磁碟機代號大小寫與斜線方向差異）
+ * @param {string} p1
+ * @param {string} p2
+ * @returns {boolean}
+ */
+function isSamePath(p1, p2) {
+  if (!p1 || !p2) return false;
+  if (process.platform === 'win32') {
+    return p1.toLowerCase().replace(/\//g, '\\') === p2.toLowerCase().replace(/\//g, '\\');
+  }
+  return p1 === p2;
+}
+
+/**
  * 多媒體自訂編輯器 Provider (實作 vscode.CustomReadonlyEditorProvider)
  */
 class MediaCustomEditorProvider {
@@ -109,31 +123,55 @@ class MediaCustomEditorProvider {
    * @param {vscode.WebviewPanel} webviewPanel
    */
   async resolveCustomEditor(document, webviewPanel) {
+    if (!document.uri || document.uri.scheme !== 'file') {
+      return;
+    }
     const fileUri = document.uri;
     const folderUri = vscode.Uri.file(path.dirname(fileUri.fsPath));
+    const targetFilePath = fileUri.fsPath;
 
-    const localResourceRoots = [
-      this.context.extensionUri,
-      folderUri
-    ];
-    if (vscode.workspace.workspaceFolders) {
-      for (const wf of vscode.workspace.workspaceFolders) {
-        localResourceRoots.push(wf.uri);
-      }
-    }
+    // 給予空白安全 HTML，防止 VS Code Webview 內部管線產生未初始化異常
+    webviewPanel.webview.options = { enableScripts: false };
+    webviewPanel.webview.html = '<!DOCTYPE html><html><body></body></html>';
 
-    webviewPanel.webview.options = {
-      enableScripts: true,
-      localResourceRoots
-    };
-
-    if (this.type === 'image') {
-      new ImageViewerPanel(webviewPanel, this.context.extensionUri, folderUri, fileUri.fsPath);
+    // 依據檔案類型，直接轉發至以該檔案所在「上層資料夾」為實體的畫廊面板，並在該視窗中立即打開放大該特定檔案
+    if (this.type === 'video') {
+      await VideoViewerPanel.createOrShow(this.context.extensionUri, folderUri, targetFilePath);
+    } else if (this.type === 'image') {
+      await ImageViewerPanel.createOrShow(this.context.extensionUri, folderUri, targetFilePath);
     } else if (this.type === 'audio') {
-      new AudioViewerPanel(webviewPanel, this.context.extensionUri, folderUri, fileUri.fsPath);
-    } else if (this.type === 'video') {
-      new VideoViewerPanel(webviewPanel, this.context.extensionUri, folderUri, fileUri.fsPath);
+      await AudioViewerPanel.createOrShow(this.context.extensionUri, folderUri, targetFilePath);
     }
+
+    // 延遲關閉 VS Code 預設開啟的單檔過渡 Panel，並確保焦點平滑鎖定在主資料夾畫廊分頁
+    setTimeout(() => {
+      try {
+        webviewPanel.dispose();
+      } catch (_) {}
+
+      if (this.type === 'video') {
+        for (const p of VideoViewerPanel.currentPanels) {
+          if (p && isSamePath(p.folderPath, folderUri.fsPath) && p.panel) {
+            p.panel.reveal(vscode.ViewColumn.Active, false);
+            break;
+          }
+        }
+      } else if (this.type === 'image') {
+        for (const p of ImageViewerPanel.currentPanels) {
+          if (p && isSamePath(p.folderPath, folderUri.fsPath) && p.panel) {
+            p.panel.reveal(vscode.ViewColumn.Active, false);
+            break;
+          }
+        }
+      } else if (this.type === 'audio') {
+        for (const p of AudioViewerPanel.currentPanels) {
+          if (p && isSamePath(p.folderPath, folderUri.fsPath) && p.panel) {
+            p.panel.reveal(vscode.ViewColumn.Active, false);
+            break;
+          }
+        }
+      }
+    }, 40);
   }
 }
 
@@ -540,13 +578,23 @@ class ImageViewerPanel {
   static async createOrShow(extensionUri, folderUri, initialImagePath = null) {
     const folderPath = folderUri.fsPath;
     for (const existing of ImageViewerPanel.currentPanels) {
-      if (existing.folderPath === folderPath && existing.panel) {
+      if (isSamePath(existing.folderPath, folderPath) && existing.panel) {
         existing.panel.reveal(vscode.ViewColumn.Active);
         if (initialImagePath) {
           existing.panel.webview.postMessage({
             type: 'openTargetImage',
             filePath: initialImagePath
           });
+          setTimeout(() => {
+            try {
+              if (existing.panel && existing.panel.visible) {
+                existing.panel.webview.postMessage({
+                  type: 'openTargetImage',
+                  filePath: initialImagePath
+                });
+              }
+            } catch (_) {}
+          }, 60);
         }
         return;
       }
@@ -570,13 +618,14 @@ class ImageViewerPanel {
     new ImageViewerPanel(panel, extensionUri, folderUri, initialImagePath);
   }
 
-  constructor(panel, extensionUri, folderUri, initialImagePath = null) {
+  constructor(panel, extensionUri, folderUri, initialImagePath = null, isCustomEditor = false) {
     this.panel = panel;
     this.extensionUri = extensionUri;
     this.folderUri = folderUri;
     this.folderPath = folderUri.fsPath;
     this.folderName = path.basename(this.folderPath);
     this.initialImagePath = initialImagePath;
+    this.isCustomEditor = !!isCustomEditor;
     this.isRecursive = false;
     this._disposables = [];
     this._isDisposed = false;
@@ -617,6 +666,9 @@ class ImageViewerPanel {
     switch (msg.type) {
       case 'ready':
         await this._sendImages(false);
+        break;
+      case 'closeCustomEditor':
+        this.dispose();
         break;
       case 'refresh':
         await this._sendImages(true);
@@ -740,7 +792,8 @@ class ImageViewerPanel {
           images,
           recursive: this.isRecursive,
           thumbSize: savedThumbSize,
-          targetFilePath: this.initialImagePath
+          targetFilePath: this.initialImagePath,
+          isCustomEditor: this.isCustomEditor
         });
         this.initialImagePath = null;
       }
@@ -804,13 +857,23 @@ class VideoViewerPanel {
   static async createOrShow(extensionUri, folderUri, initialVideoPath = null) {
     const folderPath = folderUri.fsPath;
     for (const existing of VideoViewerPanel.currentPanels) {
-      if (existing.folderPath === folderPath && existing.panel) {
+      if (isSamePath(existing.folderPath, folderPath) && existing.panel) {
         existing.panel.reveal(vscode.ViewColumn.Active);
         if (initialVideoPath) {
           existing.panel.webview.postMessage({
             type: 'openTargetVideo',
             filePath: initialVideoPath
           });
+          setTimeout(() => {
+            try {
+              if (existing.panel && existing.panel.visible) {
+                existing.panel.webview.postMessage({
+                  type: 'openTargetVideo',
+                  filePath: initialVideoPath
+                });
+              }
+            } catch (_) {}
+          }, 60);
         }
         return;
       }
@@ -834,13 +897,14 @@ class VideoViewerPanel {
     new VideoViewerPanel(panel, extensionUri, folderUri, initialVideoPath);
   }
 
-  constructor(panel, extensionUri, folderUri, initialVideoPath = null) {
+  constructor(panel, extensionUri, folderUri, initialVideoPath = null, isCustomEditor = false) {
     this.panel = panel;
     this.extensionUri = extensionUri;
     this.folderUri = folderUri;
     this.folderPath = folderUri.fsPath;
     this.folderName = path.basename(this.folderPath);
     this.initialVideoPath = initialVideoPath;
+    this.isCustomEditor = !!isCustomEditor;
     this.isRecursive = false;
     this._disposables = [];
     this._isDisposed = false;
@@ -886,6 +950,9 @@ class VideoViewerPanel {
     switch (msg.type) {
       case 'ready':
         await this._sendVideos(false);
+        break;
+      case 'closeCustomEditor':
+        this.dispose();
         break;
       case 'refresh':
         await this._sendVideos(true);
@@ -1062,7 +1129,8 @@ class VideoViewerPanel {
           lastVolume: savedLastVolume,
           autoNext: savedAutoNext,
           loop: savedLoop,
-          targetFilePath: this.initialVideoPath
+          targetFilePath: this.initialVideoPath,
+          isCustomEditor: this.isCustomEditor
         });
         this.initialVideoPath = null;
       }
@@ -1126,13 +1194,23 @@ class AudioViewerPanel {
   static async createOrShow(extensionUri, folderUri, initialAudioPath = null) {
     const folderPath = folderUri.fsPath;
     for (const existing of AudioViewerPanel.currentPanels) {
-      if (existing.folderPath === folderPath && existing.panel) {
+      if (isSamePath(existing.folderPath, folderPath) && existing.panel) {
         existing.panel.reveal(vscode.ViewColumn.Active);
         if (initialAudioPath) {
           existing.panel.webview.postMessage({
             type: 'openTargetAudio',
             filePath: initialAudioPath
           });
+          setTimeout(() => {
+            try {
+              if (existing.panel && existing.panel.visible) {
+                existing.panel.webview.postMessage({
+                  type: 'openTargetAudio',
+                  filePath: initialAudioPath
+                });
+              }
+            } catch (_) {}
+          }, 60);
         }
         return;
       }
@@ -1156,13 +1234,14 @@ class AudioViewerPanel {
     new AudioViewerPanel(panel, extensionUri, folderUri, initialAudioPath);
   }
 
-  constructor(panel, extensionUri, folderUri, initialAudioPath = null) {
+  constructor(panel, extensionUri, folderUri, initialAudioPath = null, isCustomEditor = false) {
     this.panel = panel;
     this.extensionUri = extensionUri;
     this.folderUri = folderUri;
     this.folderPath = folderUri.fsPath;
     this.folderName = path.basename(this.folderPath);
     this.initialAudioPath = initialAudioPath;
+    this.isCustomEditor = !!isCustomEditor;
     this.isRecursive = false;
     this._disposables = [];
     this._isDisposed = false;
@@ -1208,6 +1287,9 @@ class AudioViewerPanel {
     switch (msg.type) {
       case 'ready':
         await this._sendAudios(false);
+        break;
+      case 'closeCustomEditor':
+        this.dispose();
         break;
       case 'refresh':
         await this._sendAudios(true);
@@ -1375,7 +1457,8 @@ class AudioViewerPanel {
           lastVolume: savedLastVolume,
           autoNext: savedAutoNext,
           loop: savedLoop,
-          targetFilePath: this.initialAudioPath
+          targetFilePath: this.initialAudioPath,
+          isCustomEditor: this.isCustomEditor
         });
         this.initialAudioPath = null;
       }

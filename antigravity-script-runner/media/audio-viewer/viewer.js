@@ -34,6 +34,7 @@
   let currentVolume = 0.5;
   let lastVolume = 0.5;
   let justDraggedMarquee = false;
+  let lastTargetAudioPath = null;
 
   // 3. DOM 節點引用 - 工具列與畫廊
   const playerAudioEl = document.getElementById('playerAudio');
@@ -233,6 +234,7 @@
     filteredAudios.forEach((audio, idx) => {
       const card = document.createElement('div');
       card.className = 'audio-card';
+      card.tabIndex = 0;
       card.dataset.index = idx;
       card.dataset.path = audio.fullPath;
 
@@ -428,6 +430,7 @@
 
     currentIndex = index;
     const audio = filteredAudios[currentIndex];
+    lastTargetAudioPath = audio.fullPath;
 
     // 更新底部常駐播控列資訊
     playerTitleEl.textContent = audio.fileName;
@@ -437,6 +440,13 @@
     // 顯示底部播控列
     dockedPlayerBarEl.style.display = 'flex';
     document.body.classList.add('has-player');
+
+    if (vscode) {
+      const curState = vscode.getState() || {};
+      curState.hasOpenedInitialTarget = true;
+      curState.lastOpenedTarget = audio.fullPath.replace(/\\/g, '/').toLowerCase();
+      vscode.setState(curState);
+    }
 
     // 設置音訊來源（支援本機 HTTP 串流，並內建 localUri 備援）
     playerAudioEl.src = audio.uri;
@@ -1367,11 +1377,23 @@
 
           applyFilterAndSort();
 
-          // 若直接在某個音訊檔案上按右鍵開啟
+          // 若直接在某個音訊檔案上按右鍵或雙擊開啟 -> 一律直接播放音訊
           if (msg.targetFilePath) {
-            const targetIdx = filteredAudios.findIndex((a) => a.fullPath === msg.targetFilePath);
+            const normTarget = msg.targetFilePath.replace(/\\/g, '/').toLowerCase();
+            let targetIdx = filteredAudios.findIndex((a) => a.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+            if (targetIdx === -1 && allAudios && allAudios.length > 0) {
+              if (searchInputEl && searchInputEl.value) {
+                searchInputEl.value = '';
+                applyFilterAndSort();
+                targetIdx = filteredAudios.findIndex((a) => a.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+              }
+            }
             if (targetIdx !== -1) {
               playTrack(targetIdx);
+              const cardEl = galleryGridEl.querySelector(`.audio-card[data-path="${CSS.escape(filteredAudios[targetIdx].fullPath)}"]`);
+              if (cardEl) {
+                cardEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+              }
             }
           }
           break;
@@ -1409,7 +1431,15 @@
 
         case 'openTargetAudio':
           if (msg.filePath) {
-            const targetIdx = filteredAudios.findIndex((a) => a.fullPath === msg.filePath);
+            const normTarget = msg.filePath.replace(/\\/g, '/').toLowerCase();
+            let targetIdx = filteredAudios.findIndex((a) => a.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+            if (targetIdx === -1 && allAudios && allAudios.length > 0) {
+              if (searchInputEl && searchInputEl.value) {
+                searchInputEl.value = '';
+                applyFilterAndSort();
+                targetIdx = filteredAudios.findIndex((a) => a.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+              }
+            }
             if (targetIdx !== -1) {
               playTrack(targetIdx);
             }

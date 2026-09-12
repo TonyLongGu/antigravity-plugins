@@ -20,6 +20,9 @@
   let currentFolder = '';
   let folderNameStr = '';
   let isRecursive = false;
+  let isCustomEditor = false;
+  let hasExpandedToGallery = false;
+  let lastOpenImageTime = 0;
 
   // 檢視器狀態
   let currentIndex = -1;
@@ -256,7 +259,9 @@
 
   function saveUiState() {
     if (!vscode) return;
+    const curState = vscode.getState() || {};
     vscode.setState({
+      ...curState,
       thumbSize: sizeSliderEl.value,
       sortBy: sortSelectEl.value,
       filterText: searchInputEl.value,
@@ -357,6 +362,8 @@
   function createImageCard(img, idx) {
     const card = document.createElement('div');
     card.className = 'image-card';
+    card.tabIndex = 0;
+    card.dataset.index = idx;
     card.dataset.path = img.fullPath;
     if (selectedPaths.has(img.fullPath)) {
       card.classList.add('is-selected');
@@ -620,6 +627,7 @@
     if (index < 0 || index >= filteredImages.length) return;
     currentIndex = index;
     const imgData = filteredImages[currentIndex];
+    lastTargetImagePath = imgData.fullPath;
 
     lightboxTitleEl.textContent = imgData.fileName;
     lightboxTitleEl.title = imgData.fullPath;
@@ -629,6 +637,14 @@
     // 重置旋轉角度
     rotation = 0;
     lightboxModalEl.classList.add('active');
+
+    if (vscode) {
+      const curState = vscode.getState() || {};
+      curState.hasOpenedInitialTarget = true;
+      curState.isInLightbox = true;
+      curState.lastOpenedTarget = imgData.fullPath.replace(/\\/g, '/').toLowerCase();
+      vscode.setState(curState);
+    }
 
     // 確保放大圖容器獲得焦點，能直接接收鍵盤快捷鍵 (如 Delete, 左右鍵, Esc)
     window.focus();
@@ -662,10 +678,31 @@
 
   function closeLightbox() {
     lightboxModalEl.classList.remove('active');
+    const closedIdx = currentIndex;
     currentIndex = -1;
     if (isDragging) {
       isDragging = false;
       lightboxCanvasEl.classList.remove('dragging');
+    }
+
+    if (vscode) {
+      const curState = vscode.getState() || {};
+      curState.hasOpenedInitialTarget = true;
+      curState.isInLightbox = false;
+      vscode.setState(curState);
+    }
+
+    if (closedIdx >= 0 && closedIdx < filteredImages.length) {
+      const closedPath = filteredImages[closedIdx].fullPath;
+      setTimeout(() => {
+        const cardEl = galleryGridEl.querySelector(`.image-card[data-path="${CSS.escape(closedPath)}"]`);
+        if (cardEl) {
+          cardEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          try {
+            cardEl.focus();
+          } catch (_) {}
+        }
+      }, 50);
     }
   }
 
@@ -690,11 +727,26 @@
    */
   function openTargetImageByPath(targetPath) {
     if (!targetPath) return;
+    lastTargetImagePath = targetPath;
     const normTarget = targetPath.replace(/\\/g, '/').toLowerCase();
-    const targetIdx = filteredImages.findIndex(img => img.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+    let targetIdx = filteredImages.findIndex(img => img.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+    if (targetIdx === -1 && allImages && allImages.length > 0) {
+      if (searchInputEl && searchInputEl.value) {
+        searchInputEl.value = '';
+        applyFilterAndSort();
+        targetIdx = filteredImages.findIndex(img => img.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+      }
+    }
     if (targetIdx !== -1) {
+      const now = Date.now();
+      const isAlreadyViewingSame = lightboxModalEl.classList.contains('active') && currentIndex === targetIdx;
+      if (isAlreadyViewingSame && (now - lastOpenImageTime < 250)) {
+        return;
+      }
+      lastOpenImageTime = now;
+      // 立即同步開啟大圖，徹底消除縮圖網格先露面再被大圖覆蓋的視覺閃爍
+      openLightbox(targetIdx);
       setTimeout(() => {
-        openLightbox(targetIdx);
         const cardEl = galleryGridEl.querySelector(`.image-card[data-path="${CSS.escape(filteredImages[targetIdx].fullPath)}"]`);
         if (cardEl) {
           cardEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -1217,6 +1269,7 @@
     e.stopPropagation();
     closeLightbox();
   });
+
   prevBtnEl.addEventListener('click', prevImage);
   nextBtnEl.addEventListener('click', nextImage);
 
@@ -1285,33 +1338,48 @@
   window.addEventListener('keydown', (e) => {
     // 若在大圖檢視模式
     if (lightboxModalEl.classList.contains('active')) {
+      const hasModifier = e.ctrlKey || e.metaKey || e.altKey;
+
       if (e.key === 'Escape') {
         closeLightbox();
         e.preventDefault();
-      } else if (e.key === 'ArrowLeft') {
+      } else if (!hasModifier && e.key === 'ArrowLeft') {
         prevImage();
         e.preventDefault();
-      } else if (e.key === 'ArrowRight') {
+      } else if (!hasModifier && e.key === 'ArrowRight') {
         nextImage();
         e.preventDefault();
-      } else if (e.key === '+' || e.key === '=') {
+      } else if (!hasModifier && (e.key === '+' || e.key === '=')) {
         zoomInBtnEl.click();
         e.preventDefault();
-      } else if (e.key === '-') {
+      } else if (!hasModifier && e.key === '-') {
         zoomOutBtnEl.click();
         e.preventDefault();
-      } else if (e.key === '0') {
+      } else if (!hasModifier && e.key === '0') {
         fitToScreen(true);
         e.preventDefault();
-      } else if (e.key === 's' || e.key === 'S' || e.key === 'Enter') {
+      } else if (!hasModifier && (e.key === 's' || e.key === 'S' || e.key === 'Enter')) {
         selectAndCloseBtnEl.click();
         e.preventDefault();
-      } else if (e.key === 'Delete' || e.key === 'Del') {
+      } else if (!hasModifier && (e.key === 'Delete' || e.key === 'Del')) {
         deleteCurrentLightboxImage();
         e.preventDefault();
       }
     } else {
       // 畫廊模式快捷鍵
+      const hasModifier = e.ctrlKey || e.metaKey || e.altKey;
+      if (!hasModifier && (e.key === 'Enter' || e.key === ' ')) {
+        const activeEl = document.activeElement;
+        if (activeEl && activeEl.classList.contains('image-card')) {
+          const idx = parseInt(activeEl.dataset.index, 10);
+          if (!isNaN(idx) && idx >= 0 && idx < filteredImages.length) {
+            openLightbox(idx);
+            e.preventDefault();
+            return;
+          }
+        }
+      }
+
       if (e.key === 'Escape' && selectedPaths.size > 0) {
         clearSelection();
         e.preventDefault();
@@ -1373,6 +1441,10 @@
         imgCountBadgeEl.textContent = I18nModule.t('img_count_badge', { count: allImages.length });
         updateRecursiveButton();
 
+        if (typeof message.isCustomEditor === 'boolean') {
+          isCustomEditor = message.isCustomEditor;
+        }
+
         // 清理不存在於當前清單中的選取路徑
         selectedPaths.forEach(p => {
           if (!allImages.some(img => img.fullPath === p)) selectedPaths.delete(p);
@@ -1381,14 +1453,29 @@
 
         applyFilterAndSort();
 
-        // 支援右鍵單圖直接開啟全螢幕大圖檢視
+        // 支援右鍵單圖直接開啟全螢幕大圖檢視或雙擊開檔
         if (message.targetFilePath) {
-          openTargetImageByPath(message.targetFilePath);
+          const normTarget = message.targetFilePath.replace(/\\/g, '/').toLowerCase();
+          const isSameTarget = !!(currentSavedState && currentSavedState.lastOpenedTarget && currentSavedState.lastOpenedTarget === normTarget);
+          const isRestoredTab = !!(currentSavedState && currentSavedState.hasOpenedInitialTarget && isSameTarget);
+          if (!isRestoredTab || (currentSavedState && currentSavedState.isInLightbox)) {
+            openTargetImageByPath(message.targetFilePath);
+          } else {
+            // 同一檔案分頁標籤切換恢復且原本已按右鍵退回畫廊：保持在畫廊，平滑滾動定位卡片
+            const targetIdx = filteredImages.findIndex(img => img.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+            if (targetIdx !== -1) {
+              const cardEl = galleryGridEl.querySelector(`.image-card[data-path="${CSS.escape(filteredImages[targetIdx].fullPath)}"]`);
+              if (cardEl) {
+                cardEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+              }
+            }
+          }
         }
         break;
 
       case 'openTargetImage':
         if (message.filePath) {
+          hasExpandedToGallery = false;
           openTargetImageByPath(message.filePath);
         }
         break;

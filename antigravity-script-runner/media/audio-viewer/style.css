@@ -430,6 +430,12 @@ body.is-right-dragging * {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 8px var(--accent-glow);
 }
 
+.audio-card:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-glow), 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
 .audio-card.is-selected {
   border-color: var(--accent);
   background-color: var(--accent-light);

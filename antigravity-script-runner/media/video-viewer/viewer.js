@@ -27,6 +27,11 @@
   let folderNameStr = '';
   let isRecursive = false;
   let showThumbs = true;
+  let isCustomEditor = false;
+  let hasExpandedToGallery = false;
+  let lastOpenVideoTime = 0;
+  let cleanupRestoreSound = null;
+  let isAutoplayMutedFallback = false;
 
   // 播放器狀態
   let currentIndex = -1;
@@ -74,6 +79,7 @@
   const loopBtnEl = document.getElementById('loopBtn');
   const speedBtnEl = document.getElementById('speedBtn');
   const speedMenuEl = document.getElementById('speedMenu');
+  const expandGalleryBtnEl = document.getElementById('expandGalleryBtn');
   const selectAndCloseBtnEl = document.getElementById('selectAndCloseBtn');
   const playerCloseBtnEl = document.getElementById('playerCloseBtn');
 
@@ -337,9 +343,10 @@
     const rawVol = parseFloat(volumeSliderEl.value);
     const curVol = Math.round(Math.max(0, Math.min(1, isNaN(rawVol) ? 0.5 : rawVol)) * 100) / 100;
     playerVideoEl.volume = curVol;
-    playerVideoEl.muted = isMuted || curVol === 0;
+    const effectiveMuted = isMuted || isAutoplayMutedFallback || curVol === 0;
+    playerVideoEl.muted = effectiveMuted;
 
-    if (playerVideoEl.muted || curVol === 0) {
+    if (effectiveMuted) {
       iconVolHighEl.style.display = 'none';
       iconVolMutedEl.style.display = 'block';
     } else {
@@ -355,7 +362,9 @@
     if (vol > 0) {
       lastVolume = vol;
     }
+    const curState = (vscode ? vscode.getState() : null) || {};
     const state = {
+      ...curState,
       thumbSize: parseInt(sizeSliderEl.value, 10) || 280,
       sortBy: sortSelectEl.value,
       filterText: searchInputEl.value.trim(),
@@ -958,6 +967,7 @@
   function createVideoCard(video, idx) {
     const card = document.createElement('div');
     card.className = `video-card ${selectedPaths.has(video.fullPath) ? 'is-selected' : ''}`;
+    card.tabIndex = 0;
     card.dataset.index = idx;
     card.dataset.path = video.fullPath;
 
@@ -1216,10 +1226,11 @@
   // 11. 自訂影片播放器引擎 (遵循 web-video-player-guide)
   // ==============================================================================
 
-  function openPlayer(index) {
+  function openPlayer(index, autoPlay = true) {
     if (index < 0 || index >= filteredVideos.length) return;
     currentIndex = index;
     const v = filteredVideos[currentIndex];
+    lastTargetVideoPath = v.fullPath;
 
     playerTitleEl.textContent = v.fileName;
     playerTitleEl.title = v.fullPath;
@@ -1251,19 +1262,65 @@
     currentTimeTextEl.textContent = '00:00';
     durationTextEl.textContent = '00:00';
 
-    // 嘗試自動播放
-    playerVideoEl.play().then(() => {
-      updatePlayPauseUI(true);
-    }).catch((err) => {
-      console.log('[VideoPlayer] 自動播放受阻，等待使用者互動:', err);
+    if (cleanupRestoreSound) {
+      cleanupRestoreSound();
+    }
+    isAutoplayMutedFallback = false;
+
+    if (autoPlay) {
+      playerVideoEl.play().then(() => {
+        updatePlayPauseUI(true);
+      }).catch((err) => {
+        console.warn('[VideoPlayer] 帶聲音播放受瀏覽器 Autoplay 策略限制，啟用靜音自動播放保底:', err);
+        // 若受 Autoplay 政策限制（未互動禁止播放聲音），立即降級為靜音自動播放，保證畫面直接播放動起來！
+        isAutoplayMutedFallback = true;
+        syncVolumeUI();
+        playerVideoEl.play().then(() => {
+          updatePlayPauseUI(true);
+          // 一旦使用者點擊畫面或按鍵，自動恢復原聲音並解除監聽
+          const onFirstGesture = () => {
+            if (cleanupRestoreSound) cleanupRestoreSound();
+            isAutoplayMutedFallback = false;
+            syncVolumeUI();
+          };
+          cleanupRestoreSound = () => {
+            document.removeEventListener('pointerdown', onFirstGesture, true);
+            document.removeEventListener('keydown', onFirstGesture, true);
+            cleanupRestoreSound = null;
+          };
+          document.addEventListener('pointerdown', onFirstGesture, true);
+          document.addEventListener('keydown', onFirstGesture, true);
+        }).catch((err2) => {
+          console.error('[VideoPlayer] 自動播放徹底失敗:', err2);
+          isAutoplayMutedFallback = false;
+          syncVolumeUI();
+          updatePlayPauseUI(false);
+        });
+      });
+    } else {
+      playerVideoEl.pause();
       updatePlayPauseUI(false);
-    });
+    }
+
+    if (vscode) {
+      const curState = vscode.getState() || {};
+      curState.hasOpenedInitialTarget = true;
+      curState.isInPlayer = true;
+      curState.lastOpenedTarget = v.fullPath.replace(/\\/g, '/').toLowerCase();
+      curState.currentPlayingPath = v.fullPath;
+      vscode.setState(curState);
+    }
 
     resetIdleTimer();
   }
 
   function closePlayer() {
     if (!playerModalEl.classList.contains('active')) return;
+
+    if (cleanupRestoreSound) {
+      cleanupRestoreSound();
+    }
+    isAutoplayMutedFallback = false;
 
     playerVideoEl.pause();
     playerVideoEl.removeAttribute('src');
@@ -1273,11 +1330,32 @@
     playerModalEl.classList.remove('is-playing', 'is-idle');
     document.body.classList.remove('in-player');
 
+    const closedIdx = currentIndex;
     currentIndex = -1;
     clearTimeout(idleTimer);
     hideCooldownUntil = 0;
     wakeUpOriginX = null;
     wakeUpOriginY = null;
+
+    if (vscode) {
+      const curState = vscode.getState() || {};
+      curState.hasOpenedInitialTarget = true;
+      curState.isInPlayer = false;
+      vscode.setState(curState);
+    }
+
+    if (closedIdx >= 0 && closedIdx < filteredVideos.length) {
+      const closedPath = filteredVideos[closedIdx].fullPath;
+      setTimeout(() => {
+        const cardEl = galleryGridEl.querySelector(`.video-card[data-path="${CSS.escape(closedPath)}"]`);
+        if (cardEl) {
+          cardEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          try {
+            cardEl.focus();
+          } catch (_) {}
+        }
+      }, 50);
+    }
 
     // 恢復背景縮圖隊列處理（僅交由 IntersectionObserver 按需排入當前可視區）
     if (showThumbs) {
@@ -1751,8 +1829,20 @@
     });
   }
 
+  // 展開為資料夾畫廊
+  function expandToGallery() {
+    hasExpandedToGallery = true;
+    showToast(I18nModule.t('toast_expanded_gallery'), 'info');
+    closePlayer();
+  }
+
+  if (expandGalleryBtnEl) {
+    expandGalleryBtnEl.addEventListener('click', expandToGallery);
+  }
+
   // 在畫廊中選取當前播放影片並關閉
   selectAndCloseBtnEl.addEventListener('click', () => {
+    hasExpandedToGallery = true;
     if (currentIndex >= 0 && currentIndex < filteredVideos.length) {
       const cur = filteredVideos[currentIndex];
       closePlayer();
@@ -2111,34 +2201,36 @@
   window.addEventListener('keydown', (e) => {
     // 播放器視窗開啟時
     if (playerModalEl.classList.contains('active')) {
+      const hasModifier = e.ctrlKey || e.metaKey || e.altKey;
+
       if (e.key === 'Escape') {
         closePlayer();
         e.preventDefault();
-      } else if (e.key === ' ' || e.code === 'Space') {
+      } else if (!hasModifier && (e.key === ' ' || e.code === 'Space')) {
         togglePlayPause();
         e.preventDefault();
-      } else if (e.key === 'ArrowLeft') {
+      } else if (!hasModifier && e.key === 'ArrowLeft') {
         seekDelta(-5);
         e.preventDefault();
-      } else if (e.key === 'ArrowRight') {
+      } else if (!hasModifier && e.key === 'ArrowRight') {
         seekDelta(5);
         e.preventDefault();
-      } else if (e.key === 'j' || e.key === 'J') {
+      } else if (!hasModifier && (e.key === 'j' || e.key === 'J')) {
         seekDelta(-5);
         e.preventDefault();
-      } else if (e.key === 'l' || e.key === 'L') {
+      } else if (!hasModifier && (e.key === 'l' || e.key === 'L')) {
         seekDelta(5);
         e.preventDefault();
-      } else if (e.key === 'ArrowUp') {
+      } else if (!hasModifier && e.key === 'ArrowUp') {
         setVolume(playerVideoEl.volume + 0.1);
         e.preventDefault();
-      } else if (e.key === 'ArrowDown') {
+      } else if (!hasModifier && e.key === 'ArrowDown') {
         setVolume(playerVideoEl.volume - 0.1);
         e.preventDefault();
-      } else if (e.key === 'm' || e.key === 'M') {
+      } else if (!hasModifier && (e.key === 'm' || e.key === 'M')) {
         volumeBtnEl.click();
         e.preventDefault();
-      } else if (e.key === 'h' || e.key === 'H') {
+      } else if (!hasModifier && (e.key === 'h' || e.key === 'H')) {
         if (playerModalEl.classList.contains('is-idle')) {
           hideCooldownUntil = 0;
           wakeUpOriginX = null;
@@ -2149,27 +2241,28 @@
           hideControlsImmediately();
         }
         e.preventDefault();
-      } else if (e.key === 'o' || e.key === 'O') {
+      } else if (!hasModifier && (e.key === 'o' || e.key === 'O')) {
         openCurrentInExternalPlayer();
         e.preventDefault();
-      } else if (e.key === '[' || e.key === 'PageUp') {
+      } else if (!hasModifier && (e.key === '[' || e.key === 'PageUp')) {
         prevVideo();
         e.preventDefault();
-      } else if (e.key === ']' || e.key === 'PageDown') {
+      } else if (!hasModifier && (e.key === ']' || e.key === 'PageDown')) {
         nextVideo();
         e.preventDefault();
-      } else if (e.key === 'c' || e.key === 'C') {
-        if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-          toggleAutoNext();
-          e.preventDefault();
-        }
-      } else if (e.key === 'r' || e.key === 'R') {
+      } else if (!hasModifier && (e.key === 'c' || e.key === 'C')) {
+        toggleAutoNext();
+        e.preventDefault();
+      } else if (!hasModifier && (e.key === 'r' || e.key === 'R')) {
         toggleLoop();
         e.preventDefault();
-      } else if (e.key === 's' || e.key === 'S' || e.key === 'Enter') {
+      } else if (!hasModifier && (e.key === 'g' || e.key === 'G')) {
+        expandToGallery();
+        e.preventDefault();
+      } else if (!hasModifier && (e.key === 's' || e.key === 'S' || e.key === 'Enter')) {
         selectAndCloseBtnEl.click();
         e.preventDefault();
-      } else if (e.key >= '0' && e.key <= '9') {
+      } else if (!hasModifier && e.key >= '0' && e.key <= '9') {
         const pct = parseInt(e.key, 10) / 10;
         const dur = playerVideoEl.duration || 0;
         applySeek(dur * pct);
@@ -2177,6 +2270,20 @@
       }
     } else {
       // 畫廊模式
+      const hasModifier = e.ctrlKey || e.metaKey || e.altKey;
+      if (!hasModifier && (e.key === 'Enter' || e.key === ' ')) {
+        const activeEl = document.activeElement;
+        if (activeEl && activeEl.classList.contains('video-card')) {
+          const idx = parseInt(activeEl.dataset.index, 10);
+          if (!isNaN(idx) && idx >= 0 && idx < filteredVideos.length) {
+            clearPreview();
+            openPlayer(idx);
+            e.preventDefault();
+            return;
+          }
+        }
+      }
+
       if (e.key === 'Escape' && selectedPaths.size > 0) {
         clearSelection();
         e.preventDefault();
@@ -2331,6 +2438,13 @@
         updateAutoNextUI();
         updateLoopUI();
 
+        if (typeof message.isCustomEditor === 'boolean') {
+          isCustomEditor = message.isCustomEditor;
+          if (!isCustomEditor && expandGalleryBtnEl) {
+            expandGalleryBtnEl.style.display = 'none';
+          }
+        }
+
         folderNameEl.textContent = folderNameStr;
         folderInfoEl.title = currentFolder;
         videoCountBadgeEl.textContent = I18nModule.t('video_count_badge', { count: allVideos.length });
@@ -2343,11 +2457,24 @@
 
         applyFilterAndSort();
 
-        // 若開啟時指定了目標檔案 (例如在影片檔案上按右鍵)，自動定位並開啟播放
+        // 若開啟時指定了目標檔案 (例如在影片檔案上按右鍵或雙擊開檔)
+        // 若開啟時指定了目標檔案 (例如在檔案總管雙擊或右鍵開檔) -> 一律直接開啟播放器並自動播放內容
         if (message.targetFilePath) {
-          const targetIdx = filteredVideos.findIndex(v => v.fullPath === message.targetFilePath);
+          const normTarget = message.targetFilePath.replace(/\\/g, '/').toLowerCase();
+          let targetIdx = filteredVideos.findIndex(v => v.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+          if (targetIdx === -1 && allVideos && allVideos.length > 0) {
+            if (searchInputEl && searchInputEl.value) {
+              searchInputEl.value = '';
+              applyFilterAndSort();
+              targetIdx = filteredVideos.findIndex(v => v.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+            }
+          }
           if (targetIdx >= 0) {
-            openPlayer(targetIdx);
+            openPlayer(targetIdx, true);
+            const cardEl = galleryGridEl.querySelector(`.video-card[data-path="${CSS.escape(filteredVideos[targetIdx].fullPath)}"]`);
+            if (cardEl) {
+              cardEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
           }
         }
         break;
@@ -2390,9 +2517,29 @@
 
       case 'openTargetVideo':
         if (message.filePath) {
-          const targetIdx = filteredVideos.findIndex(v => v.fullPath === message.filePath);
+          hasExpandedToGallery = false;
+          const normTarget = message.filePath.replace(/\\/g, '/').toLowerCase();
+          let targetIdx = filteredVideos.findIndex(v => v.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+          if (targetIdx === -1 && allVideos && allVideos.length > 0) {
+            if (searchInputEl && searchInputEl.value) {
+              searchInputEl.value = '';
+              applyFilterAndSort();
+              targetIdx = filteredVideos.findIndex(v => v.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+            }
+          }
           if (targetIdx >= 0) {
-            openPlayer(targetIdx);
+            const now = Date.now();
+            // 250ms 解碼器連續呼叫防抖：若大播放器正處於 active 狀態且正在播放該影片，且距離上次開啟 < 250ms，僅做定位，不重複重設 src
+            const isAlreadyPlayingSame = playerModalEl.classList.contains('active') && currentIndex === targetIdx && !playerVideoEl.paused;
+            if (isAlreadyPlayingSame && (now - lastOpenVideoTime < 250)) {
+              return;
+            }
+            lastOpenVideoTime = now;
+            openPlayer(targetIdx, true);
+            const cardEl = galleryGridEl.querySelector(`.video-card[data-path="${CSS.escape(filteredVideos[targetIdx].fullPath)}"]`);
+            if (cardEl) {
+              cardEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
           }
         }
         break;
