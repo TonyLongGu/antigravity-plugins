@@ -62,6 +62,7 @@
       lightbox_zoom_fit_title: '最適視窗大小 (雙擊滑鼠)',
       lightbox_zoom_actual_title: '1:1 原始解析度',
       lightbox_select_close_title: '關閉檢視器並在畫廊中選取此圖片 (S / Enter)',
+      lightbox_copy_path_title: '複製圖片完整路徑',
       lightbox_delete_title: '刪除此圖片 (Delete)',
       lightbox_close_title: '關閉檢視器 (Esc / 右鍵)',
       lightbox_prev_title: '上一張 (← 鍵)',
@@ -72,8 +73,8 @@
       lightbox_meta_dim: '{width} × {height} px • {size}',
 
       // Toast 提示
-      toast_path_copied: '已複製路徑：{name}',
-      toast_batch_copied: '已複製 {count} 個檔案之絕對路徑',
+      toast_path_copied: '路徑已複製',
+      toast_batch_copied: '已複製 {count} 個檔案路徑',
       toast_selected_in_gallery: '已在畫廊中選取：{name}',
       toast_refresh_done: '已重新整理（共 {count} 張圖片）',
       toast_rotating_prep: '正在準備旋轉 {count} 張圖片...',
@@ -140,6 +141,7 @@
       lightbox_zoom_fit_title: 'Fit to Screen (Double Click)',
       lightbox_zoom_actual_title: '1:1 Actual Size',
       lightbox_select_close_title: 'Close viewer and select this image in gallery (S / Enter)',
+      lightbox_copy_path_title: 'Copy full image path',
       lightbox_delete_title: 'Delete this image (Delete)',
       lightbox_close_title: 'Close Viewer (Esc / Right Click)',
       lightbox_prev_title: 'Previous (Left Arrow)',
@@ -150,8 +152,8 @@
       lightbox_meta_dim: '{width} × {height} px • {size}',
 
       // Toast 提示
-      toast_path_copied: 'Copied path: {name}',
-      toast_batch_copied: 'Copied absolute paths of {count} files',
+      toast_path_copied: 'Path copied',
+      toast_batch_copied: 'Copied {count} file paths',
       toast_selected_in_gallery: 'Selected in gallery: {name}',
       toast_refresh_done: 'Refreshed ({count} images)',
       toast_rotating_prep: 'Preparing to rotate {count} images...',

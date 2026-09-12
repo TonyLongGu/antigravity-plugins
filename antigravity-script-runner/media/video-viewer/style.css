@@ -921,6 +921,12 @@ body.has-selection .card-select-btn,
   display: none;
   flex-direction: column;
   justify-content: space-between;
+  outline: none;
+}
+
+.player-modal:focus,
+.player-modal:focus-visible {
+  outline: none;
 }
 
 .player-modal.active {
@@ -974,6 +980,22 @@ body.has-selection .card-select-btn,
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+#playerCopyPathBtn svg {
+  width: 14px;
+  height: 14px;
+}
+
+#playerDeleteBtn:hover {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #ef4444;
+}
+
+#playerDeleteBtn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .btn-text {
@@ -1451,13 +1473,15 @@ body.has-selection .card-select-btn,
    浮動通知 (Toast Notification - 全面對齊 image-viewer 質感)
    ============================================================================== */
 .toast-container {
-  display: none !important;
+  display: flex;
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
   flex-direction: column;
+  align-items: center;
   gap: var(--space-xs);
-  z-index: 9999;
+  z-index: 100000;
   pointer-events: none;
 }
 
@@ -1465,27 +1489,29 @@ body.has-selection .card-select-btn,
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: 8px 14px;
+  padding: 9px 18px;
   border-radius: var(--radius-md);
-  background: rgba(30, 30, 30, 0.92);
-  border: 1px solid var(--border-color);
+  background: rgba(26, 26, 26, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   color: var(--text-primary);
-  font-size: 12px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(8px);
-  animation: toastIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  transition: opacity 0.25s, transform 0.25s;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: toastIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.22s ease, transform 0.22s ease;
   pointer-events: auto;
 }
 
 .toast.hiding {
   opacity: 0;
-  transform: translateY(10px);
+  transform: translateY(-8px);
 }
 
 .toast svg {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
   flex-shrink: 0;
 }
 
@@ -1496,7 +1522,7 @@ body.has-selection .card-select-btn,
 @keyframes toastIn {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(-12px);
   }
   to {
     opacity: 1;

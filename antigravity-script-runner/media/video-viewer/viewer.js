@@ -81,6 +81,8 @@
   const speedMenuEl = document.getElementById('speedMenu');
   const expandGalleryBtnEl = document.getElementById('expandGalleryBtn');
   const selectAndCloseBtnEl = document.getElementById('selectAndCloseBtn');
+  const playerCopyPathBtnEl = document.getElementById('playerCopyPathBtn');
+  const playerDeleteBtnEl = document.getElementById('playerDeleteBtn');
   const playerCloseBtnEl = document.getElementById('playerCloseBtn');
 
   const playerStageEl = document.getElementById('playerStage');
@@ -280,9 +282,30 @@
     updateSelectionUI();
   }
 
-  // 5. Toast 訊息提示 (已依需求移除彈窗訊息，杜絕遮擋畫面內容)
+  // 5. Toast 訊息提示 (畫面中上方醒目輕量提示)
   function showToast(message, type = 'info') {
-    // 彈窗訊息已停用
+    if (!toastContainerEl) return;
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+
+    let iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
+    if (type === 'success') {
+      iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+    } else if (type === 'warn') {
+      iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
+    }
+
+    toast.innerHTML = `${iconSvg}<span>${message}</span>`;
+    toastContainerEl.appendChild(toast);
+
+    setTimeout(() => {
+      toast.classList.add('hiding');
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.remove();
+        }
+      }, 250);
+    }, 1800);
   }
 
   // 6. 時間格式化 (秒 -> MM:SS 或 HH:MM:SS)
@@ -1311,6 +1334,13 @@
       vscode.setState(curState);
     }
 
+    // 確保放大播放器容器獲得焦點，能直接接收鍵盤快捷鍵 (如 Delete, 空白鍵, 左右鍵, Esc)
+    setTimeout(() => {
+      if (typeof playerModalEl.focus === 'function') {
+        playerModalEl.focus();
+      }
+    }, 50);
+
     resetIdleTimer();
   }
 
@@ -1860,6 +1890,36 @@
     }
   });
 
+  // 刪除當前放大檢視的影片 (送往後端彈出確認視窗後移至資源回收筒)
+  function deleteCurrentPlayerVideo() {
+    if (currentIndex >= 0 && currentIndex < filteredVideos.length) {
+      const cur = filteredVideos[currentIndex];
+      if (vscode) {
+        if (!playerVideoEl.paused) {
+          playerVideoEl.pause();
+        }
+        vscode.postMessage({
+          type: 'deleteFiles',
+          filePaths: [cur.fullPath]
+        });
+      }
+    }
+  }
+
+  if (playerCopyPathBtnEl) {
+    playerCopyPathBtnEl.addEventListener('click', () => {
+      if (currentIndex >= 0 && currentIndex < filteredVideos.length) {
+        const cur = filteredVideos[currentIndex];
+        copyToClipboard(cur.fullPath);
+        showToast(I18nModule.t('toast_copy_success', { file: cur.fileName }), 'success');
+      }
+    });
+  }
+
+  if (playerDeleteBtnEl) {
+    playerDeleteBtnEl.addEventListener('click', deleteCurrentPlayerVideo);
+  }
+
   // 17. 游標與控制列 2.4 秒自動隱藏 (Auto-Hide Inactivity Timer)
   function resetIdleTimer() {
     clearTimeout(idleTimer);
@@ -2262,6 +2322,9 @@
       } else if (!hasModifier && (e.key === 's' || e.key === 'S' || e.key === 'Enter')) {
         selectAndCloseBtnEl.click();
         e.preventDefault();
+      } else if (!hasModifier && (e.key === 'Delete' || e.key === 'Del')) {
+        deleteCurrentPlayerVideo();
+        e.preventDefault();
       } else if (!hasModifier && e.key >= '0' && e.key <= '9') {
         const pct = parseInt(e.key, 10) / 10;
         const dur = playerVideoEl.duration || 0;
@@ -2494,14 +2557,22 @@
 
         applyFilterAndSort();
 
-        // 若大播放器正開啟，依據絕對路徑精準校正 currentIndex 與數量，若被外部刪除則關閉
+        // 若大播放器正開啟，依據絕對路徑精準校正 currentIndex 與數量，若被刪除則切換至下一部或關閉
         if (playerModalEl.classList.contains('active') && currentPlayingVideo) {
           const newIdx = filteredVideos.findIndex(v => v.fullPath === currentPlayingVideo.fullPath);
           if (newIdx !== -1) {
             currentIndex = newIdx;
             playerIndexBadgeEl.textContent = `${currentIndex + 1} / ${filteredVideos.length}`;
+            prevBtnEl.disabled = currentIndex <= 0;
+            nextBtnEl.disabled = currentIndex >= filteredVideos.length - 1;
           } else {
-            closePlayer();
+            // 正在檢視的影片被刪除：若仍有剩餘影片則平滑顯示下一部（或最後一部），若無影片則退出播放器
+            if (filteredVideos.length > 0) {
+              const targetIdx = Math.min(currentIndex, filteredVideos.length - 1);
+              openPlayer(targetIdx, true);
+            } else {
+              closePlayer();
+            }
           }
         }
 

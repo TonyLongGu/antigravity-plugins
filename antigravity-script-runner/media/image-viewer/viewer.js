@@ -246,12 +246,34 @@
   const zoomFitBtnEl = document.getElementById('zoomFitBtn');
   const zoomActualBtnEl = document.getElementById('zoomActualBtn');
   const selectAndCloseBtnEl = document.getElementById('selectAndCloseBtn');
+  const lightboxCopyPathBtnEl = document.getElementById('lightboxCopyPathBtn');
   const lightboxDeleteBtnEl = document.getElementById('lightboxDeleteBtn');
   const toastContainerEl = document.getElementById('toastContainer');
 
-  // 4. Toast 通知系統 (已依需求移除彈窗訊息，杜絕遮擋畫面內容)
+  // 4. Toast 通知系統 (畫面中上方醒目輕量提示)
   function showToast(message, type = 'info') {
-    // 彈窗訊息已停用
+    if (!toastContainerEl) return;
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+
+    let iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
+    if (type === 'success') {
+      iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+    } else if (type === 'warn') {
+      iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
+    }
+
+    toast.innerHTML = `${iconSvg}<span>${message}</span>`;
+    toastContainerEl.appendChild(toast);
+
+    setTimeout(() => {
+      toast.classList.add('hiding');
+      setTimeout(() => {
+        if (toast.parentNode) {
+          toast.remove();
+        }
+      }, 250);
+    }, 1800);
   }
 
   // 5. 狀態持久化 (State Persistence)
@@ -1328,6 +1350,16 @@
         });
       }
     }
+  }
+
+  if (lightboxCopyPathBtnEl) {
+    lightboxCopyPathBtnEl.addEventListener('click', () => {
+      if (currentIndex >= 0 && currentIndex < filteredImages.length) {
+        const cur = filteredImages[currentIndex];
+        copyToClipboard(cur.fullPath);
+        showToast(I18nModule.t('toast_path_copied', { name: cur.fileName }), 'success');
+      }
+    });
   }
 
   if (lightboxDeleteBtnEl) {

@@ -65,6 +65,8 @@
       player_speed_title: '切換播放速度',
       player_expand_gallery_title: '展開為資料夾畫廊 (G)',
       player_select_and_close_title: '關閉播放器並在畫廊中選取此影片 (S / Enter)',
+      player_copy_path_title: '複製影片完整路徑',
+      player_delete_title: '刪除此影片 (Delete)',
       player_close_title: '關閉播放器 (Esc / 右鍵)',
       player_prev_title: '上一部 (← / [)',
       player_next_title: '下一部 (→ / ])',
@@ -78,7 +80,7 @@
       ctrl_hide_title: '隱藏控制器 (H，右鍵切換固定常駐)',
 
       // 提示訊息 (Toasts)
-      toast_copy_success: '已複製路徑：{file}',
+      toast_copy_success: '路徑已複製',
       toast_batch_copy_success: '已複製 {count} 個影片路徑',
       toast_open_external: '已透過系統播放器開啟：{file}',
       toast_open_selected_external: '已透過系統播放器開啟選取影片',
@@ -162,6 +164,8 @@
       player_speed_title: 'Change playback speed',
       player_expand_gallery_title: 'Expand to folder gallery (G)',
       player_select_and_close_title: 'Close player and select this video in gallery (S / Enter)',
+      player_copy_path_title: 'Copy full video path',
+      player_delete_title: 'Delete this video (Delete)',
       player_close_title: 'Close player (Esc / Right-click)',
       player_prev_title: 'Previous (← / [)',
       player_next_title: 'Next (→ / ])',
@@ -175,8 +179,8 @@
       ctrl_hide_title: 'Hide Controller (H, Right-click to pin)',
 
       // Toasts
-      toast_copy_success: 'Path copied: {file}',
-      toast_batch_copy_success: 'Copied absolute paths of {count} files',
+      toast_copy_success: 'Path copied',
+      toast_batch_copy_success: 'Copied {count} video paths',
       toast_open_external: 'Opened with system player: {file}',
       toast_open_selected_external: 'Opened selected video with system player',
       toast_first_video: 'Already the first video',
