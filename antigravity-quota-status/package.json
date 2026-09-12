@@ -2,7 +2,7 @@
   "name": "ai-quota-status",
   "displayName": "AI 模型額度狀態監控",
   "description": "於 IDE 狀態列常駐呈現 Gemini 與 Claude/GPT 模型的即時剩餘額度與重置倒數 (純文字)",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "publisher": "antigravity-toolkit",
   "engines": {
     "vscode": "^1.68.0"
@@ -20,6 +20,10 @@
       {
         "command": "aiQuota.showMenu",
         "title": "開啟 AI 模型額度選單"
+      },
+      {
+        "command": "aiQuota.switchAccount",
+        "title": "切換監控帳號 / 伺服器"
       },
       {
         "command": "aiQuota.toggleDisplayMode",

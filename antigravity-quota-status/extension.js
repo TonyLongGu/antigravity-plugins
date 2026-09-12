@@ -89,6 +89,12 @@ function activate(context) {
     })
   );
 
+  context.subscriptions.push(
+    vscode.commands.registerCommand('aiQuota.switchAccount', async () => {
+      await promptSwitchAccount();
+    })
+  );
+
   // 3. 監聽帳號認證與工作階段變更 (切換帳號時自動強制刷新)
   if (vscode.authentication && vscode.authentication.onDidChangeSessions) {
     context.subscriptions.push(
@@ -286,6 +292,13 @@ async function updateStatusBar(forceRefresh = false) {
     md.isTrusted = true;
     md.appendMarkdown(i18n.t('tooltip_title'));
 
+    if (data?.account?.email) {
+      const email = data.account.email;
+      const name = data.account.name ? ` (${data.account.name})` : '';
+      const tier = data.account.tier ? ` · ${data.account.tier}` : '';
+      md.appendMarkdown(`> **👤 ${i18n.t('tooltip_account_label')}:** \`${email}\`${name}${tier}\n\n`);
+    }
+
     const gWkRefresh = formatResetTime(data?.gemini?.weekly?.resetTime, gWk === UNLIMITED, i18n.t('plenty'));
     const g5hRefresh = gHas5h ? formatResetTime(data?.gemini?.fiveHour?.resetTime, g5h === UNLIMITED, i18n.t('plenty')) : '';
     const gDaily = formatCalculatedText(data?.gemini?.weekly?.dailyBudget, gWk);
@@ -330,13 +343,24 @@ async function updateStatusBar(forceRefresh = false) {
  * 彈出操作選單 (純文字 QuickPick)
  */
 async function showActionMenu() {
-  const data = await quotaService.getQuotaStatus(false);
+  const availableServers = quotaService.getAvailableServers();
   const items = [
     {
       label: i18n.t('menu_refresh_label'),
       description: i18n.t('menu_refresh_desc'),
       action: 'refresh'
-    },
+    }
+  ];
+
+  if (availableServers && availableServers.length > 1) {
+    items.push({
+      label: i18n.t('menu_switch_account_label'),
+      description: i18n.t('menu_switch_account_desc', { count: availableServers.length }),
+      action: 'switchAccount'
+    });
+  }
+
+  items.push(
     {
       label: i18n.t('menu_mode_label'),
       description: i18n.t('menu_mode_desc'),
@@ -352,7 +376,7 @@ async function showActionMenu() {
       description: i18n.t('menu_interval_desc'),
       action: 'setInterval'
     }
-  ];
+  );
 
   const selected = await vscode.window.showQuickPick(items, {
     placeHolder: i18n.t('menu_placeholder')
@@ -365,6 +389,9 @@ async function showActionMenu() {
       await updateStatusBar(true);
       vscode.window.setStatusBarMessage(i18n.t('toast_refresh_done'), 2500);
       break;
+    case 'switchAccount':
+      await promptSwitchAccount();
+      break;
     case 'toggleMode':
       await promptChangeDisplayMode();
       break;
@@ -374,6 +401,49 @@ async function showActionMenu() {
     case 'setInterval':
       await promptSetRefreshInterval();
       break;
+  }
+}
+
+/**
+ * 切換選定監控的語言伺服器 / 帳號
+ */
+async function promptSwitchAccount() {
+  const servers = quotaService.getAvailableServers();
+  if (!servers || servers.length === 0) {
+    vscode.window.showInformationMessage(i18n.t('no_accounts_found'));
+    return;
+  }
+
+  const selectedPid = quotaService.getSelectedPid();
+  const currentPid = quotaService._cachedConnection?.pid;
+
+  const options = [
+    {
+      label: i18n.t('account_auto_label'),
+      description: i18n.t('account_auto_desc'),
+      pid: null,
+      picked: selectedPid === null
+    },
+    ...servers.map(s => {
+      const isCurrent = s.pid === currentPid;
+      const typeTag = s.isMainLs ? `[${i18n.t('account_main_tag')}]` : `[${i18n.t('account_sub_tag')}]`;
+      return {
+        label: `${s.email} ${typeTag}`,
+        description: `PID: ${s.pid} · ${s.name || s.tier}${isCurrent ? ` (${i18n.t('account_current_tag')})` : ''}`,
+        pid: s.pid,
+        picked: selectedPid === s.pid
+      };
+    })
+  ];
+
+  const selected = await vscode.window.showQuickPick(options, {
+    placeHolder: i18n.t('switch_account_placeholder')
+  });
+
+  if (selected) {
+    quotaService.selectServer(selected.pid);
+    await updateStatusBar(true);
+    vscode.window.setStatusBarMessage(i18n.t('account_switched_toast', { target: selected.label }), 2500);
   }
 }
 

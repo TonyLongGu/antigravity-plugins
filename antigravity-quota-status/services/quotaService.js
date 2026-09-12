@@ -13,6 +13,35 @@ class QuotaService {
     this._cachedQuota = null;
     this._lastFetchTime = null;
     this._cachedConnection = null; // { port, csrf, pid }
+    this._selectedPid = null; // 使用者手動選定的 PID (若為 null 則自動按優先級選擇)
+    this._availableServers = []; // 掃描到的可用語言伺服器與帳號清單
+  }
+
+  /**
+   * 取得目前掃描到的可用語言伺服器清單
+   * @returns {Array<Object>}
+   */
+  getAvailableServers() {
+    return this._availableServers;
+  }
+
+  /**
+   * 切換選定的語言伺服器 PID (傳入 null 代表恢復自動優先選取)
+   * @param {number|null} pid
+   */
+  selectServer(pid) {
+    this._selectedPid = pid ? parseInt(pid, 10) : null;
+    this._cachedConnection = null;
+    this._cachedQuota = null;
+    this._lastFetchTime = null;
+  }
+
+  /**
+   * 取得當前手動選定的 PID
+   * @returns {number|null}
+   */
+  getSelectedPid() {
+    return this._selectedPid;
   }
 
   /**
@@ -52,10 +81,13 @@ class QuotaService {
    * @private
    */
   async _fetchFromLanguageServer() {
+    // 1. 若有快取連線且符合選定的 PID，直接快速查詢
     if (this._cachedConnection) {
-      const fastResult = await this._tryFetchFromPort(this._cachedConnection.port, this._cachedConnection.csrf);
-      if (fastResult) {
-        return fastResult;
+      if (!this._selectedPid || this._cachedConnection.pid === this._selectedPid) {
+        const fastResult = await this._tryFetchFromPort(this._cachedConnection.port, this._cachedConnection.csrf);
+        if (fastResult) {
+          return fastResult;
+        }
       }
       this._cachedConnection = null;
     }
@@ -65,15 +97,40 @@ class QuotaService {
       return null;
     }
 
+    const discoveredServers = [];
+    let chosenResult = null;
+    let chosenConnection = null;
+
     for (const proc of procs) {
       const ports = await this._getListeningPorts(proc.pid);
       for (const port of ports) {
-        const result = await this._tryFetchFromPort(port, proc.csrf);
-        if (result) {
-          this._cachedConnection = { port, csrf: proc.csrf, pid: proc.pid };
-          return result;
+        const quotaData = await this._tryFetchFromPort(port, proc.csrf);
+        if (quotaData) {
+          discoveredServers.push({
+            pid: proc.pid,
+            port: port,
+            csrf: proc.csrf,
+            isMainLs: proc.isMainLs,
+            email: quotaData.account?.email || '已登入',
+            name: quotaData.account?.name || '',
+            tier: quotaData.account?.tier || 'Pro'
+          });
+
+          // 判定是否為本次回傳目標：若指定 PID 則匹配該 PID；若無指定則由排序第一位的進程 (Main LS) 獲選
+          const isMatch = this._selectedPid ? (proc.pid === this._selectedPid) : !chosenResult;
+          if (isMatch) {
+            chosenResult = quotaData;
+            chosenConnection = { port, csrf: proc.csrf, pid: proc.pid };
+          }
+          break; // 該進程已找到通訊連接埠，不需再測該進程的其他 port
         }
       }
+    }
+
+    this._availableServers = discoveredServers;
+    if (chosenResult && chosenConnection) {
+      this._cachedConnection = chosenConnection;
+      return chosenResult;
     }
 
     return null;
@@ -106,11 +163,12 @@ class QuotaService {
 
   /**
    * 取得所有 Language Server 的 PID 與 CSRF Token
+   * 排序保證：全域主伺服器 (Main Language Server) 絕對優先，確保與 IDE 核心介面完全同步
    * @private
    */
   _getLsProcesses() {
     return new Promise((resolve) => {
-      const cmd = `powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process -Filter \\"Name = 'language_server_windows_x64.exe'\\" | Sort-Object CreationDate -Descending | Select-Object ProcessId, CommandLine | ConvertTo-Json"`;
+      const cmd = `powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process -Filter \\"Name = 'language_server_windows_x64.exe'\\" | Select-Object ProcessId, CommandLine, CreationDate | ConvertTo-Json"`;
       exec(cmd, (err, stdout) => {
         if (err || !stdout) return resolve([]);
         try {
@@ -120,9 +178,23 @@ class QuotaService {
           for (const item of parsed) {
             const csrfMatch = item.CommandLine ? item.CommandLine.match(/--csrf_token\s+([a-f0-9-]+)/) : null;
             if (csrfMatch && item.ProcessId) {
-              list.push({ pid: item.ProcessId, csrf: csrfMatch[1] });
+              const isMainLs = !item.CommandLine.includes('--enable_lsp') && !item.CommandLine.includes('--workspace_id');
+              list.push({
+                pid: item.ProcessId,
+                csrf: csrfMatch[1],
+                isMainLs: isMainLs,
+                creationDate: item.CreationDate
+              });
             }
           }
+          // 排序策略：
+          // 1. 全域主語言伺服器 (Main LS) 絕對優先，因為 IDE 主介面、模型配額面板、對話統一由主伺服器驅動
+          // 2. 同類型進程則按建立時間降序 (最新優先)
+          list.sort((a, b) => {
+            if (a.isMainLs && !b.isMainLs) return -1;
+            if (!a.isMainLs && b.isMainLs) return 1;
+            return 0;
+          });
           resolve(list);
         } catch {
           resolve([]);
