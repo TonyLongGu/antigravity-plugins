@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    Antigravity IDE 單一擴充套件一鍵卸載腳本
+    IDE 擴充套件一鍵卸載腳本 (智慧偵測 Antigravity IDE 與 VS Code + 清理 Junction 與註冊紀錄)
 #>
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -8,10 +8,11 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 $sourceDir = $PSScriptRoot
 
+# 動態讀取 package.json 資訊
 $pkgJsonPath = Join-Path $sourceDir "package.json"
 $extPublisher = "antigravity-toolkit"
-$extName = "antigravity-custom-tool"
-$extVersion = "1.0.0"
+$extName = "antigravity-quick-access"
+$extVersion = "1.2.5"
 $displayName = $extName
 
 if (Test-Path -LiteralPath $pkgJsonPath) {
@@ -25,18 +26,48 @@ if (Test-Path -LiteralPath $pkgJsonPath) {
 }
 
 $fullExtId = "$extPublisher.$extName"
-$baseRoots = @((Join-Path $env:USERPROFILE ".antigravity-ide\extensions"), (Join-Path $env:USERPROFILE ".antigravity\extensions"))
+
+# 候選 IDE 環境擴充套件路徑
+$candidateRoots = @(
+    @{ Name = "VS Code"; Path = (Join-Path $env:USERPROFILE ".vscode\extensions") },
+    @{ Name = "VS Code Insiders"; Path = (Join-Path $env:USERPROFILE ".vscode-insiders\extensions") },
+    @{ Name = "Antigravity IDE"; Path = (Join-Path $env:USERPROFILE ".antigravity-ide\extensions") },
+    @{ Name = "Antigravity (相容路徑)"; Path = (Join-Path $env:USERPROFILE ".antigravity\extensions") }
+)
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  解除安裝 Antigravity 原生擴充套件      " -ForegroundColor Cyan
-Write-Host "  套件: $displayName ($fullExtId)       " -ForegroundColor Yellow
+Write-Host "  解除安裝 IDE 原生擴充套件 (雙環境相容) " -ForegroundColor Cyan
+Write-Host "  套件名稱: $displayName ($fullExtId)   " -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Cyan
 
-foreach ($baseRoot in $baseRoots) {
-    if (-not (Test-Path -LiteralPath $baseRoot)) { continue }
+$cleanedCount = 0
+
+foreach ($target in $candidateRoots) {
+    $baseRoot = $target.Path
+    $envName = $target.Name
+
+    # 若該 IDE 擴充資料夾根本不存在，直接略過，嚴禁無故新建目錄
+    if (-not (Test-Path -LiteralPath $baseRoot)) {
+        continue
+    }
+
+    $existingDiskItems = @(Get-ChildItem -LiteralPath $baseRoot)
+    $hasTargetItem = $false
+    foreach ($diskItem in $existingDiskItems) {
+        $diname = $diskItem.Name
+        if ($diname -like "$fullExtId*" -or $diname -like "$extName*" -or $diname -like "antigravity-toolkit.$extName*") {
+            $hasTargetItem = $true
+            break
+        }
+    }
+
+    if (-not $hasTargetItem) {
+        continue
+    }
+
+    Write-Host "`n>> 正在清理 [$envName] 擴充目錄..." -ForegroundColor Cyan
 
     # 1. 萬用字元徹底刪除 Junction 與實體資料夾
-    $existingDiskItems = @(Get-ChildItem -LiteralPath $baseRoot)
     foreach ($diskItem in $existingDiskItems) {
         $diname = $diskItem.Name
         if ($diname -like "$fullExtId*" -or $diname -like "$extName*" -or $diname -like "antigravity-toolkit.$extName*") {
@@ -47,7 +78,8 @@ foreach ($baseRoot in $baseRoots) {
                 } else {
                     Remove-Item -LiteralPath $diskItem.FullName -Recurse -Force
                 }
-                Write-Host "[OK] 已移除連結: $($diskItem.FullName)" -ForegroundColor Green
+                Write-Host "  [OK] 已移除連結: $($diskItem.FullName)" -ForegroundColor Green
+                $cleanedCount++
             } catch {
                 cmd.exe /c "rd /s /q `"$($diskItem.FullName)`"" 2>$null
             }
@@ -105,14 +137,18 @@ foreach ($baseRoot in $baseRoots) {
                 if ($found) {
                     $jsonText = ConvertTo-Json -InputObject $filtered.ToArray() -Depth 10
                     [System.IO.File]::WriteAllText($jsonPath, $jsonText, $utf8NoBom)
-                    Write-Host "[OK] 已從清單取消註冊: $jsonPath" -ForegroundColor Green
+                    Write-Host "  [OK] 已從清單取消註冊: $jsonPath" -ForegroundColor Green
                 }
             }
         } catch {
-            Write-Host "[WARN] Skip extensions.json cleanup: $($_.Exception.Message)" -ForegroundColor Gray
+            Write-Host "  [略過] extensions.json 清理略過: $($_.Exception.Message)" -ForegroundColor Gray
         }
     }
 }
 
 Write-Host ""
-Write-Host "擴充套件卸載完成！請於 IDE 按 [Ctrl + Shift + P] -> 執行 [Developer: Reload Window] 生效。" -ForegroundColor Green
+if ($cleanedCount -gt 0) {
+    Write-Host "擴充套件卸載完成！請於對應的 IDE 按 [Ctrl + Shift + P] -> 執行 [Developer: Reload Window] 生效。" -ForegroundColor Green
+} else {
+    Write-Host "未發現任何本套件的安裝紀錄，系統已保持乾淨。" -ForegroundColor Gray
+}

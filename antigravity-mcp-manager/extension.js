@@ -218,7 +218,7 @@ class MCPManagerViewProvider {
 
       // 更新 IDE 底部 Status Bar
       if (this._statusBarItem) {
-        this._statusBarItem.text = `$(plug) [${globalData.envName}] MCP: ${globalData.stats.enabled}/${globalData.stats.total}`;
+        this._statusBarItem.text = `$(plug) MCP: ${globalData.stats.enabled}/${globalData.stats.total}`;
 
         const servers = (globalData.config && globalData.config.mcpServers) || {};
         const enabledServers = Object.keys(servers).filter((name) => servers[name].disabled !== true);

@@ -1,6 +1,6 @@
 # Antigravity 常用捷徑與暫存清單 (Quick Access)
 
-專為 **Google Antigravity IDE** 設計的檔案總管獨立暫存與快速存取視窗。
+專為 **Google Antigravity IDE** 與 **Visual Studio Code (VS Code)** 設計的檔案總管獨立暫存與快速存取視窗。
 
 ## 核心功能
 
@@ -41,7 +41,9 @@
   - `[Pin]` 切換 釘選 / 臨時（支援頂層項目及資料夾展開內部之子項目）
   - `[Remove]` 從清單移除（僅針對頂層加入之項目）
 
-## 安裝與卸載
+## 安裝與卸載 (支援 Antigravity IDE / VS Code 雙環境)
 
-- **安裝**：執行 `install-extension.ps1` 或雙擊 `install-extension.bat`，並於 IDE 按 `Ctrl + Shift + P` 執行 `Developer: Reload Window`。
-- **卸載**：執行 `uninstall-extension.ps1` 或雙擊 `uninstall-extension.bat`。
+腳本具備**智慧環境偵測**機制：僅會部署至本機已安裝的 IDE 環境，若未安裝某個 IDE 會自動略過，絕不建立多餘的空資料夾。
+
+- **安裝**：執行 `install-extension.ps1` 或雙擊 `install-extension.bat`，腳本會自動偵測並部署至本機已安裝的 Antigravity IDE 與 VS Code。完成後於對應 IDE 按 `Ctrl + Shift + P` 執行 `Developer: Reload Window`。
+- **卸載**：執行 `uninstall-extension.ps1` 或雙擊 `uninstall-extension.bat`，自動清理本機所有已部署環境的擴充連結與註冊紀錄。
