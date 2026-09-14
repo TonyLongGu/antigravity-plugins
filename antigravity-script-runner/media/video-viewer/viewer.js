@@ -20,6 +20,27 @@
     console.log('[VideoViewer] 獨立瀏覽器除錯環境');
   }
 
+  // 全域例外捕獲與安全防護
+  window.addEventListener('error', (event) => {
+    console.error('[VideoViewer UI Error]', event.error || event.message);
+    if (vscode) {
+      vscode.postMessage({
+        type: 'showError',
+        message: `視訊檢視器前端異常: ${event.message || '未知錯誤'}`
+      });
+    }
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('[VideoViewer UI Unhandled Rejection]', event.reason);
+    if (vscode) {
+      vscode.postMessage({
+        type: 'showError',
+        message: `視訊檢視器未處理非同步錯誤: ${event.reason?.message || event.reason || '未知原因'}`
+      });
+    }
+  });
+
   // 2. 全域狀態
   let allVideos = [];
   let filteredVideos = [];

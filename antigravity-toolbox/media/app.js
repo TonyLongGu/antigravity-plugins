@@ -5,6 +5,28 @@
 (function () {
   const vscode = acquireVsCodeApi();
 
+  // 全域前端運行時錯誤捕獲 (回報至後端 Extension Host 杜絕靜默中斷)
+  window.addEventListener('error', (event) => {
+    try {
+      vscode.postMessage({
+        type: 'showToast',
+        message: `[控制中心前端錯誤] ${event.message} (${event.filename ? event.filename.split('/').pop() : 'inline'}:${event.lineno})`,
+        status: 'error',
+      });
+    } catch (e) {}
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    try {
+      const reason = event.reason?.message || event.reason || '未知非同步例外';
+      vscode.postMessage({
+        type: 'showToast',
+        message: `[控制中心未處理 Promise] ${reason}`,
+        status: 'error',
+      });
+    } catch (e) {}
+  });
+
   /**
    * Lucide / Linear 原生圓角線性向量圖示庫 (Inline SVG 零外部請求自包含)
    */

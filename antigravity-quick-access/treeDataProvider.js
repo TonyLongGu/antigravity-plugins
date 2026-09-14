@@ -182,14 +182,18 @@ class QuickAccessTreeDataProvider {
     const isPinned = groupId === 'pinned';
 
     const workspaceFolders = vscode.workspace.workspaceFolders || [];
-    const workspaceRoots = workspaceFolders.map(f => this.storageManager.normalizePath(f.uri.fsPath).toLowerCase());
+    const rootEntries = workspaceFolders
+      .map((f, i) => ({
+        root: this.storageManager.normalizePath(f.uri.fsPath).toLowerCase(),
+        index: i
+      }))
+      .sort((a, b) => b.root.length - a.root.length);
 
     const getProjectIndex = (itemPath) => {
       const norm = this.storageManager.normalizePath(itemPath).toLowerCase();
-      for (let i = 0; i < workspaceRoots.length; i++) {
-        const root = workspaceRoots[i];
-        if (norm === root || norm.startsWith(root + '/')) {
-          return i;
+      for (const entry of rootEntries) {
+        if (norm === entry.root || norm.startsWith(entry.root + '/')) {
+          return entry.index;
         }
       }
       return 9999;
@@ -261,7 +265,7 @@ class QuickAccessTreeDataProvider {
    * @param {boolean} [parentIsPinned]
    */
   async _getDirectoryChildren(dirPath, parentGroupId = null, parentIsPinned = false) {
-    if (!dirPath || !fs.existsSync(dirPath)) {
+    if (!dirPath) {
       return [];
     }
 
@@ -332,7 +336,12 @@ class QuickAccessTreeDataProvider {
     const normPathLower = normPath.toLowerCase();
     const workspaceFolders = vscode.workspace.workspaceFolders || [];
 
-    for (const folder of workspaceFolders) {
+    // 依根目錄長度降序排序，確保巢狀工作區時優先匹配最深層的具體專案
+    const sortedFolders = [...workspaceFolders].sort((a, b) => {
+      return b.uri.fsPath.length - a.uri.fsPath.length;
+    });
+
+    for (const folder of sortedFolders) {
       const normRoot = this.storageManager.normalizePath(folder.uri.fsPath);
       const normRootLower = normRoot.toLowerCase();
 
@@ -467,9 +476,16 @@ class QuickAccessDragAndDropController {
         const uris = [];
         for (const line of lines) {
           try {
-            const parsedUri = vscode.Uri.parse(line);
-            if (parsedUri.scheme === 'file') {
-              uris.push(parsedUri);
+            // Windows 磁碟代號路徑 (如 D:\... 或 D:/...) 直接使用 Uri.file 解析
+            if (/^[a-zA-Z]:[\\/]/.test(line)) {
+              uris.push(vscode.Uri.file(line));
+            } else {
+              const parsedUri = vscode.Uri.parse(line);
+              if (parsedUri.scheme === 'file') {
+                uris.push(parsedUri);
+              } else if (fs.existsSync(line)) {
+                uris.push(vscode.Uri.file(line));
+              }
             }
           } catch {
             // 若為直接檔案路徑

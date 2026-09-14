@@ -414,8 +414,11 @@ class TranscriptParserService {
               if (modelMatch) currentModel = modelMatch[1].trim();
             }
 
-            // 從內容中掃描提及的檔案與專案路徑
-            const fileMatches = obj.content.matchAll(/(?:file:\/\/\/?|[a-zA-Z]:[\\/])(?:PJ[\\/]|Users[\\/])?[^`"'\r\n\t\<\>\(\)]+/gi);
+            // 從內容中掃描提及的檔案與專案路徑（長度防禦：避免巨型日誌或 tool output 引發正則回溯卡頓）
+            const scanTarget = (obj.type === 'USER_INPUT' || obj.type === 'MODEL')
+              ? obj.content
+              : (obj.content.length > 8192 ? obj.content.slice(0, 8192) : obj.content);
+            const fileMatches = scanTarget.matchAll(/(?:file:\/\/\/?|[a-zA-Z]:[\\/])(?:PJ[\\/]|Users[\\/])?[^`"'\r\n\t\<\>\(\)]+/gi);
             for (const fm of fileMatches) {
               const rawP = fm[0];
               if (!rawP.includes('AppData') && !rawP.includes('Temp') && !rawP.includes('node_modules')) {

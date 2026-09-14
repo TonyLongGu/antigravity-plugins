@@ -424,8 +424,8 @@ function activate(context) {
     treeDataProvider.refresh();
   });
 
-  // 19. 檔案系統變更監聽 (當檔案被刪除或更名時即時連動過濾)
-  const fsWatcher = vscode.workspace.createFileSystemWatcher('**/*');
+  // 19. 檔案系統變更監聽 (當檔案被刪除或更名時即時連動過濾；明確忽略 Change 事件以節省 CPU 與事件總線)
+  const fsWatcher = vscode.workspace.createFileSystemWatcher('**/*', false, true, false);
   fsWatcher.onDidDelete(() => treeDataProvider.refresh());
   fsWatcher.onDidCreate(() => treeDataProvider.refresh());
 

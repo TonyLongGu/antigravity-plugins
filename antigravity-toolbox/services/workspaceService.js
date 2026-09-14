@@ -72,7 +72,28 @@ function saveWorkspaceJson(wsPath, json, immediate = false) {
 
   const doWrite = () => {
     try {
-      fs.writeFileSync(wsPath, JSON.stringify(json, null, 2), 'utf-8');
+      const content = JSON.stringify(json, null, 2) + '\n';
+      JSON.parse(content); // 驗證 JSON 有效性
+
+      // 1. 若原始工作區檔案存在，自動建立 .bak 備份，避免極端異常損毀
+      try {
+        if (fs.existsSync(wsPath)) {
+          fs.copyFileSync(wsPath, `${wsPath}.bak`);
+        }
+      } catch {}
+
+      // 2. 原子性暫存寫入
+      const tempPath = `${wsPath}.${Date.now()}.${Math.random().toString(36).slice(2, 6)}.tmp`;
+      fs.writeFileSync(tempPath, content, 'utf-8');
+
+      // 3. 原子覆蓋目標檔案
+      try {
+        fs.renameSync(tempPath, wsPath);
+      } catch {
+        fs.copyFileSync(tempPath, wsPath);
+        try { fs.unlinkSync(tempPath); } catch {}
+      }
+
       try {
         const stat = fs.statSync(wsPath);
         if (cachedWorkspaceContext && cachedWorkspaceContext.wsPath === wsPath) {

@@ -64,11 +64,16 @@ class McpConfigService {
   }
 
   /**
-   * 取得當前 IDE 所屬之獨立備註檔路徑
+   * 取得當前 IDE 所屬之全域獨立備註檔路徑
+   * - Google Antigravity: ~/.gemini/config/antigravity_mcp_notes.json
+   * - Visual Studio Code: %APPDATA%/Code/User/vscode_mcp_notes.json
    */
   static get notesFilePath() {
     const filename = this.isVsCode ? 'vscode_mcp_notes.json' : 'antigravity_mcp_notes.json';
-    return path.join(__dirname, '..', filename);
+    if (this.isVsCode) {
+      return path.join(path.dirname(this.globalConfigPath), filename);
+    }
+    return path.join(os.homedir(), '.gemini', 'config', filename);
   }
 
   /**
@@ -86,7 +91,7 @@ class McpConfigService {
   }
 
   /**
-   * 安全儲存 JSON 檔案（含格式化與自動備份）
+   * 安全儲存 JSON 檔案（含格式驗證、自動備份與原子性寫入防護）
    */
   static async safeSaveJson(filePath, dataObj) {
     const dir = path.dirname(filePath);
@@ -95,24 +100,67 @@ class McpConfigService {
     } catch (e) {}
 
     const jsonContent = JSON.stringify(dataObj, null, 2) + '\n';
-    JSON.parse(jsonContent); // 格式驗證
-    await fsPromises.writeFile(filePath, jsonContent, 'utf-8');
-    return true;
+    JSON.parse(jsonContent); // 格式驗證 (確保寫入內容為 100% 合法 JSON)
+
+    // 1. 若原始檔案已存在，建立同目錄下 .bak 備份，避免極端異常損毀
+    try {
+      await fsPromises.copyFile(filePath, `${filePath}.bak`);
+    } catch (e) {}
+
+    // 2. 原子性寫入：先寫入 .tmp 暫存檔
+    const tempPath = `${filePath}.${Date.now()}.${Math.random().toString(36).slice(2, 6)}.tmp`;
+    try {
+      await fsPromises.writeFile(tempPath, jsonContent, 'utf-8');
+
+      // 3. 原子覆蓋目標檔案
+      try {
+        await fsPromises.rename(tempPath, filePath);
+      } catch (err) {
+        // Windows 上若目標檔被暫時鎖定導致 rename 失敗，回退至 copyFile
+        await fsPromises.copyFile(tempPath, filePath);
+      }
+      return true;
+    } finally {
+      // 確保無論寫入成功或異常失敗，皆銷毀 .tmp 暫存檔，杜絕磁碟垃圾殘留
+      await fsPromises.unlink(tempPath).catch(() => {});
+    }
   }
 
   /**
-   * 取得當前獨立備註檔所有內容
+   * 取得當前獨立備註檔所有內容 (自全域配置目錄讀取)
    */
   static async getNotes() {
     return await this.safeReadJson(this.notesFilePath, {});
   }
 
   /**
-   * 儲存備註至當前獨立備註檔
+   * 儲存備註至獨立備註檔 (儲存至全域配置目錄)
    */
   static async saveNotes(notesObj) {
     await this.safeSaveJson(this.notesFilePath, notesObj);
     return notesObj;
+  }
+
+  /**
+   * 非同步調用 Python 執行命令 (杜絕同步阻塞 Extension Host 主執行緒)
+   */
+  static async runPythonAsync(script, args = [], timeout = 5000) {
+    return new Promise((resolve, reject) => {
+      if (!childProcess || !childProcess.execFile) {
+        return reject(new Error('child_process 不可用'));
+      }
+      childProcess.execFile(
+        'python',
+        ['-c', script, ...args],
+        { encoding: 'utf-8', timeout, windowsHide: true },
+        (err, stdout, stderr) => {
+          if (err) {
+            return reject(err);
+          }
+          resolve(stdout ? stdout.trim() : '');
+        }
+      );
+    });
   }
 
   /**
@@ -148,22 +196,20 @@ class McpConfigService {
       console.warn('透過 node:sqlite 讀取 VS Code state.vscdb 失敗，嘗試後備方案:', err.message);
     }
 
-    // 2. 後備方案：調用本機 Python 讀取 SQLite
+    // 2. 後備方案：非同步調用本機 Python 讀取 SQLite (非阻塞)
     try {
-      if (childProcess) {
-        const pyScript = `import sqlite3, json, sys\ntry:\n conn = sqlite3.connect(sys.argv[1])\n cur = conn.cursor()\n cur.execute("SELECT value FROM ItemTable WHERE key = 'mcp.enablement'")\n row = cur.fetchone()\n print(row[0] if row else "[]")\n conn.close()\nexcept: print("[]")`;
-        const out = childProcess.execFileSync('python', ['-c', pyScript, dbPath], { encoding: 'utf-8', timeout: 3000 });
-        const arr = JSON.parse(out.trim() || '[]');
-        if (Array.isArray(arr)) {
-          for (const [key, val] of arr) {
-            const prefix = 'mcp.config.usrlocal.';
-            if (typeof key === 'string' && key.startsWith(prefix)) {
-              result.set(key.substring(prefix.length), val !== false);
-            }
+      const pyScript = `import sqlite3, json, sys\ntry:\n conn = sqlite3.connect(sys.argv[1])\n cur = conn.cursor()\n cur.execute("SELECT value FROM ItemTable WHERE key = 'mcp.enablement'")\n row = cur.fetchone()\n print(row[0] if row else "[]")\n conn.close()\nexcept: print("[]")`;
+      const out = await this.runPythonAsync(pyScript, [dbPath], 3000);
+      const arr = JSON.parse(out || '[]');
+      if (Array.isArray(arr)) {
+        for (const [key, val] of arr) {
+          const prefix = 'mcp.config.usrlocal.';
+          if (typeof key === 'string' && key.startsWith(prefix)) {
+            result.set(key.substring(prefix.length), val !== false);
           }
         }
-        return result;
       }
+      return result;
     } catch (e) {}
 
     return result;
@@ -203,15 +249,13 @@ class McpConfigService {
       console.warn('透過 node:sqlite 寫入 VS Code state.vscdb 失敗，嘗試後備方案:', err.message);
     }
 
-    // 2. 後備方案：透過 Python 寫入
+    // 2. 後備方案：非同步透過 Python 寫入 (非阻塞)
     try {
-      if (childProcess) {
-        const pyScript = `import sqlite3, json, sys\ntry:\n db_path = sys.argv[1]\n updates = json.loads(sys.argv[2])\n conn = sqlite3.connect(db_path)\n cur = conn.cursor()\n cur.execute("SELECT value FROM ItemTable WHERE key = 'mcp.enablement'")\n row = cur.fetchone()\n data = json.loads(row[0]) if row and row[0] else []\n for name, enabled in updates.items():\n  k = 'mcp.config.usrlocal.' + name\n  data = [x for x in data if x[0] != k]\n  if not enabled: data.append([k, False])\n cur.execute("INSERT OR REPLACE INTO ItemTable (key, value) VALUES ('mcp.enablement', ?)", (json.dumps(data),))\n conn.commit()\n conn.close()\n print("OK")\nexcept Exception as e: print("ERR:" + str(e))`;
-        const out = childProcess.execFileSync('python', ['-c', pyScript, dbPath, JSON.stringify(updatesMap)], { encoding: 'utf-8', timeout: 5000 });
-        if (out.includes('OK')) return true;
-      }
+      const pyScript = `import sqlite3, json, sys\ntry:\n db_path = sys.argv[1]\n updates = json.loads(sys.argv[2])\n conn = sqlite3.connect(db_path)\n cur = conn.cursor()\n cur.execute("SELECT value FROM ItemTable WHERE key = 'mcp.enablement'")\n row = cur.fetchone()\n data = json.loads(row[0]) if row and row[0] else []\n for name, enabled in updates.items():\n  k = 'mcp.config.usrlocal.' + name\n  data = [x for x in data if x[0] != k]\n  if not enabled: data.append([k, False])\n cur.execute("INSERT OR REPLACE INTO ItemTable (key, value) VALUES ('mcp.enablement', ?)", (json.dumps(data),))\n conn.commit()\n conn.close()\n print("OK")\nexcept Exception as e: print("ERR:" + str(e))`;
+      const out = await this.runPythonAsync(pyScript, [dbPath, JSON.stringify(updatesMap)], 5000);
+      if (out && out.includes('OK')) return true;
     } catch (e) {
-      console.error('後備寫入 VS Code state.vscdb 亦失敗:', e.message);
+      console.error('後備非同步寫入 VS Code state.vscdb 亦失敗:', e.message);
     }
 
     return false;
@@ -238,19 +282,18 @@ class McpConfigService {
   }
 
   /**
-   * 取得全域 MCP 配置、統計資訊與外部備註
+   * 取得全域 MCP 配置、統計資訊與外部備註 (純唯讀冪等操作，無寫入副作用)
    */
   static async getGlobalData() {
     const configPath = this.globalConfigPath;
     const notesPath = this.notesFilePath;
     const isVs = this.isVsCode;
 
-    // 1. 讀取原生配置檔與獨立備註檔
+    // 1. 讀取原生配置檔與獨立備註檔 (融合外掛目錄原有說明)
     const rawConfig = await this.safeReadJson(configPath, isVs ? { servers: {} } : { mcpServers: {} });
-    const notes = await this.safeReadJson(notesPath, {});
+    const notes = await this.getNotes();
 
     let normalizedServers = {};
-    let notesNeedSave = false;
 
     if (isVs) {
       // VS Code: 伺服器定義在 rawConfig.servers，開關狀態自 state.vscdb 讀取
@@ -270,39 +313,20 @@ class McpConfigService {
           description: note.description || '',
           disabled: isDisabled,
         };
-
-        if (note.disabled !== isDisabled) {
-          notes[name] = { ...note, disabled: isDisabled };
-          notesNeedSave = true;
-        }
-      }
-
-      if (notesNeedSave) {
-        await this.saveNotes(notes);
       }
     } else {
       // Antigravity: 伺服器與開關皆直接儲存於 rawConfig.mcpServers
       const servers = rawConfig.mcpServers || {};
       for (const [name, server] of Object.entries(servers)) {
         const note = notes[name] || {};
-        // 雙向相容：若 notes 內沒有但 rawConfig 有 description，自動回填至 notes
-        let desc = note.description;
-        if (!desc && server.description) {
-          desc = server.description;
-          notes[name] = { ...(notes[name] || {}), description: desc };
-          notesNeedSave = true;
-        }
+        const desc = note.description || server.description || '';
 
         normalizedServers[name] = {
           ...server,
           serverUrl: server.serverUrl || server.url,
-          description: desc || '',
+          description: desc,
           disabled: server.disabled === true,
         };
-      }
-
-      if (notesNeedSave) {
-        await this.saveNotes(notes);
       }
     }
 

@@ -579,7 +579,8 @@ details[open] > summary .chevron {
 details.server-card {
   background: var(--bg-item);
   border: 1px solid var(--border-color);
-  border-left: 3px solid var(--accent-green); /* 與（圖2）完全一致的筆直垂直綠色高光，絕不往回勾 */
+  border-left: 3px solid #14b8a6; /* 參照 toolbox IDE 設定檔高光 */
+  box-shadow: none; /* 移除邊緣綠光與內陰影，維持純淨卡片邊框 */
   border-radius: var(--radius-sm);
   overflow: hidden;
   transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
@@ -589,22 +590,25 @@ details.server-card {
 details.server-card:hover {
   background: var(--bg-item-hover);
   border-color: var(--border-hover);
-  border-left-color: var(--accent-green);
+  border-left-color: #2dd4bf;
 }
 
 details.server-card[open] {
   background: rgba(255, 255, 255, 0.05);
 }
 
+/* 未啟用狀態：徹底去除任何綠光陰影，回歸標準 1px 灰色外框 */
 details.server-card.disabled {
   opacity: 0.82;
-  border-left: 1px solid var(--border-color); /* 未啟用時：左邊也是標準 1px 灰色外框，四邊完整封閉，無黑色縫隙 */
+  border-left: 1px solid var(--border-color); /* 未啟用時：標準 1px 灰外框，四邊封閉 */
+  box-shadow: none !important; /* 徹底杜絕任何綠光泛出效果 */
 }
 
 details.server-card.disabled:hover {
   opacity: 0.9;
   border-color: var(--border-hover);
   border-left-color: var(--border-hover);
+  box-shadow: none !important; /* 懸停時亦不帶綠光 */
 }
 
 /* 折疊標題列 Summary */
@@ -685,8 +689,8 @@ details.server-card[open] > summary .server-chevron {
 }
 
 .status-dot.enabled {
-  background: var(--accent-green);
-  box-shadow: 0 0 5px rgba(16, 185, 129, 0.5);
+  background: #14b8a6;
+  box-shadow: 0 0 5px rgba(20, 184, 166, 0.5);
 }
 
 .status-dot.error {
@@ -723,9 +727,13 @@ details.server-card[open] > summary .server-chevron {
   text-overflow: ellipsis;
 }
 
-/* 依啟用狀態微調標題字色 */
+/* 依啟用狀態微調標題字色 (啟用時微暗柔和，未啟用時微亮清晰) */
 details.server-card:not(.disabled) .server-name {
-  color: hsl(168, 55%, 75%);
+  color: #cbd5e1; /* 啟用時稍微暗一點點，舒適不刺眼 */
+}
+
+details.server-card.disabled .server-name {
+  color: #b0b8c4; /* 未啟用時稍微亮一點，清晰易讀 */
 }
 
 /* Runtime & Type 標籤 */
@@ -772,6 +780,16 @@ details.server-card:not(.disabled) .server-name {
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: var(--trans);
+  outline: none;
+}
+
+.btn-test:focus,
+.btn-test:focus-visible {
+  outline: none;
+}
+
+.btn-test:active {
+  transform: scale(0.94);
 }
 
 .btn-test .lucide-icon {
@@ -784,45 +802,39 @@ details.server-card:not(.disabled) .server-name {
   fill: none;
 }
 
-/* 滑鼠懸停時：亮灰色，不再使用藍色 */
+/* 滑鼠懸停時：底色與外框維持標準微光，未測試狀態下圖示為亮灰色 */
 .btn-test:hover {
   background: rgba(255, 255, 255, 0.15);
-  color: #f1f5f9;
   border-color: rgba(255, 255, 255, 0.38);
+  color: #f1f5f9;
 }
 
-/* 測試狀態：正常運作中 (綠色圖示) */
+/* 測試狀態：正常運作中 (僅改變圖示為綠色，底色與外框完全不改色) */
 .btn-test.status-ok {
   color: #34d399;
-  border-color: rgba(52, 211, 153, 0.45);
-  background: rgba(16, 185, 129, 0.12);
 }
 
 .btn-test.status-ok:hover {
   color: #6ee7b7;
-  border-color: rgba(52, 211, 153, 0.7);
-  background: rgba(16, 185, 129, 0.22);
 }
 
-/* 測試狀態：錯誤/連線失敗 (紅色圖示) */
+/* 測試狀態：錯誤/連線失敗 (僅改變圖示為紅色，底色與外框完全不改色) */
 .btn-test.status-fail {
   color: #f87171;
-  border-color: rgba(248, 113, 113, 0.45);
-  background: rgba(244, 63, 94, 0.12);
 }
 
 .btn-test.status-fail:hover {
   color: #fca5a5;
-  border-color: rgba(248, 113, 113, 0.7);
-  background: rgba(244, 63, 94, 0.22);
 }
 
-/* 測試狀態：測試中 (黃色呼吸脈衝) */
+/* 測試狀態：測試中 (僅改變圖示為黃色呼吸脈衝，底色與外框完全不改色) */
 .btn-test.is-testing {
   color: var(--accent-amber);
-  border-color: rgba(245, 158, 11, 0.45);
-  background: rgba(245, 158, 11, 0.12);
   cursor: wait;
+}
+
+.btn-test.is-testing:hover {
+  color: #fcd34d;
 }
 
 .btn-test.is-testing .lucide-icon {
@@ -974,7 +986,7 @@ details.server-card:not(.disabled) .server-name {
   border-color: rgba(255, 255, 255, 0.28);
 }
 
-/* Switch Toggle 開關 (標準極簡滑塊) */
+/* Switch Toggle 開關 (完全參照 antigravity-toolbox IDE 設定檔規格) */
 .switch {
   position: relative;
   display: inline-block;
@@ -982,9 +994,15 @@ details.server-card:not(.disabled) .server-name {
   height: 16px;
   flex-shrink: 0;
   cursor: pointer;
+  user-select: none;
+  transition: transform 0.12s ease;
 }
 
-/* 擴大開關點擊感應範圍（維持 28x16 視覺尺寸不變，向四周擴展點擊熱區） */
+.switch:active {
+  transform: scale(0.92);
+}
+
+/* 擴大開關點擊感應範圍 */
 .switch::after {
   content: "";
   position: absolute;
@@ -1009,9 +1027,11 @@ details.server-card:not(.disabled) .server-name {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(255, 255, 255, 0.15);
-  transition: var(--trans);
-  border-radius: 16px;
+  box-sizing: border-box;
+  background-color: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .slider:before {
@@ -1019,28 +1039,36 @@ details.server-card:not(.disabled) .server-name {
   content: "";
   height: 12px;
   width: 12px;
-  left: 2px;
-  bottom: 2px;
-  background-color: #ffffff;
-  transition: var(--trans);
+  left: 1px;
+  top: 1px;
+  background-color: #cccccc;
   border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), background 0.18s ease;
+  pointer-events: none;
 }
 
-/* 滑鼠進入感應熱區時的微幅亮度回饋 */
+/* 滑鼠進入感應熱區時的微幅亮度回饋 (未開啟狀態) */
 .switch:hover .slider {
-  background-color: rgba(255, 255, 255, 0.24);
+  background-color: rgba(255, 255, 255, 0.26);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
+/* 開啟狀態：參照 toolbox IDE 設定檔綠色系 (#0d9488 + #14b8a6) */
 input:checked + .slider {
-  background-color: var(--accent-green);
+  background-color: #0d9488;
+  border-color: #14b8a6;
+  box-shadow: 0 0 6px rgba(20, 184, 166, 0.35);
 }
 
 .switch:hover input:checked + .slider {
-  background-color: #34d399;
+  background-color: #14b8a6;
+  box-shadow: 0 0 8px rgba(20, 184, 166, 0.5);
 }
 
 input:checked + .slider:before {
   transform: translateX(12px);
+  background-color: #ffffff;
 }
 
 /* 空狀態提示框 */

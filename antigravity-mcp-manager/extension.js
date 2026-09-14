@@ -23,6 +23,7 @@ class MCPManagerViewProvider {
     this._statusBarItem = statusBarItem;
     this._view = undefined;
     this._panel = undefined;
+    this._refreshDebounceTimer = null;
   }
 
   async resolveWebviewView(webviewView, _context, _token) {
@@ -147,6 +148,7 @@ class MCPManagerViewProvider {
         const { action } = message;
         try {
           await McpConfigService.batchToggle(action);
+          await this.refreshWebviewData(true); // 立即推播最新資料，繞過 120ms 防抖
           const isEnable = action === 'enableAll' || action === 'enable_all';
           const isDisable = action === 'disableAll' || action === 'disable_all';
           const actionText = isEnable ? '全部啟用' : isDisable ? '全部停用' : '反向切換';
@@ -154,6 +156,7 @@ class MCPManagerViewProvider {
           vscode.window.setStatusBarMessage(`[${McpConfigService.envName}] MCP 批次操作完成`, 3000);
         } catch (err) {
           this.pushToast(`批次操作失敗：${err.message}`, 'danger');
+          await this.refreshWebviewData(true);
         }
         break;
       }
@@ -212,58 +215,77 @@ class MCPManagerViewProvider {
     }
   }
 
-  async refreshWebviewData() {
-    try {
-      const globalData = await McpConfigService.getGlobalData();
+  async refreshWebviewData(immediate = false) {
+    if (this._refreshDebounceTimer) {
+      clearTimeout(this._refreshDebounceTimer);
+      this._refreshDebounceTimer = null;
+    }
 
-      // 更新 IDE 底部 Status Bar
-      if (this._statusBarItem) {
-        this._statusBarItem.text = `$(plug) MCP: ${globalData.stats.enabled}/${globalData.stats.total}`;
+    const doRefresh = async () => {
+      try {
+        const globalData = await McpConfigService.getGlobalData();
 
-        const servers = (globalData.config && globalData.config.mcpServers) || {};
-        const enabledServers = Object.keys(servers).filter((name) => servers[name].disabled !== true);
+        // 更新 IDE 底部 Status Bar
+        if (this._statusBarItem) {
+          this._statusBarItem.text = `$(plug) MCP: ${globalData.stats.enabled}/${globalData.stats.total}`;
 
-        const tooltipLines = [];
-        tooltipLines.push(`【${globalData.envName} MCP 儀表板】`);
-        if (enabledServers.length > 0) {
-          tooltipLines.push('已啟用的 MCP 工具:');
-          enabledServers.forEach((name) => {
-            tooltipLines.push(`• ${name}`);
-          });
-        } else {
-          tooltipLines.push('(目前無啟用的 MCP 工具)');
+          const servers = (globalData.config && globalData.config.mcpServers) || {};
+          const enabledServers = Object.keys(servers).filter((name) => servers[name].disabled !== true);
+
+          const tooltipLines = [];
+          tooltipLines.push(`【${globalData.envName} MCP 儀表板】`);
+          if (enabledServers.length > 0) {
+            tooltipLines.push('已啟用的 MCP 工具:');
+            enabledServers.forEach((name) => {
+              tooltipLines.push(`• ${name}`);
+            });
+          } else {
+            tooltipLines.push('(目前無啟用的 MCP 工具)');
+          }
+
+          tooltipLines.push('點擊展開側邊欄');
+
+          this._statusBarItem.tooltip = tooltipLines.join('\n');
+          this._statusBarItem.show();
         }
 
-        tooltipLines.push('點擊展開側邊欄');
+        // 推送最新完整資料至 Webview 前端 (同時廣播至側邊欄與編輯分頁)
+        const updatePayload = {
+          type: 'updateAllData',
+          payload: {
+            global: globalData,
+          },
+        };
+        if (this._view) {
+          this._view.webview.postMessage(updatePayload);
+        }
+        if (this._panel) {
+          this._panel.webview.postMessage(updatePayload);
+        }
+      } catch (err) {
+        console.error('MCP Manager Data Refresh Error:', err);
+        if (this._statusBarItem) {
+          this._statusBarItem.text = '$(plug) MCP: 讀取失敗';
+          this._statusBarItem.tooltip = `MCP 設定讀取失敗：${err.message}`;
+          this._statusBarItem.show();
+        }
+        const errorPayload = { type: 'error', message: err.message };
+        if (this._view) this._view.webview.postMessage(errorPayload);
+        if (this._panel) this._panel.webview.postMessage(errorPayload);
+      }
+    };
 
-        this._statusBarItem.tooltip = tooltipLines.join('\n');
-        this._statusBarItem.show();
-      }
-
-      // 推送最新完整資料至 Webview 前端 (同時廣播至側邊欄與編輯分頁)
-      const updatePayload = {
-        type: 'updateAllData',
-        payload: {
-          global: globalData,
-        },
-      };
-      if (this._view) {
-        this._view.webview.postMessage(updatePayload);
-      }
-      if (this._panel) {
-        this._panel.webview.postMessage(updatePayload);
-      }
-    } catch (err) {
-      console.error('MCP Manager Data Refresh Error:', err);
-      if (this._statusBarItem) {
-        this._statusBarItem.text = '$(plug) MCP: 讀取失敗';
-        this._statusBarItem.tooltip = `MCP 設定讀取失敗：${err.message}`;
-        this._statusBarItem.show();
-      }
-      const errorPayload = { type: 'error', message: err.message };
-      if (this._view) this._view.webview.postMessage(errorPayload);
-      if (this._panel) this._panel.webview.postMessage(errorPayload);
+    if (immediate) {
+      return await doRefresh();
     }
+
+    return new Promise((resolve) => {
+      this._refreshDebounceTimer = setTimeout(async () => {
+        this._refreshDebounceTimer = null;
+        await doRefresh();
+        resolve();
+      }, 120);
+    });
   }
 
   broadcastLocale(locale) {
@@ -305,12 +327,20 @@ class MCPManagerViewProvider {
 
     const currentLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
 
+    const initData = {
+      locales,
+      initialLocale: currentLocale,
+      isVsCode: McpConfigService.isVsCode,
+      envName: McpConfigService.envName,
+    };
+    const jsonSafeString = JSON.stringify(initData).replace(/</g, '\\u003c');
+
     return html
       .replace(/href="style\.css"/g, `href="${styleUri}"`)
       .replace(/src="app\.js"/g, `src="${scriptUri}?v=${Date.now()}"`)
       .replace(
         /<script id="i18n-locales-data" type="application\/json">\{\}<\/script>/g,
-        `<script>window.LOCALES = ${JSON.stringify(locales)}; window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)}; window.INITIAL_IS_VSCODE = ${McpConfigService.isVsCode}; window.ENV_NAME = ${JSON.stringify(McpConfigService.envName)};</script>`
+        `<script id="i18n-locales-data" type="application/json">${jsonSafeString}</script>`
       );
   }
 }

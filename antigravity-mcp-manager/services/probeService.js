@@ -68,10 +68,10 @@ class ProbeService {
           if (isResolved) return;
           isResolved = true;
           if (timer) clearTimeout(timer);
-          if (child) {
+          if (child && child.exitCode === null && !child.killed) {
             try {
               if (process.platform === 'win32' && child.pid) {
-                exec(`taskkill /pid ${child.pid} /T /F`, () => {});
+                exec(`taskkill /pid ${child.pid} /T /F`, { windowsHide: true }, () => {});
               } else {
                 child.kill('SIGKILL');
               }
@@ -92,6 +92,9 @@ class ProbeService {
             stdio: ['pipe', 'pipe', 'pipe'],
           });
 
+          let stderrBuffer = '';
+          let hasFatalStderr = false;
+
           child.on('error', (err) => {
             finish({
               ok: false,
@@ -99,15 +102,17 @@ class ProbeService {
               latency: Date.now() - startTime,
               messageKey: 'probe_spawn_fail',
               messageParams: { cmd },
-              message: `啟動失敗: 找不到指令 [${cmd}] 或權限不足`,
+              message: `啟動失敗: 找不到指令 [${cmd}] 或權限不足 (${err.message})`,
             });
           });
 
           try {
+            // 發送標準 MCP ping 指令
             child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'ping' }) + '\n');
           } catch (e) {}
 
           child.stdout.on('data', () => {
+            // 收到標準輸出，確認進程正常響應
             finish({
               ok: true,
               type: 'cli',
@@ -119,14 +124,12 @@ class ProbeService {
 
           child.stderr.on('data', (d) => {
             const text = d.toString();
-            if (!text.toLowerCase().includes('syntaxerror') && !text.toLowerCase().includes('cannot find module')) {
-              finish({
-                ok: true,
-                type: 'cli',
-                latency: Date.now() - startTime,
-                messageKey: 'probe_process_running',
-                message: '進程運作中',
-              });
+            stderrBuffer = (stderrBuffer + text).slice(-500); // 保留最新 500 字元
+
+            // 檢驗致命錯誤標記
+            const isFatal = /(error|fatal|exception|traceback|cannot find module|command not found|failed to start|enoent|eacces)/i.test(text);
+            if (isFatal) {
+              hasFatalStderr = true;
             }
           });
 
@@ -140,25 +143,38 @@ class ProbeService {
                 message: '指令可正常執行 (Exit 0)',
               });
             } else {
+              const summaryErr = stderrBuffer.trim().split('\n').pop() || '';
               finish({
                 ok: false,
                 type: 'cli',
                 latency: Date.now() - startTime,
                 messageKey: 'probe_exit_fail',
                 messageParams: { code },
-                message: `進程異常結束 (Exit code: ${code})`,
+                message: summaryErr ? `進程異常結束 (${summaryErr.slice(0, 60)})` : `進程異常結束 (Exit code: ${code})`,
               });
             }
           });
 
           timer = setTimeout(() => {
-            finish({
-              ok: true,
-              type: 'cli',
-              latency: Date.now() - startTime,
-              messageKey: 'probe_daemon_running',
-              message: '服務常駐運作中',
-            });
+            if (hasFatalStderr) {
+              const summaryErr = stderrBuffer.trim().split('\n').pop() || '發現錯誤輸出';
+              finish({
+                ok: false,
+                type: 'cli',
+                latency: Date.now() - startTime,
+                messageKey: 'probe_error',
+                messageParams: { error: summaryErr },
+                message: `啟動異常: ${summaryErr.slice(0, 60)}`,
+              });
+            } else {
+              finish({
+                ok: true,
+                type: 'cli',
+                latency: Date.now() - startTime,
+                messageKey: 'probe_daemon_running',
+                message: '服務常駐運作中',
+              });
+            }
           }, 1500);
 
         } catch (err) {

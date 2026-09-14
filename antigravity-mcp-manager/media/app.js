@@ -9,6 +9,26 @@
   // 取得 VS Code Webview API 物件
   const vscode = acquireVsCodeApi();
 
+  // 全域前端運行時錯誤捕獲 (回報至後端 Extension Host 杜絕靜默白畫面)
+  window.addEventListener('error', (event) => {
+    try {
+      vscode.postMessage({
+        type: 'showError',
+        message: `[MCP Manager 前端錯誤] ${event.message} (${event.filename ? event.filename.split('/').pop() : 'inline'}:${event.lineno})`,
+      });
+    } catch (e) {}
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    try {
+      const reason = event.reason?.message || event.reason || '未知非同步例外';
+      vscode.postMessage({
+        type: 'showError',
+        message: `[MCP Manager 未處理 Promise] ${reason}`,
+      });
+    } catch (e) {}
+  });
+
   /**
    * Lucide / Linear 原生圓角線性向量圖示庫 (Inline SVG 零外部請求自包含)
    */
@@ -75,6 +95,22 @@
     currentLang: 'zh-TW',
 
     init() {
+      // 優先從 application/json 標籤安全解析後端注入之初始資料
+      try {
+        const dataEl = document.getElementById('i18n-locales-data');
+        if (dataEl && dataEl.textContent) {
+          const parsed = JSON.parse(dataEl.textContent);
+          if (parsed && typeof parsed === 'object') {
+            if (parsed.locales) window.LOCALES = parsed.locales;
+            if (parsed.initialLocale) window.INITIAL_LOCALE = parsed.initialLocale;
+            if (parsed.isVsCode !== undefined) window.INITIAL_IS_VSCODE = parsed.isVsCode;
+            if (parsed.envName) window.ENV_NAME = parsed.envName;
+          }
+        }
+      } catch (e) {
+        console.warn('解析 i18n-locales-data 失敗:', e);
+      }
+
       // 優先使用後端注入之全域設定，其次讀取本機快取
       const initial = (typeof window !== 'undefined' && window.INITIAL_LOCALE) || null;
       let saved = null;
@@ -290,6 +326,7 @@
     searchQuery: '',
     currentFilter: 'all',
     openedServers: new Set(),
+    pendingToggles: new Map(), // 樂觀更新鎖 Map<serverName, { disabled: boolean, timestamp: number }>
     isBatchExpanding: false,
 
     // 收合所有展開的二級子卡片 (對齊 context-inspector 規範)
@@ -365,20 +402,57 @@
         });
       });
 
+      const applyBatchOptimistic = (action) => {
+        if (!this.data || !this.data.config) return;
+        const servers = this.data.config.mcpServers || {};
+        const now = Date.now();
+        let total = 0;
+        let enabled = 0;
+        let disabled = 0;
+
+        this.pendingToggles.clear();
+
+        for (const [key, server] of Object.entries(servers)) {
+          total++;
+          const currentDisabled = server.disabled === true;
+          let newDisabled = currentDisabled;
+          if (action === 'enable_all') newDisabled = false;
+          else if (action === 'disable_all') newDisabled = true;
+          else if (action === 'invert') newDisabled = !currentDisabled;
+
+          server.disabled = newDisabled;
+          if (newDisabled) disabled++;
+          else enabled++;
+
+          // 設置樂觀更新鎖
+          this.pendingToggles.set(key, {
+            disabled: newDisabled,
+            timestamp: now,
+          });
+        }
+
+        // 就地更新統計數據並立即 0ms 重新渲染
+        this.data.stats = { total, enabled, disabled };
+        this.render();
+      };
+
       if (this.dom.btnEnableAll) {
         this.dom.btnEnableAll.addEventListener('click', () => {
+          applyBatchOptimistic('enable_all');
           vscode.postMessage({ type: 'batchToggleGlobal', action: 'enable_all' });
         });
       }
 
       if (this.dom.btnDisableAll) {
         this.dom.btnDisableAll.addEventListener('click', () => {
+          applyBatchOptimistic('disable_all');
           vscode.postMessage({ type: 'batchToggleGlobal', action: 'disable_all' });
         });
       }
 
       if (this.dom.btnInvert) {
         this.dom.btnInvert.addEventListener('click', () => {
+          applyBatchOptimistic('invert');
           vscode.postMessage({ type: 'batchToggleGlobal', action: 'invert' });
         });
       }
@@ -422,6 +496,121 @@
       });
 
       if (!this.dom.listContainer) return;
+
+      // ─── 智慧就地比對（In-place Patching）：防止開關切換時卡片重構閃爍 ───
+      const existingCards = Array.from(this.dom.listContainer.querySelectorAll('.server-card'));
+      const existingKeys = existingCards.map((c) => c.getAttribute('data-name'));
+      const canInPlacePatch =
+        existingKeys.length === filteredKeys.length &&
+        existingKeys.length > 0 &&
+        existingKeys.every((k, idx) => k === filteredKeys[idx]);
+
+      if (canInPlacePatch) {
+        existingCards.forEach((card, idx) => {
+          const key = filteredKeys[idx];
+          const server = servers[key];
+          let isEnabled = server.disabled !== true;
+
+          // 樂觀更新鎖判定 (避坑鐵律第 85 條：2.5 秒內若後端尚未同步，優先以前端最新點擊狀態為準)
+          if (this.pendingToggles.has(key)) {
+            const pending = this.pendingToggles.get(key);
+            if (Date.now() - pending.timestamp < 2500) {
+              if (pending.disabled === !isEnabled) {
+                this.pendingToggles.delete(key); // 後端已同步，釋放鎖
+              } else {
+                isEnabled = !pending.disabled; // 後端尚未同步，維持樂觀狀態
+              }
+            } else {
+              this.pendingToggles.delete(key);
+            }
+          }
+
+          const testResult = ProbeModule.results[key];
+
+          // 1. 就地切換卡片啟用狀態 class
+          card.classList.toggle('disabled', !isEnabled);
+
+          // 2. 就地更新測試狀態 class 與 title
+          card.classList.remove('status-tested-ok', 'status-tested-fail', 'status-tested-testing');
+          let cardTitle = key;
+          if (testResult) {
+            const displayMsg = ProbeModule.formatMessage(testResult);
+            const latencyText = testResult.latency ? ` (${testResult.latency}ms)` : '';
+            if (testResult.status === 'ok') {
+              card.classList.add('status-tested-ok');
+              cardTitle = `${key}\n${I18nModule.t('status_ok_prefix')} ${displayMsg}${latencyText}`;
+            } else if (testResult.status === 'fail') {
+              card.classList.add('status-tested-fail');
+              cardTitle = `${key}\n${I18nModule.t('status_fail_prefix')} ${displayMsg}`;
+            } else if (testResult.status === 'testing') {
+              card.classList.add('status-tested-testing');
+              cardTitle = `${key}\n${I18nModule.t('status_testing')}`;
+            }
+          }
+          card.title = cardTitle;
+
+          // 3. 就地同步 Checkbox 狀態 (若狀態已一致則不賦值，防止焦點或動畫中斷)
+          const checkbox = card.querySelector('input[type="checkbox"]');
+          if (checkbox && checkbox.checked !== isEnabled) {
+            checkbox.checked = isEnabled;
+          }
+
+          // 4. 就地更新測試按鈕樣式與提示
+          const btnTest = card.querySelector('.btn-test');
+          if (btnTest) {
+            btnTest.classList.remove('is-testing', 'status-ok', 'status-fail');
+            let btnTestDynamicTitle = I18nModule.t('btn_test_title');
+            if (testResult) {
+              const displayMsg = ProbeModule.formatMessage(testResult);
+              const latencyText = testResult.latency ? ` (${testResult.latency}ms)` : '';
+              if (testResult.status === 'testing') {
+                btnTest.classList.add('is-testing');
+                btnTestDynamicTitle = `${I18nModule.t('btn_test_title')} (${I18nModule.t('status_testing')})`;
+              } else if (testResult.status === 'ok') {
+                btnTest.classList.add('status-ok');
+                btnTestDynamicTitle = `${displayMsg}${latencyText}`;
+              } else if (testResult.status === 'fail') {
+                btnTest.classList.add('status-fail');
+                btnTestDynamicTitle = `${displayMsg}`;
+              }
+            }
+            btnTest.title = btnTestDynamicTitle;
+          }
+
+          // 5. 就地更新用途說明文字 (若目前未處於開啟編輯狀態)
+          const descEditor = card.querySelector('.server-desc-editor');
+          const descText = card.querySelector('.server-desc-text');
+          if (descText && (!descEditor || descEditor.style.display !== 'flex')) {
+            const desc = server.description || '';
+            descText.textContent = desc || I18nModule.t('desc_empty_placeholder');
+            descText.classList.toggle('is-empty', !desc);
+          }
+
+          // 6. 就地更新卡片內部多國語言按鈕與提示 (防止語系切換時按鈕殘留舊語言)
+          const btnEditDesc = card.querySelector('.btn-edit-desc');
+          if (btnEditDesc) {
+            btnEditDesc.title = I18nModule.t('btn_edit_desc');
+            const span = btnEditDesc.querySelector('span');
+            if (span) span.textContent = I18nModule.t('btn_edit_desc');
+          }
+          const descDisplay = card.querySelector('.server-desc-display');
+          if (descDisplay) {
+            descDisplay.title = I18nModule.t('btn_edit_desc');
+          }
+          const descTextarea = card.querySelector('.desc-textarea');
+          if (descTextarea) {
+            descTextarea.placeholder = I18nModule.t('desc_input_placeholder');
+          }
+          const btnSaveDesc = card.querySelector('.btn-desc-save');
+          if (btnSaveDesc) btnSaveDesc.textContent = I18nModule.t('btn_save_desc');
+          const btnCancelDesc = card.querySelector('.btn-desc-cancel');
+          if (btnCancelDesc) btnCancelDesc.textContent = I18nModule.t('btn_cancel_desc');
+        });
+
+        if (this.dom.emptyState) this.dom.emptyState.style.display = 'none';
+        return; // 零 DOM 銷毀，平滑完成狀態同步
+      }
+
       this.dom.listContainer.innerHTML = '';
 
       if (filteredKeys.length === 0) {
@@ -436,7 +625,21 @@
 
       filteredKeys.forEach((key) => {
         const server = servers[key];
-        const isEnabled = server.disabled !== true;
+        let isEnabled = server.disabled !== true;
+
+        if (this.pendingToggles.has(key)) {
+          const pending = this.pendingToggles.get(key);
+          if (Date.now() - pending.timestamp < 2500) {
+            if (pending.disabled === !isEnabled) {
+              this.pendingToggles.delete(key);
+            } else {
+              isEnabled = !pending.disabled;
+            }
+          } else {
+            this.pendingToggles.delete(key);
+          }
+        }
+
         const testResult = ProbeModule.results[key];
 
         let statusClass = '';
@@ -503,18 +706,18 @@
 
           <div class="server-detail-body">
             <div class="server-action-bar">
-              <button class="action-btn btn-edit-desc" title="${escapeHtml(editDescLabel)}">${Icons.edit} <span>${escapeHtml(editDescLabel)}</span></button>
+              <button class="action-btn btn-edit-desc" data-i18n-title="btn_edit_desc" title="${escapeHtml(editDescLabel)}">${Icons.edit} <span data-i18n="btn_edit_desc">${escapeHtml(editDescLabel)}</span></button>
             </div>
 
             <div class="server-desc-wrap">
-              <div class="server-desc-display" title="${escapeHtml(editDescLabel)}">
+              <div class="server-desc-display" data-i18n-title="btn_edit_desc" title="${escapeHtml(editDescLabel)}">
                 <div class="server-desc-text ${server.description ? '' : 'is-empty'}">${escapeHtml(server.description || I18nModule.t('desc_empty_placeholder'))}</div>
               </div>
               <div class="server-desc-editor" style="display: none;">
-                <textarea class="desc-textarea" placeholder="${escapeHtml(I18nModule.t('desc_input_placeholder'))}">${escapeHtml(server.description || '')}</textarea>
+                <textarea class="desc-textarea" data-i18n-placeholder="desc_input_placeholder" placeholder="${escapeHtml(I18nModule.t('desc_input_placeholder'))}">${escapeHtml(server.description || '')}</textarea>
                 <div class="desc-editor-actions">
-                  <button class="btn-desc-save">${escapeHtml(I18nModule.t('btn_save_desc'))}</button>
-                  <button class="btn-desc-cancel">${escapeHtml(I18nModule.t('btn_cancel_desc'))}</button>
+                  <button class="btn-desc-save" data-i18n="btn_save_desc">${escapeHtml(I18nModule.t('btn_save_desc'))}</button>
+                  <button class="btn-desc-cancel" data-i18n="btn_cancel_desc">${escapeHtml(I18nModule.t('btn_cancel_desc'))}</button>
                 </div>
               </div>
             </div>
@@ -540,7 +743,7 @@
           }
         });
 
-        // 綁定 Switch Toggle (防冒泡)
+        // 綁定 Switch Toggle (防冒泡與樂觀更新鎖)
         const switchLabel = card.querySelector('.switch');
         const checkbox = card.querySelector('input[type="checkbox"]');
         if (switchLabel) {
@@ -551,6 +754,13 @@
             e.stopPropagation();
             const shouldDisable = !e.target.checked;
             card.classList.toggle('disabled', shouldDisable);
+
+            // 設置樂觀更新鎖
+            GlobalConfigModule.pendingToggles.set(key, {
+              disabled: shouldDisable,
+              timestamp: Date.now(),
+            });
+
             vscode.postMessage({
               type: 'toggleGlobalServer',
               name: key,

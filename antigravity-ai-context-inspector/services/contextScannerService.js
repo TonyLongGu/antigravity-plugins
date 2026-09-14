@@ -52,53 +52,57 @@ class ContextScannerService {
         .filter(file => file.isFile() && file.name.endsWith('.md'))
         .sort((a, b) => this.naturalCompare(a.name, b.name));
       
-      for (const file of mdFiles) {
-        const filePath = path.join(dirPath, file.name);
-        try {
-          const stat = await fsPromises.stat(filePath);
-          const content = await fsPromises.readFile(filePath, 'utf-8');
-          const lines = content.split(/\r?\n/);
-          const meta = this.parseFrontmatter(content);
-          
-          // 提取第一行標題作為簡介
-          let firstHeader = '';
-          for (const line of lines) {
-            if (line.startsWith('#')) {
-              firstHeader = line.replace(/^#+\s*/, '').trim();
-              break;
+      const parsedRules = await Promise.all(
+        mdFiles.map(async (file) => {
+          const filePath = path.join(dirPath, file.name);
+          try {
+            const stat = await fsPromises.stat(filePath);
+            const content = await fsPromises.readFile(filePath, 'utf-8');
+            const lines = content.split(/\r?\n/);
+            const meta = this.parseFrontmatter(content);
+            
+            // 提取第一行標題作為簡介
+            let firstHeader = '';
+            for (const line of lines) {
+              if (line.startsWith('#')) {
+                firstHeader = line.replace(/^#+\s*/, '').trim();
+                break;
+              }
             }
-          }
 
-          // 判斷是否為核心常駐規範 (如 core-guidelines 或 trigger === always_on)
-          const isAlwaysActive = meta.trigger === 'always_on' || file.name.toLowerCase().includes('core-guidelines') || isGlobal;
+            // 判斷是否為核心常駐規範 (如 core-guidelines 或 trigger === always_on)
+            const isAlwaysActive = meta.trigger === 'always_on' || file.name.toLowerCase().includes('core-guidelines') || isGlobal;
 
-          // 提取描述：優先使用 YAML description
-          let desc = meta.description || '';
-          if (!desc) {
-            // 若無 YAML description，過濾掉標題提取第一段文字
-            const bodyLines = lines.filter(l => !l.startsWith('#') && !l.startsWith('---') && l.trim());
-            if (bodyLines.length > 0) {
-              desc = bodyLines.slice(0, 3).join(' ').trim();
+            // 提取描述：優先使用 YAML description
+            let desc = meta.description || '';
+            if (!desc) {
+              // 若無 YAML description，過濾掉標題提取第一段文字
+              const bodyLines = lines.filter(l => !l.startsWith('#') && !l.startsWith('---') && l.trim());
+              if (bodyLines.length > 0) {
+                desc = bodyLines.slice(0, 3).join(' ').trim();
+              }
             }
-          }
 
-          rules.push({
-            name: file.name,
-            displayName: firstHeader || file.name,
-            filePath: filePath,
-            source: sourceName,
-            wsIndex: wsIndex,
-            isGlobal: isGlobal,
-            isAlwaysActive: isAlwaysActive,
-            trigger: meta.trigger || (isAlwaysActive ? 'always_on' : 'model_decision'),
-            description: desc,
-            lineCount: lines.length,
-            sizeBytes: stat.size
-          });
-        } catch (e) {
-          console.error(`Error processing rule file ${filePath}:`, e);
-        }
-      }
+            return {
+              name: file.name,
+              displayName: firstHeader || file.name,
+              filePath: filePath,
+              source: sourceName,
+              wsIndex: wsIndex,
+              isGlobal: isGlobal,
+              isAlwaysActive: isAlwaysActive,
+              trigger: meta.trigger || (isAlwaysActive ? 'always_on' : 'model_decision'),
+              description: desc,
+              lineCount: lines.length,
+              sizeBytes: stat.size
+            };
+          } catch (e) {
+            console.error(`Error processing rule file ${filePath}:`, e);
+            return null;
+          }
+        })
+      );
+      rules.push(...parsedRules.filter(Boolean));
     } catch (err) {
       console.error(`Error scanning rules in ${dirPath}:`, err);
     }
@@ -118,11 +122,12 @@ class ContextScannerService {
         .filter(entry => entry.isDirectory())
         .sort((a, b) => this.naturalCompare(a.name, b.name));
       
-      for (const entry of skillDirs) {
-        const skillDir = path.join(dirPath, entry.name);
-        const skillMdPath = path.join(skillDir, 'SKILL.md');
-        if (fs.existsSync(skillMdPath)) {
+      const parsedSkills = await Promise.all(
+        skillDirs.map(async (entry) => {
+          const skillDir = path.join(dirPath, entry.name);
+          const skillMdPath = path.join(skillDir, 'SKILL.md');
           try {
+            if (!fs.existsSync(skillMdPath)) return null;
             const content = await fsPromises.readFile(skillMdPath, 'utf-8');
             const meta = this.parseFrontmatter(content);
             const stat = await fsPromises.stat(skillMdPath);
@@ -146,7 +151,7 @@ class ContextScannerService {
             const rawName = meta.name || entry.name;
             const displayName = firstHeader || rawName;
 
-            skills.push({
+            return {
               name: rawName,
               displayName: displayName,
               dirName: entry.name,
@@ -157,12 +162,14 @@ class ContextScannerService {
               wsIndex: wsIndex,
               type: type, // 'builtin' | 'global' | 'workspace'
               sizeBytes: stat.size
-            });
+            };
           } catch (e) {
             console.error(`Error processing skill file ${skillMdPath}:`, e);
+            return null;
           }
-        }
-      }
+        })
+      );
+      skills.push(...parsedSkills.filter(Boolean));
     } catch (err) {
       console.error(`Error scanning skills in ${dirPath}:`, err);
     }

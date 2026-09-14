@@ -14,9 +14,9 @@
      - **Visual Studio Code**：讀寫 `~/AppData/Roaming/Code/User/mcp.json`（屬性為 `servers`，並支援命令、參數與網址型伺服器）。
 2. **外部 Sidecar 註解分離架構 (No Schema Warnings)**：
    - 解決 VS Code 原生 `mcp.json` 嚴格 Schema 驗證（`additionalProperties: false`，不支援自訂 `description` 屬性）之限制。
-   - 雙 IDE 採用獨立註解檔，互不衝突且不干擾原生 IDE Schema：
-     - Google Antigravity IDE：持久化於 [`antigravity_mcp_notes.json`](./antigravity_mcp_notes.json)
-     - Visual Studio Code：持久化於 [`vscode_mcp_notes.json`](./vscode_mcp_notes.json)
+    - 雙 IDE 採用獨立註解檔，互不衝突且不干擾原生 IDE Schema（儲存於全域配置目錄，不污染 Git 工作區）：
+      - Google Antigravity IDE：持久化於 `~/.gemini/config/antigravity_mcp_notes.json`
+      - Visual Studio Code：持久化於 `%APPDATA%/Code/User/vscode_mcp_notes.json`
 3. **無縫嵌入 IDE 側邊欄**：常駐在 IDE 左側活動列（Activity Bar），點擊專屬圖示即可直接操作，無需切換外部瀏覽器。
 4. **模組化服務架構 (Modular Services)**：
    - `McpConfigService`：安全讀寫、雙環境自動備份（`.bak`）、格式正規化、獨立 sidecar 註解合併與單項/批次切換。
@@ -59,11 +59,9 @@ antigravity-mcp-manager/
 ├── package.json               # 擴充套件清單、活動列容器與選單指令註冊 (v1.2.0)
 ├── extension.js               # Extension Host 進入點、雙環境偵測、狀態列與訊息路由
 ├── services/                  # 後端業務服務層 (職責分離)
-│   ├── mcpConfigService.js    # 雙環境 MCP 配置讀寫、備份、統計計算、註解 Sidecar 合併
+│   ├── mcpConfigService.js    # 雙環境 MCP 配置讀寫、備份、統計計算、全域註解 Sidecar 合併
 │   ├── probeService.js        # CLI 進程探針、JSON-RPC ping 與 HTTP/SSE 測速相容層
 │   └── systemService.js       # 編輯器設定檔開啟服務 (依環境定位路徑)
-├── antigravity_mcp_notes.json # Google Antigravity IDE 專屬 MCP 說明備註庫
-├── vscode_mcp_notes.json      # Visual Studio Code 專屬 MCP 說明備註庫
 ├── media/                     # 前端視圖資源
 │   ├── index.html             # 緊湊側邊欄 HTML 結構 (Card 結構與環境提示)
 │   ├── style.css              # 4 層 Spacing Tokens 與 Design System 樣式表

@@ -81,23 +81,26 @@ function getCanonicalPath(targetPath, baseDir) {
  * @returns {Promise<number>}
  */
 async function getDirectorySizeBytesAsync(dirPath) {
-  if (!fs.existsSync(dirPath)) return 0;
-  let total = 0;
   try {
     const entries = await fsPromises.readdir(dirPath, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(dirPath, entry.name);
-      try {
-        if (entry.isDirectory()) {
-          total += await getDirectorySizeBytesAsync(fullPath);
-        } else if (entry.isFile()) {
-          const stat = await fsPromises.stat(fullPath);
-          total += stat.size;
-        }
-      } catch {}
-    }
-  } catch {}
-  return total;
+    const sizes = await Promise.all(
+      entries.map(async (entry) => {
+        const fullPath = path.join(dirPath, entry.name);
+        try {
+          if (entry.isDirectory()) {
+            return await getDirectorySizeBytesAsync(fullPath);
+          } else if (entry.isFile()) {
+            const stat = await fsPromises.stat(fullPath);
+            return stat.size;
+          }
+        } catch {}
+        return 0;
+      })
+    );
+    return sizes.reduce((sum, s) => sum + s, 0);
+  } catch {
+    return 0;
+  }
 }
 
 /**

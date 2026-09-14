@@ -200,6 +200,14 @@ class ToolboxViewProvider {
         }
         break;
       }
+
+      case 'showToast':
+        this.pushToast(msg.message, msg.status || 'info');
+        break;
+
+      case 'showError':
+        vscode.window.showErrorMessage(msg.message);
+        break;
     }
   }
 

@@ -769,6 +769,19 @@ class ImageViewerPanel {
         }
         break;
       }
+      case 'showError': {
+        const errText = msg.message || msg.payload?.message || '未知錯誤';
+        vscode.window.showErrorMessage(errText);
+        break;
+      }
+      case 'showToast': {
+        const text = msg.message || msg.text || msg.payload?.message || '';
+        const level = msg.level || msg.toastType || 'info';
+        if (text) {
+          this.panel.webview.postMessage({ type: 'toast', text, level });
+        }
+        break;
+      }
     }
   }
 
@@ -1079,6 +1092,19 @@ class VideoViewerPanel {
           } catch (err) {
             console.error('[VideoViewer] 設定全域語系失敗:', err);
           }
+        }
+        break;
+      }
+      case 'showError': {
+        const errText = msg.message || msg.payload?.message || '未知錯誤';
+        vscode.window.showErrorMessage(errText);
+        break;
+      }
+      case 'showToast': {
+        const text = msg.message || msg.text || msg.payload?.message || '';
+        const level = msg.level || msg.toastType || 'info';
+        if (text) {
+          this.panel.webview.postMessage({ type: 'toast', text, level });
         }
         break;
       }
@@ -1411,6 +1437,19 @@ class AudioViewerPanel {
           } catch (err) {
             console.error('[AudioViewer] 設定全域語系失敗:', err);
           }
+        }
+        break;
+      }
+      case 'showError': {
+        const errText = msg.message || msg.payload?.message || '未知錯誤';
+        vscode.window.showErrorMessage(errText);
+        break;
+      }
+      case 'showToast': {
+        const text = msg.message || msg.text || msg.payload?.message || '';
+        const level = msg.level || msg.toastType || 'info';
+        if (text) {
+          this.panel.webview.postMessage({ type: 'toast', text, level });
         }
         break;
       }

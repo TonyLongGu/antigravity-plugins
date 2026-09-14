@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     IDE 擴充套件一鍵安裝腳本 (智慧偵測 Antigravity IDE 與 VS Code + Junction 免編譯掛載 + extensions.json 註冊)
 #>
@@ -109,7 +109,7 @@ foreach ($envTarget in $targetEnvironments) {
             $diname = $diskItem.Name
             $shouldDelete = $false
             if ($diname -like "$fullExtId*" -or $diname -like "$extName*" -or $diname -like "antigravity-toolkit.$extName*") {
-                if ($diname.StartsWith("antigravity-toolkit.") -or $diname.StartsWith("antigravity-mcp-manager") -or $diname.StartsWith("antigravity-")) {
+                if ($diname.StartsWith("antigravity-toolkit.$extName") -or $diname.StartsWith("$extName")) {
                     $shouldDelete = $true
                 }
             }

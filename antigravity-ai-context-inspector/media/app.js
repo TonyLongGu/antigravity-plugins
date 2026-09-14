@@ -1,6 +1,23 @@
 (function () {
   const vscode = acquireVsCodeApi();
 
+  // 全域例外捕獲與回報
+  window.addEventListener('error', (event) => {
+    console.error('[AI Context Inspector UI Error]', event.error || event.message);
+    vscode.postMessage({
+      type: 'showToast',
+      payload: { message: `前端異常: ${event.message || '未知錯誤'}`, type: 'danger' }
+    });
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('[AI Context Inspector UI Unhandled Rejection]', event.reason);
+    vscode.postMessage({
+      type: 'showToast',
+      payload: { message: `未處理非同步錯誤: ${event.reason?.message || event.reason || '未知原因'}`, type: 'danger' }
+    });
+  });
+
   /**
    * Lucide / Linear 原生圓角線性向量圖示庫 (24x24 SVG, 2px stroke, round join)
    */

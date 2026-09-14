@@ -200,6 +200,19 @@ class AiContextViewProvider {
         }
         break;
       }
+
+      case 'showToast': {
+        const text = msg.payload?.message || msg.message || '';
+        const type = msg.payload?.type || msg.toastType || 'info';
+        if (text) this.pushToast(text, type);
+        break;
+      }
+
+      case 'showError': {
+        const errText = msg.payload?.message || msg.message || '未知錯誤';
+        vscode.window.showErrorMessage(errText);
+        break;
+      }
     }
   }
 
@@ -331,6 +344,7 @@ class AiContextViewProvider {
     }
 
     return html
+      .replace(/\{\{CSP_SOURCE\}\}/g, webview.cspSource)
       .replace(/href="style\.css"/g, `href="${styleUri}"`)
       .replace(/src="app\.js"/g, `src="${scriptUri}?v=${Date.now()}"`)
       .replace(/<script src="locales\.js"><\/script>/g, `<script>window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)}; window.INITIAL_IS_VSCODE = ${this._isVsCode};</script><script>${localesJs}</script>`)

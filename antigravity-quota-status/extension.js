@@ -129,6 +129,14 @@ function activate(context) {
   // 6. 初次載入與背景定時輪詢
   updateStatusBar(true);
   setupTimer();
+  context.subscriptions.push({
+    dispose: () => {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    }
+  });
 
   // 7. 監聽 Stop Hook 寫入的 sentinel 觸發檔（對話結束 → 立即刷新）
   setupSentinelWatcher(context);
@@ -140,12 +148,19 @@ function activate(context) {
  * @param {vscode.ExtensionContext} context
  */
 function setupSentinelWatcher(context) {
-  const sentinelDir = path.dirname(SENTINEL_FILE);
   let debounceTimer = null;
 
   try {
-    sentinelWatcher = fs.watch(sentinelDir, (eventType, filename) => {
-      if (filename !== path.basename(SENTINEL_FILE)) return;
+    const sentinelDir = path.dirname(SENTINEL_FILE);
+    if (!fs.existsSync(sentinelDir)) {
+      fs.mkdirSync(sentinelDir, { recursive: true });
+    }
+    if (!fs.existsSync(SENTINEL_FILE)) {
+      fs.writeFileSync(SENTINEL_FILE, '', { flag: 'a' });
+    }
+
+    // 直接精確監聽 sentinel 檔案本身，杜絕父目錄中高頻 brain/transcripts I/O 干擾
+    sentinelWatcher = fs.watch(SENTINEL_FILE, (eventType) => {
       if (eventType !== 'rename' && eventType !== 'change') return;
 
       // 防抖：避免短時間多次觸發（Stop Hook 可能連續寫入）
@@ -153,6 +168,10 @@ function setupSentinelWatcher(context) {
       debounceTimer = setTimeout(async () => {
         await updateStatusBar(true);
       }, 500);
+    });
+
+    sentinelWatcher.on('error', (err) => {
+      console.warn('[AI 額度] sentinel watcher 錯誤:', err.message);
     });
 
     context.subscriptions.push({
@@ -165,10 +184,6 @@ function setupSentinelWatcher(context) {
       }
     });
   } catch (err) {
-    if (err.code === 'ENOENT') {
-      // 若目錄不存在則直接返回，捨棄先前的 fs.existsSync 同步檢查
-      return;
-    }
     // sentinel watcher 失敗不影響主要功能，仍有背景輪詢兜底
     console.warn('[AI 額度] sentinel watcher 初始化失敗:', err.message);
   }

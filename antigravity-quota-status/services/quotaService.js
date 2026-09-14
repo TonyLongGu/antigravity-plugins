@@ -15,6 +15,7 @@ class QuotaService {
     this._cachedConnection = null; // { port, csrf, pid }
     this._selectedPid = null; // 使用者手動選定的 PID (若為 null 則自動按優先級選擇)
     this._availableServers = []; // 掃描到的可用語言伺服器與帳號清單
+    this._inFlightPromise = null; // 並發請求鎖定 (防止重複探測與競態)
   }
 
   /**
@@ -45,11 +46,28 @@ class QuotaService {
   }
 
   /**
-   * 獲取當前即時額度狀態
+   * 獲取當前即時額度狀態 (具備 In-Flight Promise 並發防護)
    * @param {boolean} forceRefresh 是否強制重新向 Language Server 查詢
    * @returns {Promise<Object>}
    */
   async getQuotaStatus(forceRefresh = false) {
+    if (this._inFlightPromise) {
+      return this._inFlightPromise;
+    }
+
+    this._inFlightPromise = this._executeGetQuotaStatus(forceRefresh);
+    try {
+      return await this._inFlightPromise;
+    } finally {
+      this._inFlightPromise = null;
+    }
+  }
+
+  /**
+   * 實際執行獲取配額狀態
+   * @private
+   */
+  async _executeGetQuotaStatus(forceRefresh = false) {
     // 強制刷新時一併清除連線快取，確保帳號切換後重新掃描新 Language Server
     if (forceRefresh) {
       this._cachedConnection = null;
@@ -92,7 +110,12 @@ class QuotaService {
       this._cachedConnection = null;
     }
 
-    const procs = await this._getLsProcesses();
+    // 2. 並行探測：同時取得 LS 進程清單與所有本機監聽連接埠 (netstat 耗時 ~70ms)
+    const [procs, portsMap] = await Promise.all([
+      this._getLsProcesses(),
+      this._getAllListeningPortsMap()
+    ]);
+
     if (!procs || procs.length === 0) {
       return null;
     }
@@ -102,7 +125,11 @@ class QuotaService {
     let chosenConnection = null;
 
     for (const proc of procs) {
-      const ports = await this._getListeningPorts(proc.pid);
+      let ports = portsMap.get(proc.pid) || [];
+      // 容錯 Fallback：若 netstat 未能取得 ports，退回單一進程查詢
+      if (ports.length === 0) {
+        ports = await this._getListeningPorts(proc.pid);
+      }
       for (const port of ports) {
         const quotaData = await this._tryFetchFromPort(port, proc.csrf);
         if (quotaData) {
@@ -198,6 +225,40 @@ class QuotaService {
           resolve(list);
         } catch {
           resolve([]);
+        }
+      });
+    });
+  }
+
+  /**
+   * 透過原生 netstat 高速取得本機所有 PID 所監聽的 TCP 本地埠口 Map (耗時約 70ms)
+   * 避免反覆喚醒 PowerShell 造成 2~3 秒之系統卡頓與高 CPU 負載
+   * @private
+   * @returns {Promise<Map<number, number[]>>}
+   */
+  _getAllListeningPortsMap() {
+    return new Promise((resolve) => {
+      exec('netstat -ano -p tcp', { windowsHide: true }, (err, stdout) => {
+        if (err || !stdout) return resolve(new Map());
+        try {
+          const map = new Map();
+          const lines = stdout.split(/\r?\n/);
+          for (const line of lines) {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 5 && parts[3] === 'LISTENING') {
+              const addr = parts[1];
+              const pid = parseInt(parts[4], 10);
+              const portMatch = addr.match(/:(\d+)$/);
+              if (portMatch && !isNaN(pid)) {
+                const port = parseInt(portMatch[1], 10);
+                if (!map.has(pid)) map.set(pid, []);
+                map.get(pid).push(port);
+              }
+            }
+          }
+          resolve(map);
+        } catch {
+          resolve(new Map());
         }
       });
     });
@@ -446,7 +507,7 @@ class QuotaService {
 
       const fraction = extractFraction(quota);
       const resetIso = quota.resetTime || '';
-      const isShortTerm = this._isShortTermReset(resetIso);
+      const isShortTerm = this._isShortTermReset(resetIso, cachedGeminiWeekly?.resetTime || cachedClaudeWeekly?.resetTime);
 
       if (label.includes('Gemini')) {
         if (fraction !== null) {
@@ -686,10 +747,14 @@ class QuotaService {
 
   /**
    * 判斷是否為 5 小時內之短期重置
+   * 防呆加強：若重置時間與已知的每週重置時間一致，避免誤判
    * @private
    */
-  _isShortTermReset(resetTimeIso) {
+  _isShortTermReset(resetTimeIso, knownWeeklyResetIso = null) {
     if (!resetTimeIso) return true;
+    if (knownWeeklyResetIso && resetTimeIso === knownWeeklyResetIso) {
+      return false;
+    }
     try {
       const targetTime = new Date(resetTimeIso).getTime();
       const now = Date.now();
