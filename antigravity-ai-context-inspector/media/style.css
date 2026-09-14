@@ -1253,3 +1253,15 @@ body.is-rmb-dragging * {
   pointer-events: none !important; /* 避免拖曳經過按鈕、卡片、連結時觸發 hover 動畫或誤觸 */
 }
 
+/* ==============================================================================
+   VS Code 環境智慧感應樣式：自動隱藏對話快照切換與歷史下拉選單，專注於專案即時配置
+   ============================================================================== */
+body.is-vscode .mode-switch-grid,
+body.is-vscode #conv-select-wrapper {
+  display: none !important;
+}
+
+body.is-vscode .header-title-row {
+  margin-bottom: var(--space-xs);
+}
+

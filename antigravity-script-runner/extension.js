@@ -452,7 +452,7 @@ function activate(context) {
     // 監聽全域語言變動 (跨外掛即時聯動廣播)
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('antigravity.locale')) {
-        const newLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
+        const newLocale = i18n.getLocale();
         ImageViewerPanel.broadcastLocale(newLocale);
         AudioViewerPanel.broadcastLocale(newLocale);
         VideoViewerPanel.broadcastLocale(newLocale);

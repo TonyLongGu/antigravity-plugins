@@ -1,6 +1,6 @@
 # Antigravity 控制中心 (Antigravity Toolbox)
 
-Google Antigravity IDE 專屬原生側邊欄擴充套件。
+Google Antigravity IDE 與 Visual Studio Code (VS Code) 雙環境原生側邊欄擴充套件（支援環境智慧感應與按需掛載）。
 
 ---
 
@@ -47,10 +47,15 @@ Google Antigravity IDE 專屬原生側邊欄擴充套件。
 
 ---
 
-## 🚀 安裝與生效方式
+## 🚀 安裝與生效方式 (支援 Antigravity IDE 與 VS Code)
 
-1. **一鍵安裝**：執行 `install-extension.ps1`（或雙擊 `install-extension.bat`）。
-2. **重載生效**：在 IDE 按 `Ctrl + Shift + P` -> 執行 `Developer: Reload Window`。
-3. **開啟面板**：
+腳本具備智慧偵測能力，會自動辨識本機已安裝的 IDE 環境（VS Code、VS Code Insiders、Antigravity IDE）並按需掛載：
+
+1. **一鍵安裝**：在 PowerShell 執行 `.\install-extension.ps1`（或雙擊 `install-extension.bat`）。
+2. **一鍵卸載**：在 PowerShell 執行 `.\uninstall-extension.ps1`（或雙擊 `uninstall-extension.bat`）。
+3. **重載生效**：於 Antigravity IDE 或 VS Code 按 `Ctrl + Shift + P` -> 執行 `Developer: Reload Window`。
+4. **開啟面板**：
    - 點擊左側活動列的 **🛠️ (Antigravity 控制中心)** 圖示。
    - 或點擊右下角狀態列 **`$(tools) 控制中心`** 按鈕。
+
+> 💡 **環境感應動態隱藏**：若在純 VS Code 環境（本機無 Antigravity）運行，外掛將自動隱藏「全域自訂 (~/.gemini)」與「對話記憶庫 (Brain)」專屬卡片，保持純淨俐落的 VS Code 體驗。

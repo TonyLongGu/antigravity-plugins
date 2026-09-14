@@ -1269,6 +1269,34 @@
   };
 
   // ============================================================================
+  // 6.5 環境特徵感應模組 (Environment Visibility Module)
+  // ============================================================================
+  const EnvironmentModule = {
+    apply(envInfo) {
+      if (!envInfo) return;
+      const configModule = document.getElementById('module-config');
+      const brainModule = document.getElementById('module-brain');
+      const shouldShow = Boolean(envInfo.showAntigravityCards);
+
+      if (configModule) {
+        if (shouldShow) {
+          configModule.classList.remove('hidden-by-env');
+        } else {
+          configModule.classList.add('hidden-by-env');
+        }
+      }
+
+      if (brainModule) {
+        if (shouldShow) {
+          brainModule.classList.remove('hidden-by-env');
+        } else {
+          brainModule.classList.add('hidden-by-env');
+        }
+      }
+    },
+  };
+
+  // ============================================================================
   // 7. 頂部通用控制與訊息轉發分發器 (App Core Orchestrator)
   // ============================================================================
   const App = {
@@ -1307,6 +1335,13 @@
 
       // 4. 0 毫秒快照立即渲染（消除 iframe 重建時的任何白屏與載入跳動）
       const savedState = vscode.getState() || {};
+      const initialEnv = (typeof window !== 'undefined' && window.INITIAL_ENV) || null;
+      if (initialEnv) {
+        EnvironmentModule.apply(initialEnv);
+      } else if (savedState.envInfo) {
+        EnvironmentModule.apply(savedState.envInfo);
+      }
+
       if (savedState.workspace) {
         WorkspaceModule.render(savedState.workspace);
       }
@@ -1333,6 +1368,9 @@
         const { type, payload } = event.data;
         switch (type) {
           case 'updateStatus':
+            if (payload.envInfo) {
+              EnvironmentModule.apply(payload.envInfo);
+            }
             WorkspaceModule.render(payload.workspace);
             ScriptsModule.render(payload.scripts);
             BrainModule.render(payload.brain);
@@ -1345,6 +1383,7 @@
               scripts: payload.scripts,
               brain: payload.brain,
               settings: payload.settings,
+              envInfo: payload.envInfo,
             });
             break;
           case 'toast':

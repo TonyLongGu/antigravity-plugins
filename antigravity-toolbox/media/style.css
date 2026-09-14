@@ -1400,3 +1400,10 @@ body.is-rmb-dragging * {
 body.is-rmb-dragging * {
   pointer-events: none !important; /* 避免拖曳經過按鈕、卡片、連結時觸發 hover 動畫或誤觸 */
 }
+
+/* ==============================================================================
+   環境感應隱藏樣式 (純 VS Code 環境動態隱藏 Antigravity 專屬卡片)
+   ============================================================================== */
+.hidden-by-env {
+  display: none !important;
+}

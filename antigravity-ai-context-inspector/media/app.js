@@ -46,9 +46,10 @@
   };
 
   // 2. 主應用狀態
+  const isVsCode = (typeof window !== 'undefined' && Boolean(window.INITIAL_IS_VSCODE)) || false;
   const savedState = vscode.getState() || {};
   let currentData = null;
-  let currentMode = savedState.mode || 'live'; // 'live' | 'snapshot'
+  let currentMode = isVsCode ? 'live' : (savedState.mode || 'live'); // 'live' | 'snapshot'
   let currentConvLimit = savedState.convLimit || 10;
   let selectedConvId = savedState.selectedConvId || null;
   let searchKeyword = '';
@@ -231,6 +232,20 @@
   };
 
   function syncModeUI() {
+    if (isVsCode) {
+      document.body.classList.add('is-vscode');
+      currentMode = 'live';
+      dom.btnLive?.classList.add('active');
+      dom.btnSnapshot?.classList.remove('active');
+      if (dom.convWrapper) {
+        dom.convWrapper.classList.add('is-hidden');
+      }
+      closeConvPopover();
+      if (dom.modeLabel) {
+        dom.modeLabel.textContent = I18nModule.t('status_mode_live');
+      }
+      return;
+    }
     if (currentMode === 'snapshot') {
       dom.btnSnapshot?.classList.add('active');
       dom.btnLive?.classList.remove('active');
@@ -936,6 +951,7 @@
 
     // 模式切換：最近對話快照
     dom.btnSnapshot.addEventListener('click', () => {
+      if (isVsCode) return;
       currentMode = 'snapshot';
       saveState();
       syncModeUI();
@@ -991,8 +1007,12 @@
       if (type === 'updateData') {
         currentData = payload;
 
-        // 同步後端回傳之 mode
-        if (payload.mode) {
+        if (payload.isVsCode || isVsCode) {
+          document.body.classList.add('is-vscode');
+          currentMode = 'live';
+          syncModeUI();
+        } else if (payload.mode) {
+          // 同步後端回傳之 mode
           currentMode = payload.mode;
           saveState();
           syncModeUI();

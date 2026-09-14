@@ -12,7 +12,8 @@ class AiContextViewProvider {
     this._context = context;
     this._view = null;
     this._panel = null;
-    this._currentMode = context?.workspaceState?.get('aiContext.mode') || 'live';
+    this._isVsCode = !/antigravity/i.test(vscode.env.appName || '');
+    this._currentMode = this._isVsCode ? 'live' : (context?.workspaceState?.get('aiContext.mode') || 'live');
     this._selectedConvId = context?.workspaceState?.get('aiContext.selectedConvId') || null;
   }
 
@@ -116,8 +117,12 @@ class AiContextViewProvider {
   async _handleMessage(msg) {
     switch (msg.type) {
       case 'fetchData':
-        this._currentMode = msg.payload?.mode || this._currentMode;
-        this._selectedConvId = msg.payload?.conversationId || this._selectedConvId;
+        if (this._isVsCode) {
+          this._currentMode = 'live';
+        } else {
+          this._currentMode = msg.payload?.mode || this._currentMode;
+          this._selectedConvId = msg.payload?.conversationId || this._selectedConvId;
+        }
         
         // 持久化記錄狀態
         if (this._context?.workspaceState) {
@@ -265,21 +270,28 @@ class AiContextViewProvider {
         let data;
         const workspaceFolders = vscode.workspace.workspaceFolders || [];
 
-        if (this._currentMode === 'snapshot') {
-          data = await TranscriptParserService.parseConversationSnapshot(this._selectedConvId, workspaceFolders);
-        } else {
+        if (this._isVsCode) {
           data = await ContextScannerService.scanLiveEnvironment(workspaceFolders);
-        }
+          data.conversationsList = [];
+          data.isVsCode = true;
+        } else {
+          if (this._currentMode === 'snapshot') {
+            data = await TranscriptParserService.parseConversationSnapshot(this._selectedConvId, workspaceFolders);
+          } else {
+            data = await ContextScannerService.scanLiveEnvironment(workspaceFolders);
+          }
 
-        // 同時取得對話清單供前端下拉選單使用
-        const convList = await TranscriptParserService.getConversationsList();
-        data.conversationsList = convList.map(c => ({
-          id: c.id,
-          title: c.title,
-          workspace: c.workspace,
-          mtime: c.mtime,
-          mtimeStr: c.mtimeStr
-        }));
+          // 同時取得對話清單供前端下拉選單使用
+          const convList = await TranscriptParserService.getConversationsList();
+          data.conversationsList = convList.map(c => ({
+            id: c.id,
+            title: c.title,
+            workspace: c.workspace,
+            mtime: c.mtime,
+            mtimeStr: c.mtimeStr
+          }));
+          data.isVsCode = false;
+        }
 
         const updatePayload = {
           type: 'updateData',
@@ -312,12 +324,16 @@ class AiContextViewProvider {
     }
 
     const currentLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
-    const isSnapshot = this._currentMode === 'snapshot';
+    const isSnapshot = !this._isVsCode && this._currentMode === 'snapshot';
+
+    if (this._isVsCode) {
+      html = html.replace('<body>', '<body class="is-vscode">');
+    }
 
     return html
       .replace(/href="style\.css"/g, `href="${styleUri}"`)
       .replace(/src="app\.js"/g, `src="${scriptUri}?v=${Date.now()}"`)
-      .replace(/<script src="locales\.js"><\/script>/g, `<script>window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)};</script><script>${localesJs}</script>`)
+      .replace(/<script src="locales\.js"><\/script>/g, `<script>window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)}; window.INITIAL_IS_VSCODE = ${this._isVsCode};</script><script>${localesJs}</script>`)
       .replace(/\{\{LIVE_ACTIVE\}\}/g, isSnapshot ? '' : 'active')
       .replace(/\{\{SNAPSHOT_ACTIVE\}\}/g, isSnapshot ? 'active' : '')
       .replace(/\{\{CONV_WRAPPER_CLASS\}\}/g, isSnapshot ? '' : 'is-hidden');

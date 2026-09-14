@@ -1,6 +1,6 @@
-# 腳本右鍵執行工具 (Antigravity Script Runner)
+# 腳本右鍵執行工具 (Script Runner)
 
-為 **Google Antigravity IDE** 提供在左側檔案總管、編輯器或分頁標籤按右鍵直接在內建終端機執行腳本的原生擴充套件。
+為 **Google Antigravity IDE** 與 **Visual Studio Code (VS Code)** 提供在左側檔案總管、編輯器或分頁標籤按右鍵直接在內建終端機執行腳本與多媒體檢視的原生擴充套件。
 
 ---
 
@@ -82,9 +82,11 @@
 
 ---
 
-## 安裝與卸載方式
+## 安裝與卸載方式 (支援 Antigravity IDE 與 VS Code)
 
-- **一鍵安裝**：在 PowerShell 執行 `.\install-extension.ps1`（或雙擊 `install-extension.bat`）。
-- **一鍵卸載**：在 PowerShell 執行 `.\uninstall-extension.ps1`（或雙擊 `uninstall-extension.bat`）。
-- **重載生效**：於 IDE 按 `Ctrl + Shift + P` -> 選擇 `Developer: Reload Window`。
+腳本具備智慧偵測能力，會自動辨識本機已安裝的 IDE 環境（VS Code、VS Code Insiders、Antigravity IDE）並按需掛載：
+
+- **一鍵安裝**：在 PowerShell 執行 `.\install-extension.ps1`（或直接雙擊 `install-extension.bat`）。
+- **一鍵卸載**：在 PowerShell 執行 `.\uninstall-extension.ps1`（或直接雙擊 `uninstall-extension.bat`）。
+- **重載生效**：於 Antigravity IDE 或 VS Code 按 `Ctrl + Shift + P` -> 選擇 `Developer: Reload Window`。
 

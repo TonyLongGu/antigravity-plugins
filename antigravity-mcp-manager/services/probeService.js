@@ -19,13 +19,14 @@ class ProbeService {
     const startTime = Date.now();
 
     // 1. 遠端 URL 測試 (HTTP / SSE)
-    if (serverConfig.serverUrl) {
+    const targetUrl = serverConfig.serverUrl || serverConfig.url;
+    if (targetUrl) {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 4000);
 
         const headers = { ...(serverConfig.headers || {}) };
-        const res = await fetch(serverConfig.serverUrl, {
+        const res = await fetch(targetUrl, {
           method: 'GET',
           headers,
           signal: controller.signal,

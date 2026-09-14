@@ -36,12 +36,22 @@ class I18n {
   }
 
   /**
-   * 取得當前設定語系 (預設 'zh-TW')
+   * 取得當前設定語系 (優先讀取 antigravity.locale，未指定則自動適配 VS Code / IDE 系統語系)
    * @returns {string}
    */
   getLocale() {
     const config = vscode.workspace.getConfiguration('antigravity');
-    return config.get('locale', 'zh-TW');
+    const customLocale = config.get('locale');
+    if (customLocale && typeof customLocale === 'string') {
+      return customLocale;
+    }
+
+    // 自動適配 VS Code / IDE 系統語系 (預設繁體中文 zh-TW，若環境為英文則回傳 en)
+    const envLang = (vscode.env.language || '').toLowerCase();
+    if (envLang.startsWith('en')) {
+      return 'en';
+    }
+    return 'zh-TW';
   }
 
   /**

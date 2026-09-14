@@ -108,9 +108,24 @@ function getGlobalPaths() {
   const appData = process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming');
   const globalConfigRoot = path.join(homeDir, '.gemini', 'config');
   const globalAppRoot = path.join(homeDir, '.gemini', 'antigravity-ide');
-  const userSettingsDir = path.join(appData, 'Antigravity IDE', 'User');
+
+  const appName = vscode.env.appName || '';
+  const isInsiders = /insider/i.test(appName);
+  const isAntigravity = /antigravity/i.test(appName);
+
+  let userSettingsDir;
+  if (isAntigravity) {
+    userSettingsDir = path.join(appData, 'Antigravity IDE', 'User');
+  } else if (isInsiders) {
+    userSettingsDir = path.join(appData, 'Code - Insiders', 'User');
+  } else {
+    userSettingsDir = path.join(appData, 'Code', 'User');
+  }
+
   const userSettingsPath = path.join(userSettingsDir, 'settings.json');
-  const ideExtensionsDir = path.join(homeDir, '.antigravity-ide', 'extensions');
+  const ideExtensionsDir = isAntigravity
+    ? path.join(homeDir, '.antigravity-ide', 'extensions')
+    : path.join(homeDir, '.vscode', 'extensions');
 
   return {
     globalConfig: globalConfigRoot,
@@ -123,6 +138,37 @@ function getGlobalPaths() {
     userSettingsDir: userSettingsDir,
     userSettingsPath: userSettingsPath,
     ideExtensions: ideExtensionsDir,
+  };
+}
+
+/**
+ * 取得當前 IDE 環境特徵與 Antigravity 專屬卡片顯示權限
+ */
+function getEnvironmentInfo() {
+  const homeDir = process.env.USERPROFILE || process.env.HOME || '';
+  const appData = process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming');
+  const appName = vscode.env.appName || '';
+  const isAntigravityIDE = /antigravity/i.test(appName);
+
+  const globalConfigRoot = path.join(homeDir, '.gemini', 'config');
+  const globalAppRoot = path.join(homeDir, '.gemini', 'antigravity-ide');
+  const antigravityAppData = path.join(appData, 'Antigravity IDE');
+
+  const geminiExists = fs.existsSync(globalConfigRoot) || fs.existsSync(globalAppRoot) || fs.existsSync(antigravityAppData);
+  const hasAntigravity = isAntigravityIDE || geminiExists;
+
+  const config = vscode.workspace.getConfiguration('antigravity');
+  const showInVsCode = config.get('showAntigravityModulesInVsCode', true);
+
+  // 1. 若在 Antigravity IDE 執行：一律完整顯示
+  // 2. 若在 VS Code 執行：必須本機有 Antigravity 環境且使用者未手動停用，才顯示；純 VS Code 機器則自動隱藏
+  const showAntigravityCards = isAntigravityIDE || (hasAntigravity && showInVsCode);
+
+  return {
+    appName,
+    isAntigravityIDE,
+    hasAntigravity,
+    showAntigravityCards,
   };
 }
 
@@ -245,6 +291,7 @@ module.exports = {
   getCanonicalPath,
   getDirectorySizeBytesAsync,
   getGlobalPaths,
+  getEnvironmentInfo,
   handleOpenTarget,
   getExplorerSettings,
   toggleExplorerSetting,

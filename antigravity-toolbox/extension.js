@@ -247,6 +247,7 @@ class ToolboxViewProvider {
         const scriptsStatus = scriptService.getWorkspaceScripts();
         const brainStatus = await brainService.getBrainStats();
         const settingsStatus = systemService.getExplorerSettings();
+        const envInfo = systemService.getEnvironmentInfo();
         const payload = {
           type: 'updateStatus',
           payload: {
@@ -254,6 +255,7 @@ class ToolboxViewProvider {
             scripts: scriptsStatus,
             brain: brainStatus,
             settings: settingsStatus,
+            envInfo: envInfo,
           },
         };
         if (this._view) {
@@ -281,10 +283,11 @@ class ToolboxViewProvider {
     let css = fs.existsSync(cssPath) ? fs.readFileSync(cssPath, 'utf-8') : '';
     let localesJs = fs.existsSync(localesPath) ? fs.readFileSync(localesPath, 'utf-8') : '';
     const currentLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
+    const envInfo = systemService.getEnvironmentInfo();
 
     return html
       .replace(/<link rel="stylesheet" href="style\.css">/g, `<style>${css}</style>`)
-      .replace(/<script src="locales\.js"><\/script>/g, `<script>window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)};</script><script>${localesJs}</script>`)
+      .replace(/<script src="locales\.js"><\/script>/g, `<script>window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)}; window.INITIAL_ENV = ${JSON.stringify(envInfo)};</script><script>${localesJs}</script>`)
       .replace(/src="locales\.js"/g, `src="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'locales.js'))}"`)
       .replace(/src="app\.js"/g, `src="${scriptUri}?v=${Date.now()}"`);
   }
@@ -382,13 +385,16 @@ function activate(context) {
   statusBar.show();
   context.subscriptions.push(statusBar);
 
-  // 7.1 監聽全域語言變動 (跨外掛即時聯動廣播)
+  // 7.1 監聽全域語言與環境模組顯示變動 (跨外掛即時聯動廣播)
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('antigravity.locale')) {
         const newLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
         updateToolboxStatusBar();
         provider.broadcastLocale(newLocale);
+      }
+      if (e.affectsConfiguration('antigravity.showAntigravityModulesInVsCode')) {
+        provider.pushStatus(50);
       }
     })
   );

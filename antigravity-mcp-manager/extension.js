@@ -120,10 +120,10 @@ class MCPManagerViewProvider {
       case 'toggleGlobalServer': {
         const { name, disabled } = message;
         try {
-          await McpConfigService.toggleServer(McpConfigService.globalConfigPath, name, disabled);
+          await McpConfigService.toggleServer(name, disabled);
           await this.refreshWebviewData();
           this.pushToast(`已${disabled ? '停用' : '啟用'} ${name}`, disabled ? 'warning' : 'success');
-          vscode.window.setStatusBarMessage(`全域 MCP: 已${disabled ? '停用' : '啟用'} ${name}`, 3000);
+          vscode.window.setStatusBarMessage(`[${McpConfigService.envName}] 已${disabled ? '停用' : '啟用'} ${name}`, 3000);
         } catch (err) {
           this.pushToast(`切換失敗：${err.message}`, 'danger');
           await this.refreshWebviewData();
@@ -134,7 +134,7 @@ class MCPManagerViewProvider {
       case 'updateServerDescription': {
         const { name, description } = message;
         try {
-          await McpConfigService.updateServerDescription(McpConfigService.globalConfigPath, name, description);
+          await McpConfigService.updateServerDescription(name, description);
           await this.refreshWebviewData();
           this.pushToast(`已更新 ${name} 的用途說明`, 'success');
         } catch (err) {
@@ -146,11 +146,12 @@ class MCPManagerViewProvider {
       case 'batchToggleGlobal': {
         const { action } = message;
         try {
-          await McpConfigService.batchToggle(McpConfigService.globalConfigPath, action);
-          await this.refreshWebviewData();
-          const actionText = action === 'enableAll' ? '全部啟用' : action === 'disableAll' ? '全部停用' : '反向切換';
-          this.pushToast(`全域 MCP 伺服器已${actionText}`, 'success');
-          vscode.window.setStatusBarMessage(`全域 MCP 批次操作完成`, 3000);
+          await McpConfigService.batchToggle(action);
+          const isEnable = action === 'enableAll' || action === 'enable_all';
+          const isDisable = action === 'disableAll' || action === 'disable_all';
+          const actionText = isEnable ? '全部啟用' : isDisable ? '全部停用' : '反向切換';
+          this.pushToast(`[${McpConfigService.envName}] MCP 伺服器已${actionText}`, 'success');
+          vscode.window.setStatusBarMessage(`[${McpConfigService.envName}] MCP 批次操作完成`, 3000);
         } catch (err) {
           this.pushToast(`批次操作失敗：${err.message}`, 'danger');
         }
@@ -217,13 +218,13 @@ class MCPManagerViewProvider {
 
       // 更新 IDE 底部 Status Bar
       if (this._statusBarItem) {
-        this._statusBarItem.text = `$(plug) MCP: ${globalData.stats.enabled}/${globalData.stats.total}`;
+        this._statusBarItem.text = `$(plug) [${globalData.envName}] MCP: ${globalData.stats.enabled}/${globalData.stats.total}`;
 
         const servers = (globalData.config && globalData.config.mcpServers) || {};
         const enabledServers = Object.keys(servers).filter((name) => servers[name].disabled !== true);
 
         const tooltipLines = [];
-
+        tooltipLines.push(`【${globalData.envName} MCP 儀表板】`);
         if (enabledServers.length > 0) {
           tooltipLines.push('已啟用的 MCP 工具:');
           enabledServers.forEach((name) => {
@@ -309,7 +310,7 @@ class MCPManagerViewProvider {
       .replace(/src="app\.js"/g, `src="${scriptUri}?v=${Date.now()}"`)
       .replace(
         /<script id="i18n-locales-data" type="application\/json">\{\}<\/script>/g,
-        `<script>window.LOCALES = ${JSON.stringify(locales)}; window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)};</script>`
+        `<script>window.LOCALES = ${JSON.stringify(locales)}; window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)}; window.INITIAL_IS_VSCODE = ${McpConfigService.isVsCode}; window.ENV_NAME = ${JSON.stringify(McpConfigService.envName)};</script>`
       );
   }
 }
@@ -350,17 +351,29 @@ async function activate(context) {
     })
   );
 
-  // 全域設定檔檔案監聽 (即時熱重載)
-  const dir = path.dirname(McpConfigService.globalConfigPath);
+  // 全域設定檔與狀態資料庫檔案監聽 (即時熱重載)
   try {
-    await fsPromises.access(dir);
-    const watcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(vscode.Uri.file(dir), 'mcp_config.json')
+    const configPath = McpConfigService.globalConfigPath;
+    const configDir = path.dirname(configPath);
+    const configName = path.basename(configPath);
+    const configWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(vscode.Uri.file(configDir), configName)
     );
-    watcher.onDidChange(() => provider.refreshWebviewData());
-    watcher.onDidCreate(() => provider.refreshWebviewData());
-    watcher.onDidDelete(() => provider.refreshWebviewData());
-    context.subscriptions.push(watcher);
+    configWatcher.onDidChange(() => provider.refreshWebviewData());
+    configWatcher.onDidCreate(() => provider.refreshWebviewData());
+    configWatcher.onDidDelete(() => provider.refreshWebviewData());
+    context.subscriptions.push(configWatcher);
+
+    // 在 VS Code 環境下亦監聽原生 SQLite 資料庫 (state.vscdb) 的即時變更
+    if (McpConfigService.isVsCode) {
+      const dbPath = McpConfigService.vsCodeStateDbPath;
+      const dbDir = path.dirname(dbPath);
+      const dbWatcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(vscode.Uri.file(dbDir), 'state.vscdb*')
+      );
+      dbWatcher.onDidChange(() => provider.refreshWebviewData());
+      context.subscriptions.push(dbWatcher);
+    }
   } catch (e) {}
 
   // 監聽全域語言變動設定 (支援跨外掛即時聯動廣播)
