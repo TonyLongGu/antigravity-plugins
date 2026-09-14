@@ -113,6 +113,26 @@ class McpConfigService {
   }
 
   /**
+   * 更新單一伺服器的用途說明 (description)
+   */
+  static async updateServerDescription(filePath, serverName, description) {
+    const config = await this.safeReadJson(filePath, { mcpServers: {} });
+    if (!config.mcpServers || !config.mcpServers[serverName]) {
+      throw new Error(`找不到伺服器：${serverName}`);
+    }
+
+    const trimmed = typeof description === 'string' ? description.trim() : '';
+    if (trimmed) {
+      config.mcpServers[serverName].description = trimmed;
+    } else {
+      delete config.mcpServers[serverName].description;
+    }
+
+    await this.safeSaveMCPConfig(filePath, config);
+    return config;
+  }
+
+  /**
    * 批次切換伺服器狀態 (enable_all / disable_all / invert)
    */
   static async batchToggle(filePath, action) {

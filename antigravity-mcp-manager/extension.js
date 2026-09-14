@@ -131,6 +131,18 @@ class MCPManagerViewProvider {
         break;
       }
 
+      case 'updateServerDescription': {
+        const { name, description } = message;
+        try {
+          await McpConfigService.updateServerDescription(McpConfigService.globalConfigPath, name, description);
+          await this.refreshWebviewData();
+          this.pushToast(`已更新 ${name} 的用途說明`, 'success');
+        } catch (err) {
+          this.pushToast(`更新說明失敗：${err.message}`, 'danger');
+        }
+        break;
+      }
+
       case 'batchToggleGlobal': {
         const { action } = message;
         try {

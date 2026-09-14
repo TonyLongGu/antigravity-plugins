@@ -20,7 +20,10 @@
     zap: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>',
     refresh: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>',
     search: '<svg class="lucide-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
-    chevronRight: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>'
+    chevronRight: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>',
+    copy: '<svg class="lucide-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>',
+    edit: '<svg class="lucide-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>',
+    terminal: '<svg class="lucide-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>'
   };
 
   /**
@@ -216,16 +219,38 @@
         this.results[name] = {
           status: 'ok',
           message: result.message || I18nModule.t('status_ok_default'),
+          messageKey: result.messageKey,
+          messageParams: result.messageParams,
           latency: result.latency || 0,
         };
       } else {
         this.results[name] = {
           status: 'fail',
           message: result.message || I18nModule.t('status_fail_default'),
+          messageKey: result.messageKey,
+          messageParams: result.messageParams,
           latency: result.latency || 0,
         };
       }
       GlobalConfigModule.render();
+    },
+
+    formatMessage(result) {
+      if (!result) return '';
+      if (result.messageKey) {
+        return I18nModule.t(result.messageKey, result.messageParams || {});
+      }
+      // 防呆兼容舊字串與無 messageKey 之情境
+      const msg = result.message || '';
+      if (msg.includes('進程運作中')) return I18nModule.t('probe_process_running');
+      if (msg.includes('服務常駐運作中')) return I18nModule.t('probe_daemon_running');
+      if (msg.includes('回應正常')) return I18nModule.t('probe_response_ok');
+      if (msg.includes('指令可正常執行')) return I18nModule.t('probe_exit_ok');
+      if (msg.includes('進程異常結束')) return I18nModule.t('probe_exit_fail', { code: (result.messageParams && result.messageParams.code) || '' });
+      if (msg.includes('連線超時')) return I18nModule.t('probe_timeout');
+      if (msg.includes('連線正常')) return I18nModule.t('status_ok_default');
+      if (msg.includes('無法連線') || msg.includes('連線失敗')) return I18nModule.t('status_fail_default');
+      return msg;
     },
 
     testServer(name) {
@@ -264,6 +289,26 @@
     data: null,
     searchQuery: '',
     currentFilter: 'all',
+    openedServers: new Set(),
+    isBatchExpanding: false,
+
+    // 收合所有展開的二級子卡片 (對齊 context-inspector 規範)
+    collapseAllSubcards() {
+      const openCards = document.querySelectorAll('.container details.server-card[open]');
+      if (openCards.length > 0) {
+        openCards.forEach((el) => {
+          el.open = false;
+          // 若卡片內處於編輯說明狀態，還原為檢視模式
+          const descDisplay = el.querySelector('.server-desc-display');
+          const descEditor = el.querySelector('.server-desc-editor');
+          if (descDisplay && descEditor && descEditor.style.display !== 'none') {
+            descEditor.style.display = 'none';
+            descDisplay.style.display = 'flex';
+          }
+        });
+      }
+      this.openedServers.clear();
+    },
 
     dom: {
       btnOpenConfig: document.getElementById('btn-open-global-config'),
@@ -358,7 +403,7 @@
       if (this.dom.statEnabled) this.dom.statEnabled.textContent = stats.enabled;
       if (this.dom.statDisabled) this.dom.statDisabled.textContent = stats.disabled;
 
-      // 過濾項目
+      // 過濾項目（支援比對名稱、指令、URL 與用途說明 description）
       const filteredKeys = serverKeys.filter((key) => {
         const s = servers[key];
         const isEnabled = s.disabled !== true;
@@ -370,7 +415,8 @@
           const matchName = key.toLowerCase().includes(query);
           const matchCmd = s.command && s.command.toLowerCase().includes(query);
           const matchUrl = s.serverUrl && s.serverUrl.toLowerCase().includes(query);
-          return matchName || matchCmd || matchUrl;
+          const matchDesc = s.description && s.description.toLowerCase().includes(query);
+          return matchName || matchCmd || matchUrl || matchDesc;
         }
         return true;
       });
@@ -393,69 +439,195 @@
         const isEnabled = server.disabled !== true;
         const testResult = ProbeModule.results[key];
 
-        const card = document.createElement('div');
         let statusClass = '';
         let cardTitle = key;
         if (testResult) {
+          const displayMsg = ProbeModule.formatMessage(testResult);
+          const latencyText = testResult.latency ? ` (${testResult.latency}ms)` : '';
           if (testResult.status === 'ok') {
             statusClass = 'status-tested-ok';
-            cardTitle = `${key}\n${I18nModule.t('status_ok_prefix')} ${testResult.message}`;
+            cardTitle = `${key}\n${I18nModule.t('status_ok_prefix')} ${displayMsg}${latencyText}`;
           } else if (testResult.status === 'fail') {
             statusClass = 'status-tested-fail';
-            cardTitle = `${key}\n${I18nModule.t('status_fail_prefix')} ${testResult.message}`;
+            cardTitle = `${key}\n${I18nModule.t('status_fail_prefix')} ${displayMsg}`;
           } else if (testResult.status === 'testing') {
             statusClass = 'status-tested-testing';
             cardTitle = `${key}\n${I18nModule.t('status_testing')}`;
           }
         }
 
+        const isOpen = this.openedServers.has(key);
+
+        const card = document.createElement('details');
         card.className = `server-card ${isEnabled ? '' : 'disabled'} ${statusClass}`;
         card.title = cardTitle;
-
-        let dotClass = '';
-        if (testResult && testResult.status === 'testing') {
-          dotClass = 'testing';
-        } else if (isEnabled) {
-          dotClass = testResult && testResult.status === 'fail' ? 'error' : 'enabled';
+        card.setAttribute('data-name', key);
+        if (isOpen) {
+          card.setAttribute('open', '');
         }
 
-        const btnTestLabel = I18nModule.t('btn_test');
-        const btnTestTitle = I18nModule.t('btn_test_title');
+        let btnTestStatusClass = '';
+        let btnTestDynamicTitle = I18nModule.t('btn_test_title');
+        if (testResult) {
+          const displayMsg = ProbeModule.formatMessage(testResult);
+          const latencyText = testResult.latency ? ` (${testResult.latency}ms)` : '';
+          if (testResult.status === 'testing') {
+            btnTestStatusClass = 'is-testing';
+            btnTestDynamicTitle = `${I18nModule.t('btn_test_title')} (${I18nModule.t('status_testing')})`;
+          } else if (testResult.status === 'ok') {
+            btnTestStatusClass = 'status-ok';
+            btnTestDynamicTitle = `${displayMsg}${latencyText}`;
+          } else if (testResult.status === 'fail') {
+            btnTestStatusClass = 'status-fail';
+            btnTestDynamicTitle = `${displayMsg}`;
+          }
+        }
+        const editDescLabel = I18nModule.t('btn_edit_desc');
 
         card.innerHTML = `
-          <div class="server-card-main">
+          <summary class="server-card-summary">
             <div class="server-info-left">
-              <div class="status-dot ${dotClass}"></div>
+              <span class="server-chevron">${Icons.chevronRight}</span>
               <div class="server-title-wrap">
                 <span class="server-name">${escapeHtml(key)}</span>
               </div>
             </div>
             <div class="server-controls-right">
-              <button class="btn-test ${testResult && testResult.status === 'testing' ? 'is-testing' : ''}" data-name="${escapeHtml(key)}" title="${escapeHtml(btnTestTitle)}">${escapeHtml(btnTestLabel)}</button>
+              <button class="btn-test ${btnTestStatusClass}" data-name="${escapeHtml(key)}" title="${escapeHtml(btnTestDynamicTitle)}">${Icons.zap}</button>
               <label class="switch">
                 <input type="checkbox" ${isEnabled ? 'checked' : ''} data-name="${escapeHtml(key)}">
                 <span class="slider"></span>
               </label>
             </div>
+          </summary>
+
+          <div class="server-detail-body">
+            <div class="server-action-bar">
+              <button class="action-btn btn-edit-desc" title="${escapeHtml(editDescLabel)}">${Icons.edit} <span>${escapeHtml(editDescLabel)}</span></button>
+            </div>
+
+            <div class="server-desc-wrap">
+              <div class="server-desc-display" title="${escapeHtml(editDescLabel)}">
+                <div class="server-desc-text ${server.description ? '' : 'is-empty'}">${escapeHtml(server.description || I18nModule.t('desc_empty_placeholder'))}</div>
+              </div>
+              <div class="server-desc-editor" style="display: none;">
+                <textarea class="desc-textarea" placeholder="${escapeHtml(I18nModule.t('desc_input_placeholder'))}">${escapeHtml(server.description || '')}</textarea>
+                <div class="desc-editor-actions">
+                  <button class="btn-desc-save">${escapeHtml(I18nModule.t('btn_save_desc'))}</button>
+                  <button class="btn-desc-cancel">${escapeHtml(I18nModule.t('btn_cancel_desc'))}</button>
+                </div>
+              </div>
+            </div>
           </div>
         `;
 
-        // 綁定 Switch Toggle
-        const checkbox = card.querySelector('input[type="checkbox"]');
-        checkbox.addEventListener('change', (e) => {
-          const shouldDisable = !e.target.checked;
-          vscode.postMessage({
-            type: 'toggleGlobalServer',
-            name: key,
-            disabled: shouldDisable,
-          });
+        // 監聽折疊狀態變化
+        card.addEventListener('toggle', () => {
+          if (card.open) {
+            // 當單一卡片展開時，自動收合其他卡片 (維持焦點單一清晰)
+            if (!this.isBatchExpanding) {
+              document.querySelectorAll('.container details.server-card[open]').forEach((el) => {
+                if (el !== card) {
+                  el.open = false;
+                  const otherName = el.getAttribute('data-name');
+                  if (otherName) this.openedServers.delete(otherName);
+                }
+              });
+            }
+            this.openedServers.add(key);
+          } else {
+            this.openedServers.delete(key);
+          }
         });
 
-        // 綁定測試按鈕
+        // 綁定 Switch Toggle (防冒泡)
+        const switchLabel = card.querySelector('.switch');
+        const checkbox = card.querySelector('input[type="checkbox"]');
+        if (switchLabel) {
+          switchLabel.addEventListener('click', (e) => e.stopPropagation());
+        }
+        if (checkbox) {
+          checkbox.addEventListener('change', (e) => {
+            e.stopPropagation();
+            const shouldDisable = !e.target.checked;
+            card.classList.toggle('disabled', shouldDisable);
+            vscode.postMessage({
+              type: 'toggleGlobalServer',
+              name: key,
+              disabled: shouldDisable,
+            });
+          });
+        }
+
+        // 綁定測試按鈕 (防冒泡)
         const btnTest = card.querySelector('.btn-test');
-        btnTest.addEventListener('click', () => {
-          ProbeModule.testServer(key);
-        });
+        if (btnTest) {
+          btnTest.addEventListener('click', (e) => {
+            e.stopPropagation();
+            ProbeModule.testServer(key);
+          });
+        }
+
+        // 行內說明編輯邏輯
+        const descDisplay = card.querySelector('.server-desc-display');
+        const descEditor = card.querySelector('.server-desc-editor');
+        const descTextarea = card.querySelector('.desc-textarea');
+        const btnEditDesc = card.querySelector('.btn-edit-desc');
+        const btnSaveDesc = card.querySelector('.btn-desc-save');
+        const btnCancelDesc = card.querySelector('.btn-desc-cancel');
+        const descText = card.querySelector('.server-desc-text');
+
+        const enterEditMode = (e) => {
+          e.stopPropagation();
+          if (!descDisplay || !descEditor || !descTextarea) return;
+          descDisplay.style.display = 'none';
+          descEditor.style.display = 'flex';
+          descTextarea.value = server.description || '';
+          descTextarea.focus();
+        };
+
+        const exitEditMode = (e) => {
+          if (e) e.stopPropagation();
+          if (!descDisplay || !descEditor) return;
+          descEditor.style.display = 'none';
+          descDisplay.style.display = 'flex';
+        };
+
+        if (btnEditDesc) btnEditDesc.addEventListener('click', enterEditMode);
+        if (descDisplay) descDisplay.addEventListener('click', enterEditMode);
+        if (descTextarea) {
+          descTextarea.addEventListener('click', (e) => e.stopPropagation());
+          descTextarea.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+              exitEditMode(e);
+            } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+              if (btnSaveDesc) btnSaveDesc.click();
+            }
+          });
+        }
+        if (btnCancelDesc) btnCancelDesc.addEventListener('click', exitEditMode);
+        if (btnSaveDesc) {
+          btnSaveDesc.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const newDesc = descTextarea ? descTextarea.value.trim() : '';
+            server.description = newDesc;
+            if (descText) {
+              if (newDesc) {
+                descText.textContent = newDesc;
+                descText.classList.remove('is-empty');
+              } else {
+                descText.textContent = I18nModule.t('desc_empty_placeholder');
+                descText.classList.add('is-empty');
+              }
+            }
+            exitEditMode();
+            vscode.postMessage({
+              type: 'updateServerDescription',
+              name: key,
+              description: newDesc,
+            });
+          });
+        }
 
         this.dom.listContainer.appendChild(card);
       });
@@ -602,23 +774,47 @@
 
       this.restoreState();
 
-      // 全部摺疊卡片 (靜默執行)
+      // 全部摺疊卡片 (摺疊所有 MCP 伺服器子卡片)
       if (this.dom.btnCollapseAll) {
         this.dom.btnCollapseAll.addEventListener('click', () => {
-          document.querySelectorAll('.container details').forEach((el) => {
-            el.open = false;
-          });
+          GlobalConfigModule.collapseAllSubcards();
         });
       }
 
-      // 全部展開卡片 (靜默執行)
+      // 全部展開卡片 (展開全域卡片與所有 MCP 伺服器子卡片)
       if (this.dom.btnExpandAll) {
         this.dom.btnExpandAll.addEventListener('click', () => {
-          document.querySelectorAll('.container details.card').forEach((el) => {
+          const globalCard = document.getElementById('card-global');
+          if (globalCard) globalCard.open = true;
+          GlobalConfigModule.isBatchExpanding = true;
+          document.querySelectorAll('.container details.server-card').forEach((el) => {
             el.open = true;
           });
+          if (GlobalConfigModule.data && GlobalConfigModule.data.config && GlobalConfigModule.data.config.mcpServers) {
+            Object.keys(GlobalConfigModule.data.config.mcpServers).forEach((k) => GlobalConfigModule.openedServers.add(k));
+          }
+          GlobalConfigModule.isBatchExpanding = false;
         });
       }
+
+      // 焦點轉移 / 切換到其他工具時，自動收合所有展開的子卡片 (對齊 context-inspector 規範)
+      window.addEventListener('blur', () => {
+        GlobalConfigModule.collapseAllSubcards();
+      });
+
+      // 頁面切入背景 (Tab 或側邊欄切換) 時自動收合子卡片
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          GlobalConfigModule.collapseAllSubcards();
+        }
+      });
+
+      // 點擊卡片外部區域（如空白背景、搜尋列等）時自動收合卡片
+      document.addEventListener('pointerdown', (e) => {
+        if (!e.target.closest('details.server-card') && !e.target.closest('#btn-expand-all')) {
+          GlobalConfigModule.collapseAllSubcards();
+        }
+      });
 
       GlobalConfigModule.init();
       DragScrollModule.init();

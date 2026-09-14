@@ -13,7 +13,7 @@ class ProbeService {
    */
   static async testServerConnection(serverConfig) {
     if (!serverConfig) {
-      return { ok: false, message: '未提供伺服器設定' };
+      return { ok: false, messageKey: 'probe_no_config', message: '未提供伺服器設定' };
     }
 
     const startTime = Date.now();
@@ -38,7 +38,9 @@ class ProbeService {
           type: 'remote',
           status: res.status,
           latency,
-          message: `連線正常 (HTTP ${res.status}, ${latency}ms)`,
+          messageKey: 'probe_http_ok',
+          messageParams: { status: res.status },
+          message: `連線正常 (HTTP ${res.status})`,
         };
       } catch (err) {
         const latency = Date.now() - startTime;
@@ -47,6 +49,8 @@ class ProbeService {
           ok: false,
           type: 'remote',
           latency: isTimeout ? 4000 : latency,
+          messageKey: isTimeout ? 'probe_timeout' : 'probe_http_fail',
+          messageParams: { error: err.message || '連線失敗' },
           message: isTimeout ? '連線超時 (4s)' : `無法連線 (${err.message || '連線失敗'})`,
         };
       }
@@ -92,6 +96,8 @@ class ProbeService {
               ok: false,
               type: 'cli',
               latency: Date.now() - startTime,
+              messageKey: 'probe_spawn_fail',
+              messageParams: { cmd },
               message: `啟動失敗: 找不到指令 [${cmd}] 或權限不足`,
             });
           });
@@ -105,7 +111,8 @@ class ProbeService {
               ok: true,
               type: 'cli',
               latency: Date.now() - startTime,
-              message: `回應正常 (${Date.now() - startTime}ms)`,
+              messageKey: 'probe_response_ok',
+              message: '回應正常',
             });
           });
 
@@ -116,7 +123,8 @@ class ProbeService {
                 ok: true,
                 type: 'cli',
                 latency: Date.now() - startTime,
-                message: `進程運作中 (${Date.now() - startTime}ms)`,
+                messageKey: 'probe_process_running',
+                message: '進程運作中',
               });
             }
           });
@@ -127,13 +135,16 @@ class ProbeService {
                 ok: true,
                 type: 'cli',
                 latency: Date.now() - startTime,
-                message: `指令可正常執行 (Exit 0)`,
+                messageKey: 'probe_exit_ok',
+                message: '指令可正常執行 (Exit 0)',
               });
             } else {
               finish({
                 ok: false,
                 type: 'cli',
                 latency: Date.now() - startTime,
+                messageKey: 'probe_exit_fail',
+                messageParams: { code },
                 message: `進程異常結束 (Exit code: ${code})`,
               });
             }
@@ -144,7 +155,8 @@ class ProbeService {
               ok: true,
               type: 'cli',
               latency: Date.now() - startTime,
-              message: `服務常駐運作中 (${Date.now() - startTime}ms)`,
+              messageKey: 'probe_daemon_running',
+              message: '服務常駐運作中',
             });
           }, 1500);
 
@@ -153,13 +165,15 @@ class ProbeService {
             ok: false,
             type: 'cli',
             latency: Date.now() - startTime,
+            messageKey: 'probe_error',
+            messageParams: { error: err.message },
             message: `測試異常: ${err.message}`,
           });
         }
       });
     }
 
-    return { ok: false, message: '未定義 command 或 serverUrl' };
+    return { ok: false, messageKey: 'probe_undefined_config', message: '未定義 command 或 serverUrl' };
   }
 }
 
