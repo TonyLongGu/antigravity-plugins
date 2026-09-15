@@ -306,6 +306,7 @@ class ToolboxViewProvider {
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
+  systemService.bindExtensionContext(context);
   const provider = new ToolboxViewProvider(context.extensionUri);
 
   // 1. 註冊 Webview View Provider

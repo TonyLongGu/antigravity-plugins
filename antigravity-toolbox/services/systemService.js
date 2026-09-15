@@ -4,6 +4,84 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const fsPromises = require('node:fs/promises');
 
+/** @type {vscode.ExtensionContext | null} */
+let extensionContext = null;
+
+/**
+ * 綁定 ExtensionContext，供後續以實際 User / extensions 路徑解析當前 IDE
+ * @param {vscode.ExtensionContext} context
+ */
+function bindExtensionContext(context) {
+  extensionContext = context || null;
+}
+
+function getHomeDir() {
+  return process.env.USERPROFILE || process.env.HOME || '';
+}
+
+function getAppDataDir() {
+  const homeDir = getHomeDir();
+  return process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming');
+}
+
+/**
+ * 偵測當前 Extension Host 所屬 IDE（VS Code 與相容分支：Cursor、VSCodium、Antigravity）
+ * 優先用 context 推導真實路徑，避免寫死 AppData 資料夾名稱。
+ */
+function detectHostIde() {
+  const appName = vscode.env.appName || '';
+  const homeDir = getHomeDir();
+  const appData = getAppDataDir();
+
+  let id = 'vscode';
+  let userDataFolder = 'Code';
+  let extensionsHome = path.join(homeDir, '.vscode');
+
+  if (/antigravity/i.test(appName)) {
+    id = 'antigravity';
+    userDataFolder = 'Antigravity IDE';
+    extensionsHome = path.join(homeDir, '.antigravity-ide');
+  } else if (/cursor/i.test(appName)) {
+    id = 'cursor';
+    userDataFolder = 'Cursor';
+    extensionsHome = path.join(homeDir, '.cursor');
+  } else if (/insider/i.test(appName)) {
+    id = 'vscode-insiders';
+    userDataFolder = 'Code - Insiders';
+    extensionsHome = path.join(homeDir, '.vscode-insiders');
+  } else if (/vscodium|codium/i.test(appName)) {
+    id = 'vscodium';
+    userDataFolder = 'VSCodium';
+    extensionsHome = path.join(homeDir, '.vscode-oss');
+  }
+
+  let userSettingsDir = path.join(appData, userDataFolder, 'User');
+  let ideExtensionsDir = path.join(extensionsHome, 'extensions');
+
+  if (extensionContext?.globalStorageUri?.fsPath) {
+    // {userData}/User/globalStorage/{extId} → User
+    userSettingsDir = path.normalize(path.join(extensionContext.globalStorageUri.fsPath, '..', '..'));
+  }
+
+  if (extensionContext?.extensionUri?.fsPath) {
+    const parent = path.dirname(extensionContext.extensionUri.fsPath);
+    if (path.basename(parent).toLowerCase() === 'extensions') {
+      ideExtensionsDir = parent;
+    }
+  }
+
+  return {
+    id,
+    appName,
+    displayName: appName || 'VS Code',
+    isAntigravityIDE: id === 'antigravity',
+    isCursor: id === 'cursor',
+    userSettingsDir,
+    userSettingsPath: path.join(userSettingsDir, 'settings.json'),
+    ideExtensionsDir,
+  };
+}
+
 /**
  * 輔助安全建立並獲取目錄
  * @param {string} dirPath
@@ -103,32 +181,103 @@ async function getDirectorySizeBytesAsync(dirPath) {
   }
 }
 
+function getCursorHome() {
+  return path.join(getHomeDir(), '.cursor');
+}
+
 /**
- * 取得全域目錄路徑對應表
+ * 將本機路徑轉成 Cursor `~/.cursor/projects/<id>` 可能的資料夾名稱
+ * 例：D:\PJ\Ai\ai → d-PJ-Ai-ai
  */
-function getGlobalPaths() {
-  const homeDir = process.env.USERPROFILE || process.env.HOME || '';
-  const appData = process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming');
-  const globalConfigRoot = path.join(homeDir, '.gemini', 'config');
-  const globalAppRoot = path.join(homeDir, '.gemini', 'antigravity-ide');
+function toCursorProjectIdCandidates(absPath) {
+  if (!absPath) return [];
+  const resolved = path.resolve(absPath);
+  const dashed = resolved.replace(/[\\/]/g, '-').replace(/:/g, '');
+  const dotted = dashed.replace(/\./g, '-');
+  const flipDrive = (value, toUpper) => {
+    if (!/^[A-Za-z]-/.test(value)) return value;
+    const drive = toUpper ? value[0].toUpperCase() : value[0].toLowerCase();
+    return drive + value.slice(1);
+  };
+  return [...new Set([
+    dashed,
+    dotted,
+    flipDrive(dashed, false),
+    flipDrive(dotted, false),
+    flipDrive(dashed, true),
+    flipDrive(dotted, true),
+  ])];
+}
 
-  const appName = vscode.env.appName || '';
-  const isInsiders = /insider/i.test(appName);
-  const isAntigravity = /antigravity/i.test(appName);
+function resolveCursorProjectDir() {
+  const projectsRoot = path.join(getCursorHome(), 'projects');
+  if (!fs.existsSync(projectsRoot)) return null;
 
-  let userSettingsDir;
-  if (isAntigravity) {
-    userSettingsDir = path.join(appData, 'Antigravity IDE', 'User');
-  } else if (isInsiders) {
-    userSettingsDir = path.join(appData, 'Code - Insiders', 'User');
-  } else {
-    userSettingsDir = path.join(appData, 'Code', 'User');
+  let entries = [];
+  try {
+    entries = fs.readdirSync(projectsRoot);
+  } catch {
+    return null;
+  }
+  const exact = new Set(entries);
+  const lowerMap = new Map(entries.map((name) => [name.toLowerCase(), name]));
+
+  const candidates = [];
+  if (vscode.workspace.workspaceFile?.fsPath) {
+    candidates.push(...toCursorProjectIdCandidates(vscode.workspace.workspaceFile.fsPath));
+  }
+  for (const folder of vscode.workspace.workspaceFolders || []) {
+    candidates.push(...toCursorProjectIdCandidates(folder.uri.fsPath));
   }
 
-  const userSettingsPath = path.join(userSettingsDir, 'settings.json');
-  const ideExtensionsDir = isAntigravity
-    ? path.join(homeDir, '.antigravity-ide', 'extensions')
-    : path.join(homeDir, '.vscode', 'extensions');
+  for (const id of candidates) {
+    if (exact.has(id)) return path.join(projectsRoot, id);
+    const mapped = lowerMap.get(id.toLowerCase());
+    if (mapped) return path.join(projectsRoot, mapped);
+  }
+  return null;
+}
+
+function getCursorRulesDir() {
+  const folder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (folder) {
+    return path.join(folder, '.cursor', 'rules');
+  }
+  return path.join(getCursorHome(), 'rules');
+}
+
+/**
+ * 取得全域目錄路徑對應表（依目前 IDE 使用本環境路徑）
+ */
+function getGlobalPaths() {
+  const homeDir = getHomeDir();
+  const host = detectHostIde();
+
+  if (host.id === 'cursor') {
+    const cursorHome = getCursorHome();
+    const cursorProject = resolveCursorProjectDir();
+    const projectsRoot = path.join(cursorHome, 'projects');
+    const brain = cursorProject
+      ? path.join(cursorProject, 'agent-transcripts')
+      : projectsRoot;
+
+    return {
+      globalConfig: cursorHome,
+      skills: path.join(cursorHome, 'skills'),
+      rules: getCursorRulesDir(),
+      plugins: path.join(cursorHome, 'plugins'),
+      mcpConfig: path.join(cursorHome, 'mcp.json'),
+      appData: host.userSettingsDir,
+      brain,
+      brainScanRoot: projectsRoot,
+      userSettingsDir: host.userSettingsDir,
+      userSettingsPath: host.userSettingsPath,
+      ideExtensions: host.ideExtensionsDir,
+    };
+  }
+
+  const globalConfigRoot = path.join(homeDir, '.gemini', 'config');
+  const globalAppRoot = path.join(homeDir, '.gemini', 'antigravity-ide');
 
   return {
     globalConfig: globalConfigRoot,
@@ -138,20 +287,68 @@ function getGlobalPaths() {
     mcpConfig: path.join(globalConfigRoot, 'mcp_config.json'),
     appData: globalAppRoot,
     brain: path.join(globalAppRoot, 'brain'),
-    userSettingsDir: userSettingsDir,
-    userSettingsPath: userSettingsPath,
-    ideExtensions: ideExtensionsDir,
+    brainScanRoot: path.join(globalAppRoot, 'brain'),
+    userSettingsDir: host.userSettingsDir,
+    userSettingsPath: host.userSettingsPath,
+    ideExtensions: host.ideExtensionsDir,
   };
 }
 
 /**
- * 取得當前 IDE 環境特徵與 Antigravity 專屬卡片顯示權限
+ * 收集對話紀錄資料夾（Cursor：各專案 agent-transcripts；Antigravity：brain）
+ * @returns {string[]}
+ */
+function collectBrainSessionDirs() {
+  const paths = getGlobalPaths();
+  const host = detectHostIde();
+  const sessions = [];
+
+  if (host.id === 'cursor') {
+    const projectsRoot = paths.brainScanRoot;
+    if (!projectsRoot || !fs.existsSync(projectsRoot)) return sessions;
+    let projects = [];
+    try {
+      projects = fs.readdirSync(projectsRoot, { withFileTypes: true });
+    } catch {
+      return sessions;
+    }
+    for (const project of projects) {
+      if (!project.isDirectory()) continue;
+      const transcriptsDir = path.join(projectsRoot, project.name, 'agent-transcripts');
+      if (!fs.existsSync(transcriptsDir)) continue;
+      try {
+        const entries = fs.readdirSync(transcriptsDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            sessions.push(path.join(transcriptsDir, entry.name));
+          }
+        }
+      } catch {}
+    }
+    return sessions;
+  }
+
+  const brainDir = paths.brain;
+  if (!brainDir || !fs.existsSync(brainDir)) return sessions;
+  try {
+    const entries = fs.readdirSync(brainDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        sessions.push(path.join(brainDir, entry.name));
+      }
+    }
+  } catch {}
+  return sessions;
+}
+
+/**
+ * 取得當前 IDE 環境特徵與控制卡片顯示權限
  */
 function getEnvironmentInfo() {
-  const homeDir = process.env.USERPROFILE || process.env.HOME || '';
-  const appData = process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming');
-  const appName = vscode.env.appName || '';
-  const isAntigravityIDE = /antigravity/i.test(appName);
+  const homeDir = getHomeDir();
+  const appData = getAppDataDir();
+  const host = detectHostIde();
+  const isAntigravityIDE = host.isAntigravityIDE;
 
   const globalConfigRoot = path.join(homeDir, '.gemini', 'config');
   const globalAppRoot = path.join(homeDir, '.gemini', 'antigravity-ide');
@@ -159,19 +356,28 @@ function getEnvironmentInfo() {
 
   const geminiExists = fs.existsSync(globalConfigRoot) || fs.existsSync(globalAppRoot) || fs.existsSync(antigravityAppData);
   const hasAntigravity = isAntigravityIDE || geminiExists;
+  const cursorHomeExists = fs.existsSync(getCursorHome());
 
   const config = vscode.workspace.getConfiguration('antigravity');
   const showInVsCode = config.get('showAntigravityModulesInVsCode', true);
 
-  // 1. 若在 Antigravity IDE 執行：一律完整顯示
-  // 2. 若在 VS Code 執行：必須本機有 Antigravity 環境且使用者未手動停用，才顯示；純 VS Code 機器則自動隱藏
-  const showAntigravityCards = isAntigravityIDE || (hasAntigravity && showInVsCode);
+  const uiFlavor = host.isCursor ? 'cursor' : 'antigravity';
+  // Cursor：一律顯示本環境卡片；Antigravity IDE：一律顯示；其餘 IDE 需本機有 Antigravity 才顯示 gemini 卡片
+  const showHostModules = host.isCursor
+    || isAntigravityIDE
+    || (hasAntigravity && showInVsCode);
 
   return {
-    appName,
+    appName: host.appName,
+    hostId: host.id,
+    hostDisplayName: host.displayName,
     isAntigravityIDE,
+    isCursor: host.isCursor,
     hasAntigravity,
-    showAntigravityCards,
+    hasCursor: host.isCursor || cursorHomeExists,
+    uiFlavor,
+    showHostModules,
+    showAntigravityCards: showHostModules,
   };
 }
 
@@ -288,6 +494,9 @@ async function toggleExplorerSetting(settingKey, provider) {
 }
 
 module.exports = {
+  bindExtensionContext,
+  detectHostIde,
+  collectBrainSessionDirs,
   ensureDirectory,
   safeJsonParse,
   openFolderInside,

@@ -1,6 +1,6 @@
-<#
+﻿<#
 .SYNOPSIS
-    IDE 擴充套件一鍵安裝腳本 (智慧偵測 Antigravity IDE 與 VS Code + Junction 免編譯掛載 + extensions.json 註冊)
+    IDE 擴充套件一鍵安裝腳本 (僅掛載 Antigravity IDE；清除 Cursor / VS Code 殘留)
 #>
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -28,24 +28,54 @@ if (Test-Path -LiteralPath $pkgJsonPath) {
 $fullExtId = "$extPublisher.$extName"
 $standardFolderName = "$fullExtId-$extVersion"
 
-# 智慧偵測本機支援之 IDE 環境
+function Remove-UnsupportedIdeLeftover {
+    param(
+        [string]$Label,
+        [string]$ExtensionsRoot
+    )
+    if (-not (Test-Path -LiteralPath $ExtensionsRoot)) { return }
+    Write-Host "`n>> 正在清除 $Label 殘留安裝..." -ForegroundColor DarkYellow
+    $items = @(Get-ChildItem -LiteralPath $ExtensionsRoot -ErrorAction SilentlyContinue)
+    foreach ($diskItem in $items) {
+        $diname = $diskItem.Name
+        if ($diname -like "$fullExtId*" -or $diname -like "$extName*" -or $diname -like "antigravity-toolkit.$extName*") {
+            try {
+                $item = Get-Item -LiteralPath $diskItem.FullName -Force
+                if ($item.LinkType -eq "Junction" -or $item.Attributes.HasFlag([System.IO.FileAttributes]::ReparsePoint)) {
+                    $item.Delete()
+                } else {
+                    Remove-Item -LiteralPath $diskItem.FullName -Recurse -Force
+                }
+                Write-Host "  [已移除] $($diskItem.FullName)" -ForegroundColor Green
+            } catch {
+                cmd.exe /c "rd /s /q `"$($diskItem.FullName)`"" 2>$null
+            }
+        }
+    }
+    $jsonPath = Join-Path $ExtensionsRoot "extensions.json"
+    if (Test-Path -LiteralPath $jsonPath) {
+        try {
+            $raw = Get-Content -LiteralPath $jsonPath -Raw -Encoding UTF8
+            if ($raw -and $raw.Trim()) {
+                if ($raw.Length -gt 0 -and [int]$raw[0] -eq 65279) { $raw = $raw.Substring(1) }
+                $parsed = $raw | ConvertFrom-Json
+                $entries = if ($parsed.PSObject.Properties['value']) { $parsed.value } else { $parsed }
+                $kept = [System.Collections.ArrayList]::new()
+                foreach ($entry in $entries) {
+                    $eid = if ($entry.identifier) { $entry.identifier.id } else { "" }
+                    if ($eid -ne $fullExtId -and $eid -ne $extName -and $eid -ne "antigravity-toolkit.$extName") {
+                        [void]$kept.Add($entry)
+                    }
+                }
+                $jsonText = ConvertTo-Json -InputObject $kept.ToArray() -Depth 10
+                [System.IO.File]::WriteAllText($jsonPath, $jsonText, $utf8NoBom)
+            }
+        } catch {}
+    }
+}
+
+# 僅安裝至 Antigravity
 $candidateTargets = @(
-    [PSCustomObject]@{
-        Name = "VS Code"
-        CheckPaths = @(
-            (Join-Path $env:USERPROFILE ".vscode"),
-            (Join-Path $env:APPDATA "Code")
-        )
-        ExtensionsRoot = (Join-Path $env:USERPROFILE ".vscode\extensions")
-    },
-    [PSCustomObject]@{
-        Name = "VS Code Insiders"
-        CheckPaths = @(
-            (Join-Path $env:USERPROFILE ".vscode-insiders"),
-            (Join-Path $env:APPDATA "Code - Insiders")
-        )
-        ExtensionsRoot = (Join-Path $env:USERPROFILE ".vscode-insiders\extensions")
-    },
     [PSCustomObject]@{
         Name = "Antigravity IDE"
         CheckPaths = @(
@@ -80,12 +110,25 @@ foreach ($c in $candidateTargets) {
     }
 }
 
+foreach ($leftover in @(
+    @{ Label = "Cursor"; Path = (Join-Path $env:USERPROFILE ".cursor\extensions") },
+    @{ Label = "VS Code"; Path = (Join-Path $env:USERPROFILE ".vscode\extensions") },
+    @{ Label = "VS Code Insiders"; Path = (Join-Path $env:USERPROFILE ".vscode-insiders\extensions") }
+)) {
+    Remove-UnsupportedIdeLeftover -Label $leftover.Label -ExtensionsRoot $leftover.Path
+}
+
 if ($targetEnvironments.Count -eq 0) {
-    $targetEnvironments += $candidateTargets[0]
+    Write-Host ""
+    Write-Host "[警告] 未於本機偵測到任何已安裝的 Antigravity IDE！" -ForegroundColor Yellow
+    Write-Host "本腳本已自動中止，未在您的系統中建立任何多餘資料夾。" -ForegroundColor Yellow
+    Write-Host "請先安裝 Antigravity IDE 後重新執行；本套件不再安裝至 Cursor 或 VS Code。" -ForegroundColor Gray
+    Write-Host ""
+    Exit 0
 }
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  安裝 IDE 原生擴充套件 (雙環境相容)     " -ForegroundColor Cyan
+Write-Host "  安裝 IDE 原生擴充套件 (僅 Antigravity；不含 Cursor / VS Code)" -ForegroundColor Cyan
 Write-Host "  套件名稱: $displayName                " -ForegroundColor Yellow
 Write-Host "  套件識別: $fullExtId (v$extVersion)    " -ForegroundColor Gray
 Write-Host "  偵測環境: $(($targetEnvironments | ForEach-Object { $_.Name }) -join ', ') " -ForegroundColor Green
@@ -230,5 +273,5 @@ foreach ($envTarget in $targetEnvironments) {
 
 Write-Host ""
 if ($successCount -gt 0) {
-    Write-Host "擴充套件安裝成功！請於 Antigravity IDE 或 VS Code 按 [Ctrl + Shift + P] -> 執行 [Developer: Reload Window] 生效。" -ForegroundColor Green
+    Write-Host "擴充套件安裝成功！請於 Antigravity IDE 按 [Ctrl + Shift + P] -> 執行 [Developer: Reload Window] 生效。" -ForegroundColor Green
 }

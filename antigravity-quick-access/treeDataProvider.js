@@ -376,7 +376,7 @@ const MIME_INTERNAL_TREE = 'application/vnd.code.tree.antigravity.quickAccessVie
 
 /**
  * 樹狀視圖拖放控制器 (Drag & Drop Controller)
- * 支援向外拖曳至 Antigravity Chat 對話框、編輯器、終端機，以及從外部/檔案總管拖入加入清單
+ * 支援向外拖曳至 Chat 對話框、編輯器、終端機，以及從外部/檔案總管拖入加入清單
  * @implements {vscode.TreeDragAndDropController<QuickAccessItem>}
  */
 class QuickAccessDragAndDropController {

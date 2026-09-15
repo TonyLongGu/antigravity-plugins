@@ -1,6 +1,6 @@
 # Antigravity 控制中心 (Antigravity Toolbox)
 
-Google Antigravity IDE 與 Visual Studio Code (VS Code) 雙環境原生側邊欄擴充套件（支援環境智慧感應與按需掛載）。
+VS Code 相容 IDE 原生側邊欄擴充套件（Cursor、VS Code、VS Code Insiders、VSCodium、Google Antigravity），支援環境智慧感應與按需掛載。
 
 ---
 
@@ -21,15 +21,11 @@ Google Antigravity IDE 與 Visual Studio Code (VS Code) 雙環境原生側邊欄
    - ⚡ **管理員執行**：以 Windows 系統管理員權限 (UAC 提權) 於獨立視窗運行。
    - 💾 **工作區持久化保存**：腳本清單自動保存於 `.code-workspace` 檔案，隨工作區切換無縫動態載入。
 
-3. **Antigravity 全域自訂目錄捷徑 (`~/.gemini/config`)**：
-   - 📂 **Config 根目錄** (`~/.gemini/config`)
-   - ⚡ **mcp_config.json** (在編輯器開啟 MCP 設定檔)
-   - 🎯 **Skills 技能目錄** (`~/.gemini/config/skills`)
-   - 📜 **Rules 規範目錄** (`~/.gemini/config/rules`)
-   - 🧩 **Plugins 插件目錄** (`~/.gemini/config/plugins`)
-   - 📦 **AppData 核心目錄** (`~/.gemini/antigravity-ide`)
+3. **全域自訂目錄捷徑（依目前 IDE 自動切換）**：
+   - **Cursor**：`~/.cursor` 根目錄、`mcp.json`、個人 Skills（`~/.cursor/skills`）、專案 Rules（`.cursor/rules`）、Plugins、`%APPDATA%\Cursor\User`
+   - **Antigravity**：`~/.gemini/config`、`mcp_config.json`、Skills / Rules / Plugins、`~/.gemini/antigravity-ide`
 
-3. **IDE 設定檔與檔案總管過濾開關**：
+4. **IDE 設定檔與檔案總管過濾開關**：
    - 📄 **開啟 settings.json** (直接在 IDE 編輯器分頁開啟)
    - 👁️ **檔案總管即時過濾開關 (Explorer Visibility)**：
      - 🔘 **隱藏 .gitignore 檔案** (`files.exclude["**/.gitignore"]`)
@@ -38,24 +34,32 @@ Google Antigravity IDE 與 Visual Studio Code (VS Code) 雙環境原生側邊欄
      - 🔘 **隱藏 Python 編譯快取** (`__pycache__`, `*.pyc`)
    - ⚡ **即時同步**：支援全域設定監聽，點擊開關後檔案總管立即無感刷新。
 
-
-4. **對話記憶庫管理與清理 (Brain)**：
-   - 📊 **即時狀態**：顯示當前 Brain 暫存總容量（MB）與對話總數。
-   - 📂 **開啟 Brain 目錄**：直接調用 Windows 檔案總管進入 `~/.gemini/antigravity-ide/brain`。
-   - 🎚️ **動態時間滑桿（2 ~ 4 個月，預設 3 個月）**：直覺調整欲清理的歷史對話週期。
-   - 🗑️ **安全清理歷史紀錄**：具備二次確認防護視窗，精確計算過期資料夾數量與釋放空間後安全刪除。
+5. **對話記憶庫管理與清理**：
+   - **Cursor**：統計並清理 `~/.cursor/projects/*/agent-transcripts` 各對話資料夾；開啟按鈕會進目前專案的 transcripts 目錄。
+   - **Antigravity**：統計並清理 `~/.gemini/antigravity-ide/brain`。
+   - 🎚️ **動態時間滑桿（2 ~ 4 個月，預設 3 個月）**，清理前有二次確認。
 
 ---
 
-## 🚀 安裝與生效方式 (支援 Antigravity IDE 與 VS Code)
+## 🚀 安裝與生效方式 (Cursor / VS Code / Antigravity)
 
-腳本具備智慧偵測能力，會自動辨識本機已安裝的 IDE 環境（VS Code、VS Code Insiders、Antigravity IDE）並按需掛載：
+Cursor、VS Code 與 Antigravity 都實作 VS Code Extension API（`require('vscode')`），因此**同一份外掛可直接掛到 Cursor**，不必另打包。
+
+腳本會自動辨識本機已安裝的相容 IDE（Cursor、VS Code、VS Code Insiders、VSCodium、Antigravity IDE）並按需掛載到各自的 `extensions` 目錄：
+
+| IDE | 擴充套件目錄 | User 設定目錄 |
+| :--- | :--- | :--- |
+| Cursor | `~/.cursor/extensions` | `%APPDATA%\Cursor\User` |
+| VS Code | `~/.vscode/extensions` | `%APPDATA%\Code\User` |
+| VS Code Insiders | `~/.vscode-insiders/extensions` | `%APPDATA%\Code - Insiders\User` |
+| VSCodium | `~/.vscode-oss/extensions` | `%APPDATA%\VSCodium\User` |
+| Antigravity IDE | `~/.antigravity-ide/extensions` | `%APPDATA%\Antigravity IDE\User` |
 
 1. **一鍵安裝**：在 PowerShell 執行 `.\install-extension.ps1`（或雙擊 `install-extension.bat`）。
 2. **一鍵卸載**：在 PowerShell 執行 `.\uninstall-extension.ps1`（或雙擊 `uninstall-extension.bat`）。
-3. **重載生效**：於 Antigravity IDE 或 VS Code 按 `Ctrl + Shift + P` -> 執行 `Developer: Reload Window`。
+3. **重載生效**：於目標 IDE 按 `Ctrl + Shift + P` -> 執行 `Developer: Reload Window`。
 4. **開啟面板**：
    - 點擊左側活動列的 **🛠️ (Antigravity 控制中心)** 圖示。
    - 或點擊右下角狀態列 **`$(tools) 控制中心`** 按鈕。
 
-> 💡 **環境感應動態隱藏**：若在純 VS Code 環境（本機無 Antigravity）運行，外掛將自動隱藏「全域自訂 (~/.gemini)」與「對話記憶庫 (Brain)」專屬卡片，保持純淨俐落的 VS Code 體驗。
+> 💡 **環境感應**：在 Cursor 會顯示 Cursor 本機路徑（`~/.cursor`、agent-transcripts）；在 Antigravity 則顯示 `~/.gemini`。純 VS Code 且本機沒有 Antigravity 時，這兩張卡片會自動隱藏。

@@ -3,7 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 /**
- * 通用後台多國語言模組 (讀取全域配置 antigravity.locale)
+ * 通用後台多國語言模組
+ * 優先順序：scriptRunner.locale → antigravity.locale → IDE 顯示語言
  */
 class I18n {
   /**
@@ -36,17 +37,21 @@ class I18n {
   }
 
   /**
-   * 取得當前設定語系 (優先讀取 antigravity.locale，未指定則自動適配 VS Code / IDE 系統語系)
+   * 取得當前設定語系
+   * 優先讀取 scriptRunner.locale，其次相容 antigravity.locale，未指定則跟隨 IDE 顯示語言
    * @returns {string}
    */
   getLocale() {
-    const config = vscode.workspace.getConfiguration('antigravity');
-    const customLocale = config.get('locale');
+    const runnerLocale = vscode.workspace.getConfiguration('scriptRunner').get('locale');
+    if (runnerLocale === 'zh-TW' || runnerLocale === 'en') {
+      return runnerLocale;
+    }
+
+    const customLocale = vscode.workspace.getConfiguration('antigravity').get('locale');
     if (customLocale && typeof customLocale === 'string') {
       return customLocale;
     }
 
-    // 自動適配 VS Code / IDE 系統語系 (預設繁體中文 zh-TW，若環境為英文則回傳 en)
     const envLang = (vscode.env.language || '').toLowerCase();
     if (envLang.startsWith('en')) {
       return 'en';

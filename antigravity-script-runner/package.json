@@ -1,8 +1,8 @@
 {
 	"name": "antigravity-script-runner",
 	"displayName": "腳本右鍵執行工具 (Script Runner)",
-	"description": "在 Antigravity IDE 與 VS Code 檔案總管與編輯器為 .bat、.cmd、.ps1、.py 腳本提供右鍵與右上角 ▶ 按鈕執行功能（在內建 PowerShell 終端機安全執行），並提供圖片、聲音、影片多媒體檢視器",
-	"version": "1.6.1",
+	"description": "在 Cursor、Antigravity IDE 與 VS Code 檔案總管與編輯器為 .bat、.cmd、.ps1、.py 腳本提供右鍵與右上角 ▶ 按鈕執行功能（在內建 PowerShell 終端機安全執行），並提供圖片、聲音、影片多媒體檢視器",
+	"version": "1.6.2",
 	"publisher": "antigravity-toolkit",
 	"engines": {
 		"vscode": "^1.80.0"
@@ -57,6 +57,14 @@
 					"type": "boolean",
 					"default": true,
 					"description": "以系統管理員身分執行時，是否在腳本執行完畢後保持視窗開啟以供檢視輸出與報錯"
+				},
+				"scriptRunner.locale": {
+					"type": "string",
+					"enum": [
+						"zh-TW",
+						"en"
+					],
+					"description": "擴充套件介面語系。未設定時自動跟隨 IDE 顯示語言（並相容 antigravity.locale）"
 				}
 			}
 		},
@@ -163,218 +171,218 @@
 				{
 					"command": "scriptRunner.runPy",
 					"group": "navigation@1",
-					"when": "(editorLangId == python || resourceExtname == .py) && config.antigravity.locale != 'en'"
+					"when": "(editorLangId == python || resourceExtname == .py) && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPy.en",
 					"group": "navigation@1",
-					"when": "(editorLangId == python || resourceExtname == .py) && config.antigravity.locale == 'en'"
+					"when": "(editorLangId == python || resourceExtname == .py) && scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPs1",
 					"group": "navigation@2",
-					"when": "(editorLangId == powershell || resourceExtname == .ps1) && config.antigravity.locale != 'en'"
+					"when": "(editorLangId == powershell || resourceExtname == .ps1) && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPs1.en",
 					"group": "navigation@2",
-					"when": "(editorLangId == powershell || resourceExtname == .ps1) && config.antigravity.locale == 'en'"
+					"when": "(editorLangId == powershell || resourceExtname == .ps1) && scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runBat",
 					"group": "navigation@3",
-					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale != 'en'"
+					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runBat.en",
 					"group": "navigation@3",
-					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale == 'en'"
+					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isEnglish"
 				}
 			],
 			"explorer/context": [
 				{
 					"command": "scriptRunner.viewFolderImages",
 					"group": "z_script_runner@1",
-					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(png|jpe?g|webp|gif|svg|bmp|ico|avif|tiff?|jfif)$/i) && config.antigravity.locale != 'en'"
+					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(png|jpe?g|webp|gif|svg|bmp|ico|avif|tiff?|jfif)$/i) && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.viewFolderImages.en",
 					"group": "z_script_runner@1",
-					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(png|jpe?g|webp|gif|svg|bmp|ico|avif|tiff?|jfif)$/i) && config.antigravity.locale == 'en'"
+					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(png|jpe?g|webp|gif|svg|bmp|ico|avif|tiff?|jfif)$/i) && scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.viewFolderAudios",
 					"group": "z_script_runner@2",
-					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(mp3|wav|ogg|flac|aac|m4a|wma|aiff?|opus|weba)$/i) && config.antigravity.locale != 'en'"
+					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(mp3|wav|ogg|flac|aac|m4a|wma|aiff?|opus|weba)$/i) && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.viewFolderAudios.en",
 					"group": "z_script_runner@2",
-					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(mp3|wav|ogg|flac|aac|m4a|wma|aiff?|opus|weba)$/i) && config.antigravity.locale == 'en'"
+					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(mp3|wav|ogg|flac|aac|m4a|wma|aiff?|opus|weba)$/i) && scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.viewFolderVideos",
 					"group": "z_script_runner@3",
-					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(mp4|webm|mkv|mov|avi|wmv|flv|m4v|ts|ogv)$/i) && config.antigravity.locale != 'en'"
+					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(mp4|webm|mkv|mov|avi|wmv|flv|m4v|ts|ogv)$/i) && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.viewFolderVideos.en",
 					"group": "z_script_runner@3",
-					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(mp4|webm|mkv|mov|avi|wmv|flv|m4v|ts|ogv)$/i) && config.antigravity.locale == 'en'"
+					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(mp4|webm|mkv|mov|avi|wmv|flv|m4v|ts|ogv)$/i) && scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPy",
 					"group": "z_script_runner@10",
-					"when": "resourceExtname == .py && config.antigravity.locale != 'en'"
+					"when": "resourceExtname == .py && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPy.en",
 					"group": "z_script_runner@10",
-					"when": "resourceExtname == .py && config.antigravity.locale == 'en'"
+					"when": "resourceExtname == .py && scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPs1",
 					"group": "z_script_runner@11",
-					"when": "resourceExtname == .ps1 && config.antigravity.locale != 'en'"
+					"when": "resourceExtname == .ps1 && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPs1.en",
 					"group": "z_script_runner@11",
-					"when": "resourceExtname == .ps1 && config.antigravity.locale == 'en'"
+					"when": "resourceExtname == .ps1 && scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPs1Admin",
 					"group": "z_script_runner@12",
-					"when": "resourceExtname == .ps1 && config.antigravity.locale != 'en'"
+					"when": "resourceExtname == .ps1 && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPs1Admin.en",
 					"group": "z_script_runner@12",
-					"when": "resourceExtname == .ps1 && config.antigravity.locale == 'en'"
+					"when": "resourceExtname == .ps1 && scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runBat",
 					"group": "z_script_runner@13",
-					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale != 'en'"
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runBat.en",
 					"group": "z_script_runner@13",
-					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale == 'en'"
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runBatAdmin",
 					"group": "z_script_runner@14",
-					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale != 'en'"
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runBatAdmin.en",
 					"group": "z_script_runner@14",
-					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale == 'en'"
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isEnglish"
 				}
 			],
 			"editor/context": [
 				{
 					"command": "scriptRunner.runPy",
 					"group": "z_script_runner@1",
-					"when": "(editorLangId == python || resourceExtname == .py) && config.antigravity.locale != 'en'"
+					"when": "(editorLangId == python || resourceExtname == .py) && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPy.en",
 					"group": "z_script_runner@1",
-					"when": "(editorLangId == python || resourceExtname == .py) && config.antigravity.locale == 'en'"
+					"when": "(editorLangId == python || resourceExtname == .py) && scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPs1",
 					"group": "z_script_runner@2",
-					"when": "(editorLangId == powershell || resourceExtname == .ps1) && config.antigravity.locale != 'en'"
+					"when": "(editorLangId == powershell || resourceExtname == .ps1) && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPs1.en",
 					"group": "z_script_runner@2",
-					"when": "(editorLangId == powershell || resourceExtname == .ps1) && config.antigravity.locale == 'en'"
+					"when": "(editorLangId == powershell || resourceExtname == .ps1) && scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPs1Admin",
 					"group": "z_script_runner@3",
-					"when": "(editorLangId == powershell || resourceExtname == .ps1) && config.antigravity.locale != 'en'"
+					"when": "(editorLangId == powershell || resourceExtname == .ps1) && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPs1Admin.en",
 					"group": "z_script_runner@3",
-					"when": "(editorLangId == powershell || resourceExtname == .ps1) && config.antigravity.locale == 'en'"
+					"when": "(editorLangId == powershell || resourceExtname == .ps1) && scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runBat",
 					"group": "z_script_runner@4",
-					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale != 'en'"
+					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runBat.en",
 					"group": "z_script_runner@4",
-					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale == 'en'"
+					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runBatAdmin",
 					"group": "z_script_runner@5",
-					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale != 'en'"
+					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runBatAdmin.en",
 					"group": "z_script_runner@5",
-					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale == 'en'"
+					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isEnglish"
 				}
 			],
 			"editor/title/context": [
 				{
 					"command": "scriptRunner.runPy",
 					"group": "z_script_runner@1",
-					"when": "resourceExtname == .py && config.antigravity.locale != 'en'"
+					"when": "resourceExtname == .py && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPy.en",
 					"group": "z_script_runner@1",
-					"when": "resourceExtname == .py && config.antigravity.locale == 'en'"
+					"when": "resourceExtname == .py && scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPs1",
 					"group": "z_script_runner@2",
-					"when": "resourceExtname == .ps1 && config.antigravity.locale != 'en'"
+					"when": "resourceExtname == .ps1 && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPs1.en",
 					"group": "z_script_runner@2",
-					"when": "resourceExtname == .ps1 && config.antigravity.locale == 'en'"
+					"when": "resourceExtname == .ps1 && scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPs1Admin",
 					"group": "z_script_runner@3",
-					"when": "resourceExtname == .ps1 && config.antigravity.locale != 'en'"
+					"when": "resourceExtname == .ps1 && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runPs1Admin.en",
 					"group": "z_script_runner@3",
-					"when": "resourceExtname == .ps1 && config.antigravity.locale == 'en'"
+					"when": "resourceExtname == .ps1 && scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runBat",
 					"group": "z_script_runner@4",
-					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale != 'en'"
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runBat.en",
 					"group": "z_script_runner@4",
-					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale == 'en'"
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runBatAdmin",
 					"group": "z_script_runner@5",
-					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale != 'en'"
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish"
 				},
 				{
 					"command": "scriptRunner.runBatAdmin.en",
 					"group": "z_script_runner@5",
-					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && config.antigravity.locale == 'en'"
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isEnglish"
 				}
 			]
 		}

@@ -14,6 +14,23 @@ const McpConfigService = require('./services/mcpConfigService');
 const ProbeService = require('./services/probeService');
 const SystemService = require('./services/systemService');
 
+function resolveLocale() {
+  const runnerLocale = vscode.workspace.getConfiguration('scriptRunner').get('locale');
+  if (runnerLocale === 'zh-TW' || runnerLocale === 'en') return runnerLocale;
+  const customLocale = vscode.workspace.getConfiguration('antigravity').get('locale');
+  if (customLocale === 'zh-TW' || customLocale === 'en') return customLocale;
+  const envLang = (vscode.env.language || '').toLowerCase();
+  if (envLang.startsWith('en')) return 'en';
+  return 'zh-TW';
+}
+
+async function persistGlobalLocale(locale) {
+  if (locale !== 'zh-TW' && locale !== 'en') return;
+  try {
+    await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
+  } catch (_) {}
+}
+
 /**
  * 側邊欄 WebviewViewProvider 實作
  */
@@ -104,6 +121,19 @@ class MCPManagerViewProvider {
   }
 
   /**
+   * 寫入 mcp_config.json 後稍候，讓 Antigravity 檔案監看跟上
+   */
+  async _syncLiveMcp(changes) {
+    if (!Array.isArray(changes) || changes.length === 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 180));
+  }
+
+  _toggleAppliedMessage(name, disabled) {
+    const action = disabled ? '停用' : '啟用';
+    return `[${McpConfigService.envName}] 已${action} ${name}`;
+  }
+
+  /**
    * 統一訊息分發處理器
    */
   async _handleMessage(message, senderWebview) {
@@ -121,10 +151,11 @@ class MCPManagerViewProvider {
       case 'toggleGlobalServer': {
         const { name, disabled } = message;
         try {
-          await McpConfigService.toggleServer(name, disabled);
+          const result = await McpConfigService.toggleServer(name, disabled);
           await this.refreshWebviewData();
           this.pushToast(`已${disabled ? '停用' : '啟用'} ${name}`, disabled ? 'warning' : 'success');
-          vscode.window.setStatusBarMessage(`[${McpConfigService.envName}] 已${disabled ? '停用' : '啟用'} ${name}`, 3000);
+          vscode.window.setStatusBarMessage(this._toggleAppliedMessage(name, disabled), 5000);
+          await this._syncLiveMcp((result && result.changes) || [{ name, disabled: !!disabled }]);
         } catch (err) {
           this.pushToast(`切換失敗：${err.message}`, 'danger');
           await this.refreshWebviewData();
@@ -147,13 +178,14 @@ class MCPManagerViewProvider {
       case 'batchToggleGlobal': {
         const { action } = message;
         try {
-          await McpConfigService.batchToggle(action);
+          const result = await McpConfigService.batchToggle(action);
           await this.refreshWebviewData(true); // 立即推播最新資料，繞過 120ms 防抖
           const isEnable = action === 'enableAll' || action === 'enable_all';
           const isDisable = action === 'disableAll' || action === 'disable_all';
           const actionText = isEnable ? '全部啟用' : isDisable ? '全部停用' : '反向切換';
           this.pushToast(`[${McpConfigService.envName}] MCP 伺服器已${actionText}`, 'success');
-          vscode.window.setStatusBarMessage(`[${McpConfigService.envName}] MCP 批次操作完成`, 3000);
+          vscode.window.setStatusBarMessage(`[${McpConfigService.envName}] MCP 批次操作完成`, 5000);
+          await this._syncLiveMcp((result && result.changes) || []);
         } catch (err) {
           this.pushToast(`批次操作失敗：${err.message}`, 'danger');
           await this.refreshWebviewData(true);
@@ -196,7 +228,7 @@ class MCPManagerViewProvider {
       case 'setGlobalLocale': {
         const { locale } = message;
         try {
-          await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
+            await persistGlobalLocale(locale);
         } catch (err) {
           console.error('Failed to update global locale:', err);
         }
@@ -215,7 +247,7 @@ class MCPManagerViewProvider {
     }
   }
 
-  async refreshWebviewData(immediate = false) {
+  async refreshWebviewData(immediate = false, delayMs = 120) {
     if (this._refreshDebounceTimer) {
       clearTimeout(this._refreshDebounceTimer);
       this._refreshDebounceTimer = null;
@@ -284,7 +316,7 @@ class MCPManagerViewProvider {
         this._refreshDebounceTimer = null;
         await doRefresh();
         resolve();
-      }, 120);
+      }, delayMs);
     });
   }
 
@@ -325,12 +357,13 @@ class MCPManagerViewProvider {
       console.error('Failed to load external locales:', e);
     }
 
-    const currentLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
+    const currentLocale = resolveLocale();
 
     const initData = {
       locales,
       initialLocale: currentLocale,
       isVsCode: McpConfigService.isVsCode,
+      hostKind: McpConfigService.hostKind,
       envName: McpConfigService.envName,
     };
     const jsonSafeString = JSON.stringify(initData).replace(/</g, '\\u003c');
@@ -349,6 +382,15 @@ class MCPManagerViewProvider {
  * 擴充套件啟動進入點
  */
 async function activate(context) {
+  McpConfigService.init(context);
+  if (McpConfigService.isUnsupportedHost) {
+    vscode.window.showWarningMessage('MCP 管理儀表板僅支援 Antigravity IDE，不支援 Cursor 與 Visual Studio Code。');
+  }
+  const syncLocaleContext = () => {
+    vscode.commands.executeCommand('setContext', 'mcpManager.isEnglish', resolveLocale() === 'en');
+  };
+  syncLocaleContext();
+
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 40);
   statusBarItem.command = 'antigravity.mcp.focusView';
   statusBarItem.text = `$(plug) MCP: 載入中...`;
@@ -382,36 +424,27 @@ async function activate(context) {
   );
 
   // 全域設定檔與狀態資料庫檔案監聽 (即時熱重載)
-  try {
-    const configPath = McpConfigService.globalConfigPath;
-    const configDir = path.dirname(configPath);
-    const configName = path.basename(configPath);
-    const configWatcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(vscode.Uri.file(configDir), configName)
-    );
-    configWatcher.onDidChange(() => provider.refreshWebviewData());
-    configWatcher.onDidCreate(() => provider.refreshWebviewData());
-    configWatcher.onDidDelete(() => provider.refreshWebviewData());
-    context.subscriptions.push(configWatcher);
-
-    // 在 VS Code 環境下亦監聽原生 SQLite 資料庫 (state.vscdb) 的即時變更
-    if (McpConfigService.isVsCode) {
-      const dbPath = McpConfigService.vsCodeStateDbPath;
-      const dbDir = path.dirname(dbPath);
-      const dbWatcher = vscode.workspace.createFileSystemWatcher(
-        new vscode.RelativePattern(vscode.Uri.file(dbDir), 'state.vscdb*')
+  if (!McpConfigService.isUnsupportedHost) {
+    try {
+      const configPath = McpConfigService.globalConfigPath;
+      const configDir = path.dirname(configPath);
+      const configName = path.basename(configPath);
+      const configWatcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(vscode.Uri.file(configDir), configName)
       );
-      dbWatcher.onDidChange(() => provider.refreshWebviewData());
-      context.subscriptions.push(dbWatcher);
-    }
-  } catch (e) {}
+      configWatcher.onDidChange(() => provider.refreshWebviewData());
+      configWatcher.onDidCreate(() => provider.refreshWebviewData());
+      configWatcher.onDidDelete(() => provider.refreshWebviewData());
+      context.subscriptions.push(configWatcher);
+    } catch (e) {}
+  }
 
   // 監聽全域語言變動設定 (支援跨外掛即時聯動廣播)
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('antigravity.locale')) {
-        const newLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
-        provider.broadcastLocale(newLocale);
+      if (e.affectsConfiguration('antigravity.locale') || e.affectsConfiguration('scriptRunner.locale')) {
+        syncLocaleContext();
+        provider.broadcastLocale(resolveLocale());
       }
     })
   );

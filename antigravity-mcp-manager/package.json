@@ -1,8 +1,8 @@
 {
 	"name": "antigravity-mcp-manager",
-	"displayName": "Antigravity MCP 管理儀表板",
-	"description": "Google Antigravity IDE 與 Visual Studio Code 雙環境相容之 MCP 伺服器視覺化管理、開關控制、獨立註解與連線探測儀表板",
-	"version": "1.2.0",
+	"displayName": "MCP 管理儀表板",
+	"description": "專為 Antigravity IDE 打造的 MCP 伺服器視覺化管理、開關控制、獨立註解與連線探測儀表板",
+	"version": "1.4.0",
 	"publisher": "antigravity-toolkit",
 	"engines": {
 		"vscode": "^1.80.0"
@@ -81,12 +81,12 @@
 			"view/title": [
 				{
 					"command": "antigravity.mcp.openInEditor",
-					"when": "view == antigravity.mcpManagerView && config.antigravity.locale != 'en'",
+					"when": "view == antigravity.mcpManagerView && !mcpManager.isEnglish",
 					"group": "navigation"
 				},
 				{
 					"command": "antigravity.mcp.openInEditor.en",
-					"when": "view == antigravity.mcpManagerView && config.antigravity.locale == 'en'",
+					"when": "view == antigravity.mcpManagerView && mcpManager.isEnglish",
 					"group": "navigation"
 				}
 			]

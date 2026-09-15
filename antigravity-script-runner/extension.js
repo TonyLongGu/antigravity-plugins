@@ -81,6 +81,26 @@ function getRunnerConfig() {
 }
 
 /**
+ * 解析介面語系（scriptRunner.locale → antigravity.locale → IDE 顯示語言）
+ * @returns {string}
+ */
+function resolveLocale() {
+  return new I18n().getLocale();
+}
+
+/**
+ * 寫入全域語系：Cursor / VS Code 使用 scriptRunner.locale，並相容寫入 antigravity.locale 供舊套件聯動
+ * @param {string} locale
+ */
+async function persistGlobalLocale(locale) {
+  if (locale !== 'zh-TW' && locale !== 'en') return;
+  await vscode.workspace.getConfiguration('scriptRunner').update('locale', locale, vscode.ConfigurationTarget.Global);
+  try {
+    await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
+  } catch (_) {}
+}
+
+/**
  * 跨平台安全路徑比對（在 Windows 忽略磁碟機代號大小寫與斜線方向差異）
  * @param {string} p1
  * @param {string} p2
@@ -181,6 +201,10 @@ class MediaCustomEditorProvider {
  */
 function activate(context) {
   const i18n = new I18n(context.extensionUri);
+  const syncLocaleContext = () => {
+    vscode.commands.executeCommand('setContext', 'scriptRunner.isEnglish', i18n.getLocale() === 'en');
+  };
+  syncLocaleContext();
 
   // 1. 執行 Python 腳本 (.py)
   const runPyHandler = async (uri) => {
@@ -451,7 +475,8 @@ function activate(context) {
     vscode.commands.registerCommand('scriptRunner.runPs1Admin.en', runPs1AdminHandler),
     // 監聽全域語言變動 (跨外掛即時聯動廣播)
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('antigravity.locale')) {
+      if (e.affectsConfiguration('scriptRunner.locale') || e.affectsConfiguration('antigravity.locale')) {
+        syncLocaleContext();
         const newLocale = i18n.getLocale();
         ImageViewerPanel.broadcastLocale(newLocale);
         AudioViewerPanel.broadcastLocale(newLocale);
@@ -762,7 +787,7 @@ class ImageViewerPanel {
         const { locale } = msg.payload || msg;
         if (locale === 'zh-TW' || locale === 'en') {
           try {
-            await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
+            await persistGlobalLocale(locale);
           } catch (err) {
             console.error('[ImageViewer] 設定全域語系失敗:', err);
           }
@@ -827,7 +852,7 @@ class ImageViewerPanel {
     if (fs.existsSync(localesPath)) {
       localesJs = fs.readFileSync(localesPath, 'utf8');
     }
-    const currentLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
+    const currentLocale = resolveLocale();
 
     html = html
       .replace(/href="style\.css"/g, `href="${styleUri}"`)
@@ -1088,7 +1113,7 @@ class VideoViewerPanel {
         const { locale } = msg.payload || msg;
         if (locale === 'zh-TW' || locale === 'en') {
           try {
-            await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
+            await persistGlobalLocale(locale);
           } catch (err) {
             console.error('[VideoViewer] 設定全域語系失敗:', err);
           }
@@ -1177,7 +1202,7 @@ class VideoViewerPanel {
     if (fs.existsSync(localesPath)) {
       localesJs = fs.readFileSync(localesPath, 'utf8');
     }
-    const currentLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
+    const currentLocale = resolveLocale();
 
     html = html
       .replace(/href="style\.css"/g, `href="${styleUri}"`)
@@ -1433,7 +1458,7 @@ class AudioViewerPanel {
         const { locale } = msg.payload || msg;
         if (locale === 'zh-TW' || locale === 'en') {
           try {
-            await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
+            await persistGlobalLocale(locale);
           } catch (err) {
             console.error('[AudioViewer] 設定全域語系失敗:', err);
           }
@@ -1518,7 +1543,7 @@ class AudioViewerPanel {
     if (fs.existsSync(localesPath)) {
       localesJs = fs.readFileSync(localesPath, 'utf8');
     }
-    const currentLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
+    const currentLocale = resolveLocale();
 
     html = html
       .replace(/href="style\.css"/g, `href="${styleUri}"`)

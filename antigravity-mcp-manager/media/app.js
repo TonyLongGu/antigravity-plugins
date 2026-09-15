@@ -103,7 +103,7 @@
           if (parsed && typeof parsed === 'object') {
             if (parsed.locales) window.LOCALES = parsed.locales;
             if (parsed.initialLocale) window.INITIAL_LOCALE = parsed.initialLocale;
-            if (parsed.isVsCode !== undefined) window.INITIAL_IS_VSCODE = parsed.isVsCode;
+            if (parsed.hostKind) window.HOST_KIND = parsed.hostKind;
             if (parsed.envName) window.ENV_NAME = parsed.envName;
           }
         }

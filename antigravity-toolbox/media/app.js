@@ -58,6 +58,7 @@
   // ============================================================================
   const I18nModule = {
     currentLang: 'zh-TW',
+    uiFlavor: (typeof window !== 'undefined' && window.INITIAL_ENV && window.INITIAL_ENV.uiFlavor) || '',
 
     init() {
       const initial = (typeof window !== 'undefined' && window.INITIAL_LOCALE) || null;
@@ -89,7 +90,10 @@
     t(key, params = {}) {
       const locales = window.LOCALES || (typeof globalThis !== 'undefined' ? globalThis.LOCALES : null) || {};
       const dict = locales[this.currentLang] || locales['zh-TW'] || {};
-      let text = dict[key] !== undefined ? dict[key] : key;
+      const flavoredKey = this.uiFlavor ? `${key}_${this.uiFlavor}` : '';
+      let text = (flavoredKey && dict[flavoredKey] !== undefined)
+        ? dict[flavoredKey]
+        : (dict[key] !== undefined ? dict[key] : key);
       if (typeof text === 'string') {
         Object.keys(params).forEach((p) => {
           text = text.replace(new RegExp(`\\{${p}\\}`, 'g'), params[p]);
@@ -1298,22 +1302,18 @@
       if (!envInfo) return;
       const configModule = document.getElementById('module-config');
       const brainModule = document.getElementById('module-brain');
-      const shouldShow = Boolean(envInfo.showAntigravityCards);
+      const shouldShow = Boolean(envInfo.showHostModules || envInfo.showAntigravityCards);
 
-      if (configModule) {
-        if (shouldShow) {
-          configModule.classList.remove('hidden-by-env');
-        } else {
-          configModule.classList.add('hidden-by-env');
-        }
+      if (envInfo.uiFlavor) {
+        I18nModule.uiFlavor = envInfo.uiFlavor;
+        I18nModule.applyLanguage(I18nModule.currentLang, false);
       }
 
+      if (configModule) {
+        configModule.classList.toggle('hidden-by-env', !shouldShow);
+      }
       if (brainModule) {
-        if (shouldShow) {
-          brainModule.classList.remove('hidden-by-env');
-        } else {
-          brainModule.classList.add('hidden-by-env');
-        }
+        brainModule.classList.toggle('hidden-by-env', !shouldShow);
       }
     },
   };

@@ -1,6 +1,6 @@
 # 腳本右鍵執行工具 (Script Runner)
 
-為 **Google Antigravity IDE** 與 **Visual Studio Code (VS Code)** 提供在左側檔案總管、編輯器或分頁標籤按右鍵直接在內建終端機執行腳本與多媒體檢視的原生擴充套件。
+為 **Cursor**、**Google Antigravity IDE** 與 **Visual Studio Code (VS Code)** 提供在左側檔案總管、編輯器或分頁標籤按右鍵直接在內建終端機執行腳本與多媒體檢視的原生擴充套件。
 
 ---
 
@@ -79,14 +79,15 @@
 | :--- | :--- | :--- | :--- |
 | `scriptRunner.runAsAdmin` | `boolean` | `true` | **是否預設以系統管理員身分 (Administrator) 執行腳本**。<br>• `true`：彈出 Windows UAC 確認並在提權獨立視窗執行。<br>• `false`：直接在 IDE 內部的整合終端機執行。 |
 | `scriptRunner.keepWindowOpen` | `boolean` | `true` | **以管理員執行時，是否在執行完畢後保持視窗開啟**（防止報錯或執行完瞬間閃退，便於檢視輸出）。 |
+| `scriptRunner.locale` | `string` | 跟隨 IDE | **介面語系**（`zh-TW` / `en`）。未設定時自動跟隨 Cursor / VS Code / Antigravity 顯示語言，並相容舊設定 `antigravity.locale`。 |
 
 ---
 
-## 安裝與卸載方式 (支援 Antigravity IDE 與 VS Code)
+## 安裝與卸載方式 (支援 Cursor、Antigravity IDE 與 VS Code)
 
-腳本具備智慧偵測能力，會自動辨識本機已安裝的 IDE 環境（VS Code、VS Code Insiders、Antigravity IDE）並按需掛載：
+腳本具備智慧偵測能力，會自動辨識本機已安裝的 IDE 環境（Cursor、VS Code、VS Code Insiders、Antigravity IDE）並按需掛載：
 
 - **一鍵安裝**：在 PowerShell 執行 `.\install-extension.ps1`（或直接雙擊 `install-extension.bat`）。
 - **一鍵卸載**：在 PowerShell 執行 `.\uninstall-extension.ps1`（或直接雙擊 `uninstall-extension.bat`）。
-- **重載生效**：於 Antigravity IDE 或 VS Code 按 `Ctrl + Shift + P` -> 選擇 `Developer: Reload Window`。
+- **重載生效**：於 Cursor、Antigravity IDE 或 VS Code 按 `Ctrl + Shift + P` -> 選擇 `Developer: Reload Window`。
 

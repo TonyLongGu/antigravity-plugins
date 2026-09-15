@@ -1,4 +1,6 @@
 @echo off
+chcp 65001 >nul
+title Install MCP Manager Extension (Antigravity IDE)
 setlocal
 cd /d "%~dp0"
 

@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    IDE 擴充套件一鍵卸載腳本 (智慧偵測 Antigravity IDE 與 VS Code + 清理 Junction 與註冊紀錄)
+    IDE 擴充套件一鍵卸載腳本 (智慧偵測 VS Code / Cursor / Antigravity 等相容 IDE + 清理 Junction 與註冊紀錄)
 #>
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -11,7 +11,7 @@ $sourceDir = $PSScriptRoot
 $pkgJsonPath = Join-Path $sourceDir "package.json"
 $extPublisher = "antigravity-toolkit"
 $extName = "antigravity-toolbox"
-$extVersion = "1.3.5"
+$extVersion = "1.3.7"
 $displayName = $extName
 
 if (Test-Path -LiteralPath $pkgJsonPath) {
@@ -30,12 +30,14 @@ $fullExtId = "$extPublisher.$extName"
 $candidateRoots = @(
     @{ Name = "VS Code"; Path = (Join-Path $env:USERPROFILE ".vscode\extensions") },
     @{ Name = "VS Code Insiders"; Path = (Join-Path $env:USERPROFILE ".vscode-insiders\extensions") },
+    @{ Name = "Cursor"; Path = (Join-Path $env:USERPROFILE ".cursor\extensions") },
+    @{ Name = "VSCodium"; Path = (Join-Path $env:USERPROFILE ".vscode-oss\extensions") },
     @{ Name = "Antigravity IDE"; Path = (Join-Path $env:USERPROFILE ".antigravity-ide\extensions") },
     @{ Name = "Antigravity (相容路徑)"; Path = (Join-Path $env:USERPROFILE ".antigravity\extensions") }
 )
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  解除安裝 IDE 原生擴充套件 (雙環境相容) " -ForegroundColor Cyan
+Write-Host "  解除安裝 IDE 原生擴充套件 (多 IDE 相容) " -ForegroundColor Cyan
 Write-Host "  套件名稱: $displayName ($fullExtId)   " -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Cyan
 

@@ -1,14 +1,21 @@
 const vscode = require('vscode');
-const fs = require('node:fs');
-const path = require('node:path');
 const fsPromises = require('node:fs/promises');
-const { getGlobalPaths, getDirectorySizeBytesAsync } = require('./systemService');
+const {
+  getGlobalPaths,
+  getDirectorySizeBytesAsync,
+  collectBrainSessionDirs,
+  detectHostIde,
+} = require('./systemService');
 
 let _cachedBrainStats = null;
 let _cachedBrainStatsTime = 0;
 
+function isCursorHost() {
+  return detectHostIde().id === 'cursor';
+}
+
 /**
- * 取得 Brain 對話記憶庫統計資訊 (具備 5 秒快取以保證 UI 極致流暢)
+ * 取得對話記憶庫統計資訊 (具備 5 秒快取以保證 UI 極致流暢)
  * @param {boolean} [forceRefresh=false]
  */
 async function getBrainStats(forceRefresh = false) {
@@ -18,28 +25,27 @@ async function getBrainStats(forceRefresh = false) {
   }
 
   const paths = getGlobalPaths();
-  const brainDir = paths.brain;
+  const sessions = collectBrainSessionDirs();
 
-  if (!fs.existsSync(brainDir)) {
+  if (sessions.length === 0) {
     _cachedBrainStats = {
       folderCount: 0,
       totalMB: '0.0',
-      path: brainDir,
+      path: paths.brain,
     };
     _cachedBrainStatsTime = now;
     return _cachedBrainStats;
   }
 
   try {
-    const entries = await fsPromises.readdir(brainDir, { withFileTypes: true });
-    const folders = entries.filter((e) => e.isDirectory());
-    const totalBytes = await getDirectorySizeBytesAsync(brainDir);
+    const sizes = await Promise.all(sessions.map((dir) => getDirectorySizeBytesAsync(dir)));
+    const totalBytes = sizes.reduce((sum, size) => sum + size, 0);
     const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
 
     _cachedBrainStats = {
-      folderCount: folders.length,
-      totalMB: totalMB,
-      path: brainDir,
+      folderCount: sessions.length,
+      totalMB,
+      path: paths.brain,
     };
     _cachedBrainStatsTime = now;
     return _cachedBrainStats;
@@ -47,14 +53,14 @@ async function getBrainStats(forceRefresh = false) {
     return {
       folderCount: 0,
       totalMB: '0.0',
-      path: brainDir,
+      path: paths.brain,
       error: err.message,
     };
   }
 }
 
 /**
- * 清理指定月份前的 Brain 歷史對話紀錄（含二次確認）
+ * 清理指定月份前的歷史對話紀錄（含二次確認）
  * @param {number} months
  * @param {object} [provider]
  */
@@ -62,36 +68,33 @@ async function cleanBrainHistory(months = 3, provider = null) {
   const safeMonths = Math.max(2, Math.min(4, parseInt(months, 10) || 3));
   const days = safeMonths * 30;
   const cutoffMs = Date.now() - days * 24 * 60 * 60 * 1000;
-  const paths = getGlobalPaths();
-  const brainDir = paths.brain;
+  const sessions = collectBrainSessionDirs();
 
-  if (!fs.existsSync(brainDir)) {
-    const msg = '目前無 Brain 對話紀錄目錄。';
+  if (sessions.length === 0) {
+    const msg = isCursorHost()
+      ? '目前沒有 Cursor 對話紀錄（agent-transcripts）。'
+      : '目前無 Brain 對話紀錄目錄。';
     if (provider && typeof provider.pushToast === 'function') provider.pushToast(msg, 'info');
     else vscode.window.showInformationMessage(msg);
     return false;
   }
 
   try {
-    const entries = await fsPromises.readdir(brainDir, { withFileTypes: true });
     const targets = [];
 
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const fullPath = path.join(brainDir, entry.name);
-        try {
-          const stat = await fsPromises.stat(fullPath);
-          if (stat.mtimeMs < cutoffMs) {
-            const size = await getDirectorySizeBytesAsync(fullPath);
-            targets.push({
-              name: entry.name,
-              path: fullPath,
-              mtime: stat.mtime,
-              size: size,
-            });
-          }
-        } catch {}
-      }
+    for (const fullPath of sessions) {
+      try {
+        const stat = await fsPromises.stat(fullPath);
+        if (stat.mtimeMs < cutoffMs) {
+          const size = await getDirectorySizeBytesAsync(fullPath);
+          targets.push({
+            name: fullPath,
+            path: fullPath,
+            mtime: stat.mtime,
+            size,
+          });
+        }
+      } catch {}
     }
 
     if (targets.length === 0) {
@@ -103,10 +106,11 @@ async function cleanBrainHistory(months = 3, provider = null) {
 
     const totalTargetBytes = targets.reduce((sum, t) => sum + t.size, 0);
     const targetSizeMB = (totalTargetBytes / (1024 * 1024)).toFixed(1);
+    const kindHint = isCursorHost() ? 'Cursor 對話紀錄' : '對話紀錄';
 
     const confirmButton = `確定清理 (${targets.length} 個紀錄)`;
     const selection = await vscode.window.showWarningMessage(
-      `確定要清理超過 ${safeMonths} 個月（約 ${days} 天）前的所有對話紀錄嗎？\n\n共 ${targets.length} 個對話資料夾（預估釋放約 ${targetSizeMB} MB 空間），此操作無法復原。`,
+      `確定要清理超過 ${safeMonths} 個月（約 ${days} 天）前的所有${kindHint}嗎？\n\n共 ${targets.length} 個對話資料夾（預估釋放約 ${targetSizeMB} MB 空間），此操作無法復原。`,
       { modal: true },
       confirmButton
     );
@@ -128,7 +132,6 @@ async function cleanBrainHistory(months = 3, provider = null) {
       }
     }
 
-    // 清理成功後立即重置快取，確保 UI 容量與紀錄數即時刷新
     _cachedBrainStats = null;
     _cachedBrainStatsTime = 0;
 

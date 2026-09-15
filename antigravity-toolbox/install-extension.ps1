@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    IDE 擴充套件一鍵安裝腳本 (智慧偵測 Antigravity IDE 與 VS Code + Junction 免編譯掛載 + extensions.json 註冊)
+    IDE 擴充套件一鍵安裝腳本 (智慧偵測 VS Code / Cursor / Antigravity 等相容 IDE + Junction 免編譯掛載 + extensions.json 註冊)
 #>
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -12,7 +12,7 @@ $sourceDir = $PSScriptRoot
 $pkgJsonPath = Join-Path $sourceDir "package.json"
 $extPublisher = "antigravity-toolkit"
 $extName = "antigravity-toolbox"
-$extVersion = "1.3.5"
+$extVersion = "1.3.7"
 $displayName = $extName
 
 if (Test-Path -LiteralPath $pkgJsonPath) {
@@ -28,7 +28,7 @@ if (Test-Path -LiteralPath $pkgJsonPath) {
 $fullExtId = "$extPublisher.$extName"
 $standardFolderName = "$fullExtId-$extVersion"
 
-# 智慧偵測本機支援之 IDE 環境
+# 智慧偵測本機支援之 VS Code 相容 IDE 環境
 $candidateTargets = @(
     [PSCustomObject]@{
         Name = "VS Code"
@@ -45,6 +45,22 @@ $candidateTargets = @(
             (Join-Path $env:APPDATA "Code - Insiders")
         )
         ExtensionsRoot = (Join-Path $env:USERPROFILE ".vscode-insiders\extensions")
+    },
+    [PSCustomObject]@{
+        Name = "Cursor"
+        CheckPaths = @(
+            (Join-Path $env:USERPROFILE ".cursor"),
+            (Join-Path $env:APPDATA "Cursor")
+        )
+        ExtensionsRoot = (Join-Path $env:USERPROFILE ".cursor\extensions")
+    },
+    [PSCustomObject]@{
+        Name = "VSCodium"
+        CheckPaths = @(
+            (Join-Path $env:USERPROFILE ".vscode-oss"),
+            (Join-Path $env:APPDATA "VSCodium")
+        )
+        ExtensionsRoot = (Join-Path $env:USERPROFILE ".vscode-oss\extensions")
     },
     [PSCustomObject]@{
         Name = "Antigravity IDE"
@@ -85,7 +101,7 @@ if ($targetEnvironments.Count -eq 0) {
 }
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  安裝 IDE 原生擴充套件 (雙環境相容)     " -ForegroundColor Cyan
+Write-Host "  安裝 IDE 原生擴充套件 (多 IDE 相容)     " -ForegroundColor Cyan
 Write-Host "  套件名稱: $displayName                " -ForegroundColor Yellow
 Write-Host "  套件識別: $fullExtId (v$extVersion)    " -ForegroundColor Gray
 Write-Host "  偵測環境: $(($targetEnvironments | ForEach-Object { $_.Name }) -join ', ') " -ForegroundColor Green
@@ -230,5 +246,5 @@ foreach ($envTarget in $targetEnvironments) {
 
 Write-Host ""
 if ($successCount -gt 0) {
-    Write-Host "擴充套件安裝成功！請於 Antigravity IDE 或 VS Code 按 [Ctrl + Shift + P] -> 執行 [Developer: Reload Window] 生效。" -ForegroundColor Green
+    Write-Host "擴充套件安裝成功！請於目標 IDE（VS Code / Cursor / Antigravity）按 [Ctrl + Shift + P] -> 執行 [Developer: Reload Window] 生效。" -ForegroundColor Green
 }

@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    IDE 擴充套件一鍵卸載腳本 (智慧偵測 Antigravity IDE 與 VS Code + 清理 Junction 與註冊紀錄)
+    IDE 擴充套件一鍵卸載腳本 (Antigravity IDE + 清理 Cursor / VS Code 殘留 Junction 與註冊紀錄)
 #>
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -28,6 +28,7 @@ $fullExtId = "$extPublisher.$extName"
 
 # 候選 IDE 環境擴充套件路徑
 $candidateRoots = @(
+    @{ Name = "Cursor"; Path = (Join-Path $env:USERPROFILE ".cursor\extensions") },
     @{ Name = "VS Code"; Path = (Join-Path $env:USERPROFILE ".vscode\extensions") },
     @{ Name = "VS Code Insiders"; Path = (Join-Path $env:USERPROFILE ".vscode-insiders\extensions") },
     @{ Name = "Antigravity IDE"; Path = (Join-Path $env:USERPROFILE ".antigravity-ide\extensions") },
@@ -35,7 +36,7 @@ $candidateRoots = @(
 )
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  解除安裝 IDE 原生擴充套件 (雙環境相容) " -ForegroundColor Cyan
+Write-Host "  解除安裝 IDE 原生擴充套件 (Antigravity；並清除 Cursor / VS Code 殘留)" -ForegroundColor Cyan
 Write-Host "  套件名稱: $displayName ($fullExtId)   " -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Cyan
 

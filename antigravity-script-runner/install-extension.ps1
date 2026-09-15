@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    IDE 擴充套件一鍵安裝腳本 (智慧偵測 Antigravity IDE 與 VS Code + Junction 免編譯掛載 + extensions.json 註冊)
+    IDE 擴充套件一鍵安裝腳本 (智慧偵測 Cursor、VS Code、Antigravity IDE + Junction 免編譯掛載 + extensions.json 註冊)
 #>
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -30,6 +30,15 @@ $standardFolderName = "$fullExtId-$extVersion"
 
 # 智慧偵測本機支援之 IDE 環境
 $candidateTargets = @(
+    [PSCustomObject]@{
+        Name = "Cursor"
+        CheckPaths = @(
+            (Join-Path $env:USERPROFILE ".cursor"),
+            (Join-Path $env:APPDATA "Cursor"),
+            (Join-Path $env:LOCALAPPDATA "Programs\cursor")
+        )
+        ExtensionsRoot = (Join-Path $env:USERPROFILE ".cursor\extensions")
+    },
     [PSCustomObject]@{
         Name = "VS Code"
         CheckPaths = @(
@@ -80,13 +89,13 @@ foreach ($c in $candidateTargets) {
     }
 }
 
-# 若本機皆未偵測到上述目錄（如極簡全新環境），預設安裝至標準 VS Code 目錄
+# 若本機皆未偵測到上述目錄（如極簡全新環境），預設安裝至 Cursor
 if ($targetEnvironments.Count -eq 0) {
     $targetEnvironments += $candidateTargets[0]
 }
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  安裝 IDE 原生擴充套件 (雙環境相容)     " -ForegroundColor Cyan
+Write-Host "  安裝 IDE 原生擴充套件 (Cursor / VS Code / Antigravity)" -ForegroundColor Cyan
 Write-Host "  套件名稱: $displayName                " -ForegroundColor Yellow
 Write-Host "  套件識別: $fullExtId (v$extVersion)    " -ForegroundColor Gray
 Write-Host "  偵測環境: $(($targetEnvironments | ForEach-Object { $_.Name }) -join ', ') " -ForegroundColor Green
@@ -231,5 +240,5 @@ foreach ($envTarget in $targetEnvironments) {
 
 Write-Host ""
 if ($successCount -gt 0) {
-    Write-Host "擴充套件安裝成功！請於 Antigravity IDE 或 VS Code 按 [Ctrl + Shift + P] -> 執行 [Developer: Reload Window] 生效。" -ForegroundColor Green
+    Write-Host "擴充套件安裝成功！請於 Cursor、Antigravity IDE 或 VS Code 按 [Ctrl + Shift + P] -> 執行 [Developer: Reload Window] 生效。" -ForegroundColor Green
 }

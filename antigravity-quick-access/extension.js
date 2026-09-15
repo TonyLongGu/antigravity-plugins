@@ -11,6 +11,10 @@ const { QuickAccessTreeDataProvider, QuickAccessDragAndDropController } = requir
  */
 function activate(context) {
   const i18n = new I18n(context.extensionUri);
+  const syncLocaleContext = () => {
+    vscode.commands.executeCommand('setContext', 'quickAccess.isEnglish', i18n.getLocale() === 'en');
+  };
+  syncLocaleContext();
   const storageManager = new StorageManager(context, i18n);
   const treeDataProvider = new QuickAccessTreeDataProvider(storageManager, i18n);
   const dndController = new QuickAccessDragAndDropController(storageManager, treeDataProvider);
@@ -442,14 +446,16 @@ function activate(context) {
     } catch {}
   }
 
-  // 21. 設定變更監聽 (files.exclude 或 workbench.list 設定變動，以及 antigravity.locale 語言全域變更)
+  // 21. 設定變更監聽 (files.exclude、workbench.list / tree，以及跨 IDE 語系變更)
   const configWatcher = vscode.workspace.onDidChangeConfiguration((e) => {
     if (
+      e.affectsConfiguration('scriptRunner.locale') ||
       e.affectsConfiguration('antigravity.locale') ||
       e.affectsConfiguration('files.exclude') ||
       e.affectsConfiguration('workbench.list') ||
       e.affectsConfiguration('workbench.tree')
     ) {
+      syncLocaleContext();
       treeDataProvider.refresh();
     }
   });
