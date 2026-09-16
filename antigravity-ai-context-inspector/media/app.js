@@ -582,11 +582,14 @@
     }
 
     // 3. 技能清單
+    const isVsCodeEnv = Boolean(isVsCode || currentData.isVsCode);
     let rawSkills = [
       ...(currentData.skills?.workspace || []),
-      ...(currentData.skills?.global || []),
-      ...(currentData.skills?.builtin || [])
+      ...(currentData.skills?.global || [])
     ];
+    if (!isVsCodeEnv) {
+      rawSkills.push(...(currentData.skills?.builtin || []));
+    }
     if (currentMode === 'snapshot') {
       rawSkills = rawSkills.filter(s => s.isInvoked);
     }
@@ -604,7 +607,7 @@
       let html = '';
       const workspace = allSkills.filter(s => s.type === 'workspace');
       const global = allSkills.filter(s => s.type === 'global');
-      const builtin = allSkills.filter(s => s.type === 'builtin');
+      const builtin = isVsCodeEnv ? [] : allSkills.filter(s => s.type === 'builtin');
 
       if (workspace.length > 0) {
         html += `
@@ -805,9 +808,11 @@
 
     let skillList = [
       ...(currentData.skills?.workspace || []),
-      ...(currentData.skills?.global || []),
-      ...(currentData.skills?.builtin || [])
+      ...(currentData.skills?.global || [])
     ];
+    if (!isVsCodeEnv) {
+      skillList.push(...(currentData.skills?.builtin || []));
+    }
     if (currentMode === 'snapshot') {
       skillList = skillList.filter(s => s.isInvoked);
     }
@@ -818,12 +823,14 @@
     });
     lines.push('');
 
-    let mcpList = currentData.mcpServers || [];
-    if (currentMode === 'snapshot') {
-      mcpList = mcpList.filter(s => s.isInvoked);
+    if (!isVsCodeEnv) {
+      let mcpList = currentData.mcpServers || [];
+      if (currentMode === 'snapshot') {
+        mcpList = mcpList.filter(s => s.isInvoked);
+      }
+      lines.push(`## 🔌 ${I18nModule.t('card_mcp_title')} (${mcpList.length})`);
+      mcpList.forEach(m => lines.push(`- **${m.name}** (${I18nModule.t('unit_apis', { count: m.tools?.length || 0 })})`));
     }
-    lines.push(`## 🔌 ${I18nModule.t('card_mcp_title')} (${mcpList.length})`);
-    mcpList.forEach(m => lines.push(`- **${m.name}** (${I18nModule.t('unit_apis', { count: m.tools?.length || 0 })})`));
 
     return lines.join('\n');
   }

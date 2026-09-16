@@ -33,8 +33,8 @@
 				},
 				"antigravity.showAntigravityModulesInVsCode": {
 					"type": "boolean",
-					"default": true,
-					"description": "在 Cursor / VS Code 等相容 IDE 中若偵測到本機有 Antigravity 環境，是否顯示 Antigravity 專屬模組（全域自訂與對話記憶庫）"
+					"default": false,
+					"description": "在純 VS Code 等相容環境中若偵測到本機有 Antigravity，是否顯示 Antigravity 專屬卡片（全域自訂 ~/.gemini 與對話記憶庫 Brain）。預設為關閉 (false)；Cursor 環境自帶專屬配置不受此限制"
 				}
 			}
 		},

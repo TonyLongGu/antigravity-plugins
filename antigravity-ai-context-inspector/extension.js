@@ -284,14 +284,14 @@ class AiContextViewProvider {
         const workspaceFolders = vscode.workspace.workspaceFolders || [];
 
         if (this._isVsCode) {
-          data = await ContextScannerService.scanLiveEnvironment(workspaceFolders);
+          data = await ContextScannerService.scanLiveEnvironment(workspaceFolders, { isVsCode: true });
           data.conversationsList = [];
           data.isVsCode = true;
         } else {
           if (this._currentMode === 'snapshot') {
             data = await TranscriptParserService.parseConversationSnapshot(this._selectedConvId, workspaceFolders);
           } else {
-            data = await ContextScannerService.scanLiveEnvironment(workspaceFolders);
+            data = await ContextScannerService.scanLiveEnvironment(workspaceFolders, { isVsCode: false });
           }
 
           // 同時取得對話清單供前端下拉選單使用

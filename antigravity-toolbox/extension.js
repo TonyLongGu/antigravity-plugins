@@ -293,7 +293,14 @@ class ToolboxViewProvider {
     const currentLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
     const envInfo = systemService.getEnvironmentInfo();
 
-    return html
+    let processedHtml = html;
+    if (!envInfo.showAntigravityCards) {
+      processedHtml = processedHtml
+        .replace('class="card" id="module-config"', 'class="card hidden-by-env" id="module-config"')
+        .replace('class="card" id="module-brain"', 'class="card hidden-by-env" id="module-brain"');
+    }
+
+    return processedHtml
       .replace(/<link rel="stylesheet" href="style\.css">/g, `<style>${css}</style>`)
       .replace(/<script src="locales\.js"><\/script>/g, `<script>window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)}; window.INITIAL_ENV = ${JSON.stringify(envInfo)};</script><script>${localesJs}</script>`)
       .replace(/src="locales\.js"/g, `src="${webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'locales.js'))}"`)

@@ -60,12 +60,6 @@ if ($Target -eq "Prompt") {
         $Target = "Antigravity"
     }
 }
-if ($Target -eq "VSCode" -or $Target -eq "Cursor") {
-    Write-Host ""
-    Write-Host "[提示] 此套件 ($displayName) 專為 Google Antigravity IDE 深度脈絡打造。" -ForegroundColor Yellow
-    Write-Host "在 VS Code / Cursor 環境中不支援，已安全略過安裝。" -ForegroundColor Gray
-    Exit 0
-}
 
 # 候選 IDE 環境定義
 

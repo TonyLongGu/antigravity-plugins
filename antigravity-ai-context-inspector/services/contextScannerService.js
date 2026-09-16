@@ -179,7 +179,8 @@ class ContextScannerService {
   /**
    * 執行全方位環境即時掃描（嚴格遵循 VS Code 檔案總管專案順序與 A-Z 自然排序）
    */
-  static async scanLiveEnvironment(workspaceFolders = []) {
+  static async scanLiveEnvironment(workspaceFolders = [], options = {}) {
+    const isVsCode = Boolean(options.isVsCode);
     const userHome = this.getUserHome();
     const globalConfigDir = path.join(userHome, '.gemini', 'config');
     const builtinSkillsDir = path.join(userHome, '.gemini', 'antigravity-ide', 'builtin', 'skills');
@@ -239,12 +240,16 @@ class ContextScannerService {
     const globalSkills = await this.scanSkillsInDir(globalSkillsDir, '全域技能 (Global)', 'global', 1000);
     result.skills.global.push(...globalSkills);
 
-    // 3. 掃描內建 Skills (排在最末)
-    const builtinSkills = await this.scanSkillsInDir(builtinSkillsDir, 'Antigravity 內建', 'builtin', 2000);
-    result.skills.builtin.push(...builtinSkills);
+    // 3. 掃描內建 Skills (僅在非 VS Code 環境下掃描；VS Code 環境停用內建技能)
+    if (!isVsCode) {
+      const builtinSkills = await this.scanSkillsInDir(builtinSkillsDir, 'Antigravity 內建', 'builtin', 2000);
+      result.skills.builtin.push(...builtinSkills);
+    }
 
-    // 4. 掃描 MCP 伺服器與工具
-    result.mcpServers = await McpDetectorService.scanMcpServers(workspaceFolders);
+    // 4. 掃描 MCP 伺服器與工具 (僅在非 VS Code 環境下掃描；VS Code 環境停用 MCP 功能)
+    if (!isVsCode) {
+      result.mcpServers = await McpDetectorService.scanMcpServers(workspaceFolders);
+    }
 
     return result;
   }

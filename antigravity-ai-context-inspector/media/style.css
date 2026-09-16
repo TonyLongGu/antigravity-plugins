@@ -1254,10 +1254,12 @@ body.is-rmb-dragging * {
 }
 
 /* ==============================================================================
-   VS Code 環境智慧感應樣式：自動隱藏對話快照切換與歷史下拉選單，專注於專案即時配置
+   VS Code 環境智慧感應樣式：自動隱藏對話快照、內建技能與 MCP，專注於工作區即時配置
    ============================================================================== */
 body.is-vscode .mode-switch-grid,
-body.is-vscode #conv-select-wrapper {
+body.is-vscode #conv-select-wrapper,
+body.is-vscode #card-mcp,
+body.is-vscode [data-subgroup="builtin"] {
   display: none !important;
 }
 

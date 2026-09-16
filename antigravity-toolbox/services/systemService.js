@@ -359,13 +359,14 @@ function getEnvironmentInfo() {
   const cursorHomeExists = fs.existsSync(getCursorHome());
 
   const config = vscode.workspace.getConfiguration('antigravity');
-  const showInVsCode = config.get('showAntigravityModulesInVsCode', true);
+  // 預設為 false：在純 VS Code 等外部 IDE 中預設不顯示 Antigravity 專屬卡片
+  const showInVsCode = config.get('showAntigravityModulesInVsCode', false);
 
   const uiFlavor = host.isCursor ? 'cursor' : 'antigravity';
-  // Cursor：一律顯示本環境卡片；Antigravity IDE：一律顯示；其餘 IDE 需本機有 Antigravity 才顯示 gemini 卡片
-  const showHostModules = host.isCursor
-    || isAntigravityIDE
-    || (hasAntigravity && showInVsCode);
+  // 1. Antigravity IDE：顯示原生的 ~/.gemini 與 Brain
+  // 2. Cursor：顯示 Cursor 專屬的 ~/.cursor 與 Transcripts
+  // 3. VS Code 等環境：預設隱藏，僅當使用者手動開啟設定時才顯示
+  const showHostModules = host.isCursor || isAntigravityIDE || Boolean(showInVsCode);
 
   return {
     appName: host.appName,
