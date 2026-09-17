@@ -115,6 +115,40 @@ function isSamePath(p1, p2) {
 }
 
 /**
+ * 建立 Webview 載入握手控制器（前端載入完成會 postMessage 'ready'）
+ * @returns {{ markReady: () => void, waitUntilReady: (timeoutMs?: number) => Promise<void> }}
+ */
+function createReadyHandshake() {
+  let isReady = false;
+  let waiters = [];
+
+  const markReady = () => {
+    if (isReady) return;
+    isReady = true;
+    const pending = waiters;
+    waiters = [];
+    for (const resolve of pending) resolve();
+  };
+
+  const waitUntilReady = (timeoutMs = 1500) => {
+    if (isReady) return Promise.resolve();
+    return new Promise((resolve) => {
+      const onReady = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(() => {
+        waiters = waiters.filter((w) => w !== onReady);
+        resolve();
+      }, timeoutMs);
+      waiters.push(onReady);
+    });
+  };
+
+  return { markReady, waitUntilReady };
+}
+
+/**
  * 多媒體自訂編輯器 Provider (實作 vscode.CustomReadonlyEditorProvider)
  */
 class MediaCustomEditorProvider {
@@ -150,48 +184,24 @@ class MediaCustomEditorProvider {
     const folderUri = vscode.Uri.file(path.dirname(fileUri.fsPath));
     const targetFilePath = fileUri.fsPath;
 
-    // 給予空白安全 HTML，防止 VS Code Webview 內部管線產生未初始化異常
-    webviewPanel.webview.options = { enableScripts: false };
-    webviewPanel.webview.html = '<!DOCTYPE html><html><body></body></html>';
+    // 方案 A：直接復用 VS Code 原生建立的 webviewPanel，不另開新 Panel、絕不銷毀過渡分頁
+    // 徹底根除在 Service Worker 註冊窗口期銷毀 Webview 導致的 InvalidStateError
+    webviewPanel.webview.options = {
+      enableScripts: true,
+      retainContextWhenHidden: true,
+      localResourceRoots: [
+        this.context.extensionUri,
+        folderUri
+      ]
+    };
 
-    // 依據檔案類型，直接轉發至以該檔案所在「上層資料夾」為實體的畫廊面板，並在該視窗中立即打開放大該特定檔案
     if (this.type === 'video') {
-      await VideoViewerPanel.createOrShow(this.context.extensionUri, folderUri, targetFilePath);
+      new VideoViewerPanel(webviewPanel, this.context.extensionUri, folderUri, targetFilePath, true);
     } else if (this.type === 'image') {
-      await ImageViewerPanel.createOrShow(this.context.extensionUri, folderUri, targetFilePath);
+      new ImageViewerPanel(webviewPanel, this.context.extensionUri, folderUri, targetFilePath, true);
     } else if (this.type === 'audio') {
-      await AudioViewerPanel.createOrShow(this.context.extensionUri, folderUri, targetFilePath);
+      new AudioViewerPanel(webviewPanel, this.context.extensionUri, folderUri, targetFilePath, true);
     }
-
-    // 延遲關閉 VS Code 預設開啟的單檔過渡 Panel，並確保焦點平滑鎖定在主資料夾畫廊分頁
-    setTimeout(() => {
-      try {
-        webviewPanel.dispose();
-      } catch (_) {}
-
-      if (this.type === 'video') {
-        for (const p of VideoViewerPanel.currentPanels) {
-          if (p && isSamePath(p.folderPath, folderUri.fsPath) && p.panel) {
-            p.panel.reveal(vscode.ViewColumn.Active, false);
-            break;
-          }
-        }
-      } else if (this.type === 'image') {
-        for (const p of ImageViewerPanel.currentPanels) {
-          if (p && isSamePath(p.folderPath, folderUri.fsPath) && p.panel) {
-            p.panel.reveal(vscode.ViewColumn.Active, false);
-            break;
-          }
-        }
-      } else if (this.type === 'audio') {
-        for (const p of AudioViewerPanel.currentPanels) {
-          if (p && isSamePath(p.folderPath, folderUri.fsPath) && p.panel) {
-            p.panel.reveal(vscode.ViewColumn.Active, false);
-            break;
-          }
-        }
-      }
-    }, 40);
   }
 }
 
@@ -435,6 +445,7 @@ function activate(context) {
 
   const customEditorOptions = {
     webviewOptions: {
+      enableScripts: true,
       retainContextWhenHidden: true
     },
     supportsMultipleEditorsPerDocument: false
@@ -603,7 +614,7 @@ class ImageViewerPanel {
   static async createOrShow(extensionUri, folderUri, initialImagePath = null) {
     const folderPath = folderUri.fsPath;
     for (const existing of ImageViewerPanel.currentPanels) {
-      if (isSamePath(existing.folderPath, folderPath) && existing.panel) {
+      if (!existing.isCustomEditor && isSamePath(existing.folderPath, folderPath) && existing.panel) {
         existing.panel.reveal(vscode.ViewColumn.Active);
         if (initialImagePath) {
           existing.panel.webview.postMessage({
@@ -621,7 +632,7 @@ class ImageViewerPanel {
             } catch (_) {}
           }, 60);
         }
-        return;
+        return existing;
       }
     }
 
@@ -640,7 +651,7 @@ class ImageViewerPanel {
       }
     );
 
-    new ImageViewerPanel(panel, extensionUri, folderUri, initialImagePath);
+    return new ImageViewerPanel(panel, extensionUri, folderUri, initialImagePath);
   }
 
   constructor(panel, extensionUri, folderUri, initialImagePath = null, isCustomEditor = false) {
@@ -654,6 +665,7 @@ class ImageViewerPanel {
     this.isRecursive = false;
     this._disposables = [];
     this._isDisposed = false;
+    this._readyHandshake = createReadyHandshake();
 
     // 自動監聽資料夾內容異動（防抖節流並靜默無感重新整理）
     this.folderWatcher = new FolderWatcher(
@@ -673,6 +685,9 @@ class ImageViewerPanel {
     if (this._isDisposed) return;
     this._isDisposed = true;
 
+    // 若尚未完成載入握手就被關閉，立即解除過渡分頁的等待（避免白等逾時）
+    this._readyHandshake.markReady();
+
     if (this.folderWatcher) {
       this.folderWatcher.dispose();
       this.folderWatcher = null;
@@ -687,9 +702,19 @@ class ImageViewerPanel {
     }
   }
 
+  /**
+   * 等待前端完成載入握手（或逾時）
+   * @param {number} timeoutMs
+   * @returns {Promise<void>}
+   */
+  waitUntilReady(timeoutMs = 1500) {
+    return this._readyHandshake.waitUntilReady(timeoutMs);
+  }
+
   async _handleMessage(msg) {
     switch (msg.type) {
       case 'ready':
+        this._readyHandshake.markReady();
         await this._sendImages(false);
         break;
       case 'closeCustomEditor':
@@ -895,7 +920,7 @@ class VideoViewerPanel {
   static async createOrShow(extensionUri, folderUri, initialVideoPath = null) {
     const folderPath = folderUri.fsPath;
     for (const existing of VideoViewerPanel.currentPanels) {
-      if (isSamePath(existing.folderPath, folderPath) && existing.panel) {
+      if (!existing.isCustomEditor && isSamePath(existing.folderPath, folderPath) && existing.panel) {
         existing.panel.reveal(vscode.ViewColumn.Active);
         if (initialVideoPath) {
           existing.panel.webview.postMessage({
@@ -913,7 +938,7 @@ class VideoViewerPanel {
             } catch (_) {}
           }, 60);
         }
-        return;
+        return existing;
       }
     }
 
@@ -932,7 +957,7 @@ class VideoViewerPanel {
       }
     );
 
-    new VideoViewerPanel(panel, extensionUri, folderUri, initialVideoPath);
+    return new VideoViewerPanel(panel, extensionUri, folderUri, initialVideoPath);
   }
 
   constructor(panel, extensionUri, folderUri, initialVideoPath = null, isCustomEditor = false) {
@@ -946,6 +971,7 @@ class VideoViewerPanel {
     this.isRecursive = false;
     this._disposables = [];
     this._isDisposed = false;
+    this._readyHandshake = createReadyHandshake();
 
     // 增加伺服器活躍引用計數
     videoStreamServer.retain();
@@ -968,6 +994,9 @@ class VideoViewerPanel {
     if (this._isDisposed) return;
     this._isDisposed = true;
 
+    // 若尚未完成載入握手就被關閉，立即解除過渡分頁的等待（避免白等逾時）
+    this._readyHandshake.markReady();
+
     if (this.folderWatcher) {
       this.folderWatcher.dispose();
       this.folderWatcher = null;
@@ -984,9 +1013,19 @@ class VideoViewerPanel {
     }
   }
 
+  /**
+   * 等待前端完成載入握手（或逾時）
+   * @param {number} timeoutMs
+   * @returns {Promise<void>}
+   */
+  waitUntilReady(timeoutMs = 1500) {
+    return this._readyHandshake.waitUntilReady(timeoutMs);
+  }
+
   async _handleMessage(msg) {
     switch (msg.type) {
       case 'ready':
+        this._readyHandshake.markReady();
         await this._sendVideos(false);
         break;
       case 'closeCustomEditor':
@@ -1245,7 +1284,7 @@ class AudioViewerPanel {
   static async createOrShow(extensionUri, folderUri, initialAudioPath = null) {
     const folderPath = folderUri.fsPath;
     for (const existing of AudioViewerPanel.currentPanels) {
-      if (isSamePath(existing.folderPath, folderPath) && existing.panel) {
+      if (!existing.isCustomEditor && isSamePath(existing.folderPath, folderPath) && existing.panel) {
         existing.panel.reveal(vscode.ViewColumn.Active);
         if (initialAudioPath) {
           existing.panel.webview.postMessage({
@@ -1263,7 +1302,7 @@ class AudioViewerPanel {
             } catch (_) {}
           }, 60);
         }
-        return;
+        return existing;
       }
     }
 
@@ -1282,7 +1321,7 @@ class AudioViewerPanel {
       }
     );
 
-    new AudioViewerPanel(panel, extensionUri, folderUri, initialAudioPath);
+    return new AudioViewerPanel(panel, extensionUri, folderUri, initialAudioPath);
   }
 
   constructor(panel, extensionUri, folderUri, initialAudioPath = null, isCustomEditor = false) {
@@ -1296,6 +1335,7 @@ class AudioViewerPanel {
     this.isRecursive = false;
     this._disposables = [];
     this._isDisposed = false;
+    this._readyHandshake = createReadyHandshake();
 
     // 增加伺服器活躍引用計數
     audioStreamServer.retain();
@@ -1318,6 +1358,9 @@ class AudioViewerPanel {
     if (this._isDisposed) return;
     this._isDisposed = true;
 
+    // 若尚未完成載入握手就被關閉，立即解除過渡分頁的等待（避免白等逾時）
+    this._readyHandshake.markReady();
+
     if (this.folderWatcher) {
       this.folderWatcher.dispose();
       this.folderWatcher = null;
@@ -1334,9 +1377,19 @@ class AudioViewerPanel {
     }
   }
 
+  /**
+   * 等待前端完成載入握手（或逾時）
+   * @param {number} timeoutMs
+   * @returns {Promise<void>}
+   */
+  waitUntilReady(timeoutMs = 1500) {
+    return this._readyHandshake.waitUntilReady(timeoutMs);
+  }
+
   async _handleMessage(msg) {
     switch (msg.type) {
       case 'ready':
+        this._readyHandshake.markReady();
         await this._sendAudios(false);
         break;
       case 'closeCustomEditor':
