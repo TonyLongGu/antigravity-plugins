@@ -10,6 +10,63 @@ param (
 )
 
 $ErrorActionPreference = "Stop"
+
+# ── 共用工具：本腳本專用 ─────────────────────────────────────────────
+# 判斷資料夾 / .obsolete 鍵名是否為「本套件自身」的安裝產物：
+# 僅接受「完整識別碼」或「歷史別名 + 純版本號後綴」，杜絕誤刪市集中同名前綴之其他套件。
+function Test-IsOwnExtensionArtifact {
+    param(
+        [string]$Name,
+        [string]$FullExtId,
+        [string]$ExtName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Name)) { return $false }
+
+    $identities = @($FullExtId, "antigravity-toolkit.$ExtName", $ExtName) |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Select-Object -Unique
+
+    foreach ($identity in $identities) {
+        if ($Name -ieq $identity) { return $true }
+        if (-not ($Name -like "$identity-*" -or $Name -like "$identity.*")) { continue }
+        if ($Name.Substring($identity.Length).TrimStart('-', '.') -match '^\d+(\.\d+)*(-[0-9A-Za-z\.\-]+)?$') { return $true }
+    }
+
+    return $false
+}
+
+# 偵測指定擴充目錄所屬的 IDE 是否正在執行 (IDE 執行中會於關閉時覆寫 extensions.json 快取)。
+function Get-RunningIdeForRoot {
+    param([string[]]$ExtensionRoots)
+
+    if (-not $ExtensionRoots) { return @() }
+
+    $processMap = [ordered]@{
+        ".vscode-insiders" = "Code - Insiders"
+        ".vscode"          = "Code"
+        ".vscodium"        = "VSCodium"
+        ".cursor"          = "Cursor"
+        ".antigravity-ide" = "Antigravity IDE"
+        ".antigravity"     = "Antigravity IDE"
+    }
+
+    $running = @()
+    foreach ($root in $ExtensionRoots) {
+        foreach ($key in $processMap.Keys) {
+            if ($root -like "*$key*") {
+                $procName = $processMap[$key]
+                if (-not ($running -contains $procName) -and (Get-Process -Name $procName -ErrorAction SilentlyContinue)) {
+                    $running += $procName
+                }
+                break
+            }
+        }
+    }
+
+    return $running
+}
+
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
@@ -154,6 +211,11 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  安裝擴充套件: $displayName" -ForegroundColor Yellow
 Write-Host "  套件識別: $fullExtId (v$extVersion)" -ForegroundColor Gray
 Write-Host "  目標環境: $(($targetEnvironments | ForEach-Object { $_.Name }) -join ', ')" -ForegroundColor Green
+$runningIdes = Get-RunningIdeForRoot -ExtensionRoots ($targetEnvironments | ForEach-Object { $_.ExtensionsRoot })
+if ($runningIdes.Count -gt 0) {
+    Write-Host "[警告] 偵測到目標 IDE 正在執行中：$($runningIdes -join ', ')" -ForegroundColor Yellow
+    Write-Host "       建議先完整關閉該 IDE 後再執行本腳本；否則 IDE 關閉時可能覆寫 extensions.json 快取，導致本次變更未生效。" -ForegroundColor Yellow
+}
 Write-Host "  環境隔離: 生效中 (僅部署所選目標，絕不更動或刪除其他 IDE 之套件)" -ForegroundColor DarkGray
 Write-Host "========================================" -ForegroundColor Cyan
 
@@ -173,12 +235,7 @@ foreach ($envTarget in $targetEnvironments) {
         $existingDiskItems = @(Get-ChildItem -LiteralPath $baseRoot)
         foreach ($diskItem in $existingDiskItems) {
             $diname = $diskItem.Name
-            $shouldDelete = $false
-            if ($diname -like "$fullExtId*" -or $diname -like "$extName*" -or $diname -like "antigravity-toolkit.$extName*") {
-                if ($diname.StartsWith("antigravity-toolkit.") -or $diname.StartsWith("antigravity-")) {
-                    $shouldDelete = $true
-                }
-            }
+            $shouldDelete = Test-IsOwnExtensionArtifact -Name $diname -FullExtId $fullExtId -ExtName $extName
 
             if ($shouldDelete) {
                 try {
@@ -214,7 +271,7 @@ foreach ($envTarget in $targetEnvironments) {
             $changed = $false
             $propNames = @($obsoleteJson.PSObject.Properties | ForEach-Object { $_.Name })
             foreach ($pn in $propNames) {
-                if ($pn -like "$fullExtId*" -or $pn -like "$extName*" -or $pn -like "antigravity-toolkit.$extName*") {
+                if (Test-IsOwnExtensionArtifact -Name $pn -FullExtId $fullExtId -ExtName $extName) {
                     $obsoleteJson.PSObject.Properties.Remove($pn)
                     $changed = $true
                 }
@@ -296,5 +353,5 @@ foreach ($envTarget in $targetEnvironments) {
 
 Write-Host ""
 if ($successCount -gt 0) {
-    Write-Host "擴充套件安裝成功！請於對應 IDE 按 [Ctrl + Shift + P] -> 執行 [Developer: Reload Window] 生效。" -ForegroundColor Green
+    Write-Host "擴充套件安裝成功！Antigravity IDE / Cursor 可按 [Ctrl + Shift + P] -> [Developer: Reload Window] 載入；VS Code 請完整關閉後重新啟動。" -ForegroundColor Green
 }
