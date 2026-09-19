@@ -96,6 +96,112 @@ class McpDetectorService {
   }
 
   /**
+   * VS Code 使用者設定目錄（%APPDATA%/Code/User，不寫死本機磁碟路徑）
+   */
+  static getVsCodeUserDir() {
+    if (process.env.APPDATA) {
+      return path.join(process.env.APPDATA, 'Code', 'User');
+    }
+    if (process.platform === 'darwin') {
+      return path.join(this.getUserHome(), 'Library', 'Application Support', 'Code', 'User');
+    }
+    return path.join(this.getUserHome(), '.config', 'Code', 'User');
+  }
+
+  /**
+   * 掃描 Cursor 使用者與工作區 MCP 設定（~/.cursor/mcp.json、{workspace}/.cursor/mcp.json）
+   * 僅解析伺服器清單與啟動方式，不讀取 env / headers，避免把權杖帶進 UI。
+   */
+  static async scanCursorMcpServers(workspaceFolders = []) {
+    return this._scanJsonMcpServers(
+      path.join(this.getUserHome(), '.cursor', 'mcp.json'),
+      ['.cursor', 'mcp.json'],
+      workspaceFolders
+    );
+  }
+
+  /**
+   * 掃描 VS Code 使用者與工作區 MCP 設定（%APPDATA%/Code/User/mcp.json、{workspace}/.vscode/mcp.json）
+   */
+  static async scanVsCodeMcpServers(workspaceFolders = []) {
+    return this._scanJsonMcpServers(
+      path.join(this.getVsCodeUserDir(), 'mcp.json'),
+      ['.vscode', 'mcp.json'],
+      workspaceFolders
+    );
+  }
+
+  static async _scanJsonMcpServers(userConfigPath, workspaceRelParts, workspaceFolders = []) {
+    const servers = [];
+    const seen = new Set();
+
+    const pushUnique = (list) => {
+      for (const server of list) {
+        const key = `${(server.name || '').toLowerCase()}|${(server.path || '').toLowerCase()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        servers.push(server);
+      }
+    };
+
+    pushUnique(await this._parseMcpJsonConfig(userConfigPath, 'Global'));
+
+    for (const folder of workspaceFolders) {
+      const folderPath = typeof folder === 'string' ? folder : (folder.uri ? folder.uri.fsPath : (folder.path || folder));
+      if (!folderPath) continue;
+      pushUnique(await this._parseMcpJsonConfig(
+        path.join(folderPath, ...workspaceRelParts),
+        `Workspace (${path.basename(folderPath)})`
+      ));
+    }
+
+    return servers;
+  }
+
+  /**
+   * 解析 mcp.json：Cursor 用 mcpServers，VS Code 用 servers。不讀取 env / headers。
+   */
+  static async _parseMcpJsonConfig(configPath, scope) {
+    const servers = [];
+    if (!fs.existsSync(configPath)) return servers;
+
+    try {
+      const content = await fsPromises.readFile(configPath, 'utf-8');
+      const parsed = JSON.parse(content);
+      const mcpServers = parsed.servers || parsed.mcpServers || {};
+      const serverKeys = Object.keys(mcpServers).sort((a, b) => this.naturalCompare(a, b));
+
+      for (const sName of serverKeys) {
+        const sCfg = mcpServers[sName] || {};
+        const url = typeof sCfg.url === 'string' ? sCfg.url : '';
+        const command = typeof sCfg.command === 'string' ? sCfg.command : '';
+        const args = Array.isArray(sCfg.args) ? sCfg.args.filter(a => typeof a === 'string') : [];
+        const tools = Array.isArray(sCfg.tools) ? sCfg.tools : [];
+        const type = typeof sCfg.type === 'string' ? sCfg.type.toLowerCase() : '';
+        const transport = (type === 'http' || type === 'sse' || url) ? 'http' : 'stdio';
+        servers.push({
+          name: sName,
+          scope,
+          path: configPath,
+          toolCount: tools.length,
+          tools,
+          hasInstructions: false,
+          instructionsPath: null,
+          transport,
+          command,
+          args,
+          url,
+          disabled: Boolean(sCfg.disabled)
+        });
+      }
+    } catch (err) {
+      console.error(`Error reading MCP config at ${configPath}:`, err);
+    }
+
+    return servers;
+  }
+
+  /**
    * 讀取特定 MCP Server 資料夾下的工具 JSON 定義
    */
   static async _scanServerTools(serverPath) {

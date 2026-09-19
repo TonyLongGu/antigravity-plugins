@@ -76,7 +76,7 @@ $sourceDir = $PSScriptRoot
 $pkgJsonPath = Join-Path $sourceDir "package.json"
 $extPublisher = "antigravity-toolkit"
 $extName = "antigravity-ai-context-inspector"
-$extVersion = "1.1.8"
+$extVersion = "1.2.0"
 $displayName = $extName
 
 if (Test-Path -LiteralPath $pkgJsonPath) {

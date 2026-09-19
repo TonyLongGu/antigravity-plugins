@@ -5,6 +5,9 @@ const cp = require('node:child_process');
 
 const ContextScannerService = require('./services/contextScannerService');
 const TranscriptParserService = require('./services/transcriptParserService');
+const CursorTranscriptService = require('./services/cursorTranscriptService');
+const VsCodeChatSessionService = require('./services/vscodeChatSessionService');
+const McpDetectorService = require('./services/mcpDetectorService');
 
 class AiContextViewProvider {
   constructor(extensionUri, context = null) {
@@ -12,8 +15,10 @@ class AiContextViewProvider {
     this._context = context;
     this._view = null;
     this._panel = null;
-    this._isVsCode = !/antigravity/i.test(vscode.env.appName || '');
-    this._currentMode = this._isVsCode ? 'live' : (context?.workspaceState?.get('aiContext.mode') || 'live');
+    const appName = vscode.env.appName || '';
+    this._isVsCode = !/antigravity/i.test(appName);
+    this._isCursor = /cursor/i.test(appName);
+    this._currentMode = context?.workspaceState?.get('aiContext.mode') || 'live';
     this._selectedConvId = context?.workspaceState?.get('aiContext.selectedConvId') || null;
   }
 
@@ -112,17 +117,35 @@ class AiContextViewProvider {
   }
 
   /**
+   * 已安裝擴充套件中帶 skills/ 目錄者（VS Code Copilot「擴充」技能）
+   */
+  _listExtensionSkillDirs() {
+    const dirs = [];
+    const seen = new Set();
+    for (const ext of vscode.extensions.all) {
+      try {
+        const extPath = ext.extensionUri.fsPath;
+        const skillsDir = path.join(extPath, 'skills');
+        const key = skillsDir.toLowerCase();
+        if (seen.has(key) || !fs.existsSync(skillsDir)) continue;
+        seen.add(key);
+        dirs.push({
+          dir: skillsDir,
+          source: (ext.packageJSON && (ext.packageJSON.displayName || ext.packageJSON.name)) || ext.id
+        });
+      } catch {}
+    }
+    return dirs;
+  }
+
+  /**
    * 統一前端訊息處理器
    */
   async _handleMessage(msg) {
     switch (msg.type) {
       case 'fetchData':
-        if (this._isVsCode) {
-          this._currentMode = 'live';
-        } else {
-          this._currentMode = msg.payload?.mode || this._currentMode;
-          this._selectedConvId = msg.payload?.conversationId || this._selectedConvId;
-        }
+        this._currentMode = msg.payload?.mode || this._currentMode;
+        this._selectedConvId = msg.payload?.conversationId || this._selectedConvId;
         
         // 持久化記錄狀態
         if (this._context?.workspaceState) {
@@ -142,6 +165,40 @@ class AiContextViewProvider {
       case 'openMcpDir': {
         try {
           const userHome = process.env.USERPROFILE || require('node:os').homedir();
+          if (this._isCursor) {
+            const cursorMcpFile = path.join(userHome, '.cursor', 'mcp.json');
+            if (fs.existsSync(cursorMcpFile)) {
+              this.openFileInEditor(cursorMcpFile);
+              break;
+            }
+            const cursorDir = path.join(userHome, '.cursor');
+            if (!fs.existsSync(cursorDir)) {
+              fs.mkdirSync(cursorDir, { recursive: true });
+            }
+            if (process.platform === 'win32') {
+              cp.execFile('explorer.exe', [cursorDir]);
+            } else {
+              await vscode.env.openExternal(vscode.Uri.file(cursorDir));
+            }
+            break;
+          }
+          if (this._isVsCode) {
+            const vscodeMcpFile = path.join(McpDetectorService.getVsCodeUserDir(), 'mcp.json');
+            if (fs.existsSync(vscodeMcpFile)) {
+              this.openFileInEditor(vscodeMcpFile);
+              break;
+            }
+            const vscodeUserDir = McpDetectorService.getVsCodeUserDir();
+            if (!fs.existsSync(vscodeUserDir)) {
+              fs.mkdirSync(vscodeUserDir, { recursive: true });
+            }
+            if (process.platform === 'win32') {
+              cp.execFile('explorer.exe', [vscodeUserDir]);
+            } else {
+              await vscode.env.openExternal(vscode.Uri.file(vscodeUserDir));
+            }
+            break;
+          }
           const mcpDir = path.join(userHome, '.gemini', 'antigravity-ide', 'mcp');
           if (!fs.existsSync(mcpDir)) {
             fs.mkdirSync(mcpDir, { recursive: true });
@@ -283,10 +340,49 @@ class AiContextViewProvider {
         let data;
         const workspaceFolders = vscode.workspace.workspaceFolders || [];
 
-        if (this._isVsCode) {
-          data = await ContextScannerService.scanLiveEnvironment(workspaceFolders, { isVsCode: true });
-          data.conversationsList = [];
+        if (this._isCursor) {
+          if (this._currentMode === 'snapshot') {
+            data = await CursorTranscriptService.parseConversationSnapshot(this._selectedConvId, workspaceFolders);
+          } else {
+            data = await ContextScannerService.scanLiveEnvironment(workspaceFolders, {
+              isVsCode: true,
+              isCursor: true
+            });
+          }
+          const convList = await CursorTranscriptService.getConversationsList(workspaceFolders);
+          data.conversationsList = convList.map(c => ({
+            id: c.id,
+            title: c.title,
+            workspace: c.workspace,
+            mtime: c.mtime,
+            mtimeStr: c.mtimeStr
+          }));
           data.isVsCode = true;
+          data.isCursor = true;
+        } else if (this._isVsCode) {
+          const extraUris = vscode.workspace.workspaceFile ? [vscode.workspace.workspaceFile.fsPath] : [];
+          const scanOptions = {
+            isVsCode: true,
+            isCursor: false,
+            appRoot: vscode.env.appRoot,
+            extensionSkillDirs: this._listExtensionSkillDirs(),
+            extraUris
+          };
+          if (this._currentMode === 'snapshot') {
+            data = await VsCodeChatSessionService.parseConversationSnapshot(this._selectedConvId, workspaceFolders, scanOptions);
+          } else {
+            data = await ContextScannerService.scanLiveEnvironment(workspaceFolders, scanOptions);
+          }
+          const convList = await VsCodeChatSessionService.getConversationsList(workspaceFolders, extraUris);
+          data.conversationsList = convList.map(c => ({
+            id: c.id,
+            title: c.title,
+            workspace: c.workspace,
+            mtime: c.mtime,
+            mtimeStr: c.mtimeStr
+          }));
+          data.isVsCode = true;
+          data.isCursor = false;
         } else {
           if (this._currentMode === 'snapshot') {
             data = await TranscriptParserService.parseConversationSnapshot(this._selectedConvId, workspaceFolders);
@@ -304,6 +400,7 @@ class AiContextViewProvider {
             mtimeStr: c.mtimeStr
           }));
           data.isVsCode = false;
+          data.isCursor = false;
         }
 
         const updatePayload = {
@@ -337,17 +434,17 @@ class AiContextViewProvider {
     }
 
     const currentLocale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
-    const isSnapshot = !this._isVsCode && this._currentMode === 'snapshot';
+    const isSnapshot = this._currentMode === 'snapshot';
 
     if (this._isVsCode) {
-      html = html.replace('<body>', '<body class="is-vscode">');
+      html = html.replace('<body>', this._isCursor ? '<body class="is-vscode is-cursor">' : '<body class="is-vscode">');
     }
 
     return html
       .replace(/\{\{CSP_SOURCE\}\}/g, webview.cspSource)
       .replace(/href="style\.css"/g, `href="${styleUri}"`)
       .replace(/src="app\.js"/g, `src="${scriptUri}?v=${Date.now()}"`)
-      .replace(/<script src="locales\.js"><\/script>/g, `<script>window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)}; window.INITIAL_IS_VSCODE = ${this._isVsCode};</script><script>${localesJs}</script>`)
+      .replace(/<script src="locales\.js"><\/script>/g, `<script>window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)}; window.INITIAL_IS_VSCODE = ${this._isVsCode}; window.INITIAL_IS_CURSOR = ${this._isCursor};</script><script>${localesJs}</script>`)
       .replace(/\{\{LIVE_ACTIVE\}\}/g, isSnapshot ? '' : 'active')
       .replace(/\{\{SNAPSHOT_ACTIVE\}\}/g, isSnapshot ? 'active' : '')
       .replace(/\{\{CONV_WRAPPER_CLASS\}\}/g, isSnapshot ? '' : 'is-hidden');
@@ -401,6 +498,99 @@ function activate(context) {
     agentsWatcher.onDidDelete(onAgentsChange);
     context.subscriptions.push(agentsWatcher);
   } catch {}
+
+  // 4b. Cursor / VS Code MCP 設定檔變更
+  if (activeProvider?._isCursor) {
+    try {
+      const userHome = process.env.USERPROFILE || require('node:os').homedir();
+      const cursorDir = path.join(userHome, '.cursor');
+      const cursorMcpWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(cursorDir, 'mcp.json'));
+      const onCursorMcpChange = () => {
+        if (activeProvider) activeProvider.pushData(200);
+      };
+      cursorMcpWatcher.onDidChange(onCursorMcpChange);
+      cursorMcpWatcher.onDidCreate(onCursorMcpChange);
+      cursorMcpWatcher.onDidDelete(onCursorMcpChange);
+      context.subscriptions.push(cursorMcpWatcher);
+    } catch {}
+
+    try {
+      const wsCursorMcpWatcher = vscode.workspace.createFileSystemWatcher('**/.cursor/mcp.json');
+      const onWsCursorMcpChange = () => {
+        if (activeProvider) activeProvider.pushData(200);
+      };
+      wsCursorMcpWatcher.onDidChange(onWsCursorMcpChange);
+      wsCursorMcpWatcher.onDidCreate(onWsCursorMcpChange);
+      wsCursorMcpWatcher.onDidDelete(onWsCursorMcpChange);
+      context.subscriptions.push(wsCursorMcpWatcher);
+    } catch {}
+
+    try {
+      const userHome = process.env.USERPROFILE || require('node:os').homedir();
+      const projectsDir = path.join(userHome, '.cursor', 'projects');
+      const transcriptWatcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(projectsDir, '**/agent-transcripts/**/*.jsonl')
+      );
+      const onTranscriptChange = () => {
+        if (activeProvider) activeProvider.pushData(200);
+      };
+      transcriptWatcher.onDidChange(onTranscriptChange);
+      transcriptWatcher.onDidCreate(onTranscriptChange);
+      transcriptWatcher.onDidDelete(onTranscriptChange);
+      context.subscriptions.push(transcriptWatcher);
+    } catch {}
+  } else if (activeProvider?._isVsCode) {
+    try {
+      const vscodeUserDir = McpDetectorService.getVsCodeUserDir();
+      const vscodeMcpWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscodeUserDir, 'mcp.json'));
+      const onVsCodeMcpChange = () => {
+        if (activeProvider) activeProvider.pushData(200);
+      };
+      vscodeMcpWatcher.onDidChange(onVsCodeMcpChange);
+      vscodeMcpWatcher.onDidCreate(onVsCodeMcpChange);
+      vscodeMcpWatcher.onDidDelete(onVsCodeMcpChange);
+      context.subscriptions.push(vscodeMcpWatcher);
+    } catch {}
+
+    try {
+      const wsVsCodeMcpWatcher = vscode.workspace.createFileSystemWatcher('**/.vscode/mcp.json');
+      const onWsVsCodeMcpChange = () => {
+        if (activeProvider) activeProvider.pushData(200);
+      };
+      wsVsCodeMcpWatcher.onDidChange(onWsVsCodeMcpChange);
+      wsVsCodeMcpWatcher.onDidCreate(onWsVsCodeMcpChange);
+      wsVsCodeMcpWatcher.onDidDelete(onWsVsCodeMcpChange);
+      context.subscriptions.push(wsVsCodeMcpWatcher);
+    } catch {}
+
+    try {
+      const wsRoot = path.join(McpDetectorService.getVsCodeUserDir(), 'workspaceStorage');
+      const sessionWatcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(wsRoot, '**/chatSessions/*.jsonl')
+      );
+      const onSessionChange = () => {
+        if (activeProvider) activeProvider.pushData(200);
+      };
+      sessionWatcher.onDidChange(onSessionChange);
+      sessionWatcher.onDidCreate(onSessionChange);
+      sessionWatcher.onDidDelete(onSessionChange);
+      context.subscriptions.push(sessionWatcher);
+    } catch {}
+
+    try {
+      const cliRoot = path.join(process.env.USERPROFILE || require('node:os').homedir(), '.copilot', 'session-state');
+      const cliWatcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(cliRoot, '**/events.jsonl')
+      );
+      const onCliChange = () => {
+        if (activeProvider) activeProvider.pushData(200);
+      };
+      cliWatcher.onDidChange(onCliChange);
+      cliWatcher.onDidCreate(onCliChange);
+      cliWatcher.onDidDelete(onCliChange);
+      context.subscriptions.push(cliWatcher);
+    } catch {}
+  }
 
   // 4. 監聽 IDE 視窗焦點（切回視窗時輕量確認最新狀態；焦點離開時收合子卡片）
   context.subscriptions.push(

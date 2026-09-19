@@ -1,8 +1,8 @@
 {
 	"name": "antigravity-ai-context-inspector",
 	"displayName": "AI 上下文檢視器 (AI Context Inspector)",
-	"description": "Google Antigravity IDE 與 VS Code 雙環境相容側邊欄擴充套件：即時檢視每次對話 AI 載入之 Rules、Skills、MCP API 與工作區綁定狀態，支援即時配置掃描與對話快照歷史還原 (VS Code 下自動最佳化為即時配置檢視)",
-	"version": "1.1.8",
+	"description": "Google Antigravity IDE、Cursor 與 VS Code 相容側邊欄擴充套件：即時檢視 Rules、Skills、MCP；Cursor 另支援 ~/.cursor/mcp.json 與 agent-transcripts 對話足跡還原；VS Code 讀取 %APPDATA%/Code/User/mcp.json",
+	"version": "1.2.0",
 	"publisher": "antigravity-toolkit",
 	"engines": {
 		"vscode": "^1.80.0"

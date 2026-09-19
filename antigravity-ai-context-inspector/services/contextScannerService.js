@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const fsPromises = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
+const { execFileSync } = require('node:child_process');
 const McpDetectorService = require('./mcpDetectorService');
 
 class ContextScannerService {
@@ -181,6 +182,7 @@ class ContextScannerService {
    */
   static async scanLiveEnvironment(workspaceFolders = [], options = {}) {
     const isVsCode = Boolean(options.isVsCode);
+    const isCursor = Boolean(options.isCursor);
     const userHome = this.getUserHome();
     const globalConfigDir = path.join(userHome, '.gemini', 'config');
     const builtinSkillsDir = path.join(userHome, '.gemini', 'antigravity-ide', 'builtin', 'skills');
@@ -195,6 +197,7 @@ class ContextScannerService {
       },
       skills: {
         builtin: [],
+        extension: [],
         global: [],
         workspace: []
       },
@@ -246,9 +249,18 @@ class ContextScannerService {
       }
 
       // 1.3 掃描 Workspace Skills（專案內依資料夾名稱自然排序）
-      const wsSkillsDir = path.join(wsPath, '.agents', 'skills');
-      const wsSkills = await this.scanSkillsInDir(wsSkillsDir, wsName, 'workspace', wsIndex);
-      result.skills.workspace.push(...wsSkills);
+      const wsSkillDirs = [path.join(wsPath, '.agents', 'skills')];
+      if (isVsCode && !isCursor) {
+        wsSkillDirs.push(
+          path.join(wsPath, '.github', 'skills'),
+          path.join(wsPath, '.claude', 'skills'),
+          path.join(wsPath, '.copilot', 'skills')
+        );
+      }
+      for (const wsSkillsDir of wsSkillDirs) {
+        const wsSkills = await this.scanSkillsInDir(wsSkillsDir, wsName, 'workspace', wsIndex);
+        this._mergeSkills(result.skills.workspace, wsSkills);
+      }
     }
 
     // 2. 掃描全域 Rules 與 Skills (排在工作區之後)
@@ -280,21 +292,87 @@ class ContextScannerService {
     }
 
     const globalSkillsDir = path.join(globalConfigDir, 'skills');
-    const globalSkills = await this.scanSkillsInDir(globalSkillsDir, '全域技能 (Global)', 'global', 1000);
-    result.skills.global.push(...globalSkills);
+    if (!(isVsCode && !isCursor)) {
+      const globalSkills = await this.scanSkillsInDir(globalSkillsDir, '全域技能 (Global)', 'global', 1000);
+      result.skills.global.push(...globalSkills);
+    }
 
-    // 3. 掃描內建 Skills (僅在非 VS Code 環境下掃描；VS Code 環境停用內建技能)
+    // 3. 掃描內建 / VS Code Copilot 技能
     if (!isVsCode) {
       const builtinSkills = await this.scanSkillsInDir(builtinSkillsDir, 'Antigravity 內建', 'builtin', 2000);
       result.skills.builtin.push(...builtinSkills);
+    } else if (isCursor) {
+      const cursorBuiltinDir = path.join(userHome, '.cursor', 'skills-cursor');
+      const builtinSkills = await this.scanSkillsInDir(cursorBuiltinDir, 'Cursor 內建', 'builtin', 2000);
+      result.skills.builtin.push(...builtinSkills);
+    } else {
+      await this.scanVsCodeAgentSkills(result, options);
     }
 
-    // 4. 掃描 MCP 伺服器與工具 (僅在非 VS Code 環境下掃描；VS Code 環境停用 MCP 功能)
+    // 4. 掃描 MCP 伺服器與工具
+    // Antigravity：本機 MCP 目錄；Cursor：~/.cursor/mcp.json；VS Code：%APPDATA%/Code/User/mcp.json
     if (!isVsCode) {
       result.mcpServers = await McpDetectorService.scanMcpServers(workspaceFolders);
+    } else if (isCursor) {
+      result.mcpServers = await McpDetectorService.scanCursorMcpServers(workspaceFolders);
+    } else {
+      result.mcpServers = await McpDetectorService.scanVsCodeMcpServers(workspaceFolders);
     }
 
     return result;
+  }
+
+  static _mergeSkills(target, list) {
+    for (const skill of list || []) {
+      const key = (skill.dirName || skill.name || '').toLowerCase();
+      const fileKey = (skill.filePath || '').toLowerCase();
+      if (!key && !fileKey) continue;
+      const exists = target.some((item) => {
+        const itemKey = (item.dirName || item.name || '').toLowerCase();
+        const itemFile = (item.filePath || '').toLowerCase();
+        return (key && itemKey === key) || (fileKey && itemFile === fileKey);
+      });
+      if (!exists) target.push(skill);
+    }
+  }
+
+  /**
+   * VS Code Copilot 技能：使用者 / 擴充 / 內建
+   * 使用者：~/.claude/skills、~/.copilot/skills、~/.agents/skills
+   * 擴充：已安裝擴充套件的 skills/ 目錄（由 extension host 傳入）
+   * 內建：vscode.env.appRoot 底下 Copilot 隨附 skills
+   */
+  static async scanVsCodeAgentSkills(result, options = {}) {
+    const userHome = this.getUserHome();
+    const userDirs = [
+      path.join(userHome, '.claude', 'skills'),
+      path.join(userHome, '.copilot', 'skills'),
+      path.join(userHome, '.agents', 'skills'),
+      path.join(userHome, '.github', 'skills')
+    ];
+    for (const dir of userDirs) {
+      const skills = await this.scanSkillsInDir(dir, '使用者', 'global', 1000);
+      this._mergeSkills(result.skills.global, skills);
+    }
+
+    const extensionDirs = Array.isArray(options.extensionSkillDirs) ? options.extensionSkillDirs : [];
+    for (const item of extensionDirs) {
+      const dir = typeof item === 'string' ? item : item.dir;
+      const source = (typeof item === 'object' && item.source) ? item.source : '擴充';
+      if (!dir) continue;
+      const skills = await this.scanSkillsInDir(dir, source, 'extension', 1500);
+      this._mergeSkills(result.skills.extension, skills);
+    }
+
+    const appRoot = typeof options.appRoot === 'string' ? options.appRoot : '';
+    const builtinDirs = [];
+    if (appRoot) {
+      builtinDirs.push(path.join(appRoot, 'extensions', 'copilot', 'assets', 'prompts', 'skills'));
+    }
+    for (const dir of builtinDirs) {
+      const skills = await this.scanSkillsInDir(dir, 'VS Code 內建', 'builtin', 2000);
+      this._mergeSkills(result.skills.builtin, skills);
+    }
   }
 
   /**
@@ -475,7 +553,7 @@ class ContextScannerService {
 
       const rawName = meta.name || dirName;
       const displayName = firstHeader || rawName;
-      const finalSource = sourceName || (type === 'global' ? '全域技能 (Global)' : (type === 'builtin' ? 'Antigravity 內建' : this.formatWorkspaceName(path.resolve(skillDir, '../../..'))));
+      const finalSource = sourceName || (type === 'global' ? '全域技能 (Global)' : (type === 'builtin' ? 'IDE 內建' : this.formatWorkspaceName(path.resolve(skillDir, '../../..'))));
 
       return {
         name: rawName,
@@ -493,6 +571,65 @@ class ContextScannerService {
       return null;
     }
   }
+
+  /**
+   * 以 Git 歷史判斷檔案在對話當下是否已存在。
+   * 不使用 Windows birthtime：複製／checkout 常把建立時間改掉，早期對話會誤判。
+   * 不在 Git 內或查不到時回傳 false（寧可漏、不要灌進尚未存在的規範）。
+   */
+  static existedBeforeConversation(filePath, convMtime) {
+    const clean = this.normalizeFsPath(filePath);
+    if (!clean || !fs.existsSync(clean) || !convMtime) return false;
+
+    const beforeSec = Math.floor((Number(convMtime) + 60000) / 1000);
+    const cacheKey = `${clean.toLowerCase()}|${beforeSec}`;
+    if (this._gitExistCache.has(cacheKey)) return this._gitExistCache.get(cacheKey);
+
+    const existed = this._gitFileExistedAt(clean, beforeSec);
+    this._gitExistCache.set(cacheKey, existed);
+    if (this._gitExistCache.size > 200) {
+      const first = this._gitExistCache.keys().next().value;
+      this._gitExistCache.delete(first);
+    }
+    return existed;
+  }
+
+  static _gitFileExistedAt(filePath, beforeSec) {
+    const startDir = path.dirname(filePath);
+    let root = '';
+    try {
+      root = execFileSync('git', ['-C', startDir, 'rev-parse', '--show-toplevel'], {
+        encoding: 'utf8',
+        timeout: 3000,
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'ignore']
+      }).trim();
+    } catch {
+      return false;
+    }
+    if (!root) return false;
+
+    const rel = path.relative(root, filePath).replace(/\\/g, '/');
+    if (!rel || rel.startsWith('..')) return false;
+
+    try {
+      const hash = execFileSync(
+        'git',
+        ['-C', root, 'rev-list', '-1', `--before=${beforeSec}`, 'HEAD', '--', rel],
+        {
+          encoding: 'utf8',
+          timeout: 3000,
+          windowsHide: true,
+          stdio: ['ignore', 'pipe', 'ignore']
+        }
+      ).trim();
+      return Boolean(hash);
+    } catch {
+      return false;
+    }
+  }
 }
+
+ContextScannerService._gitExistCache = new Map();
 
 module.exports = ContextScannerService;

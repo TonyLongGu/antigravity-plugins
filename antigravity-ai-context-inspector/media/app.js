@@ -36,6 +36,7 @@
     plug: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg>',
     folder: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>',
     globe: '<svg class="lucide-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>',
+    puzzle: '<svg class="lucide-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg>',
     package: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7"/><path d="m7.5 4.27 9 5.15"/></svg>',
     server: '<svg class="lucide-icon" viewBox="0 0 24 24"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>'
   };
@@ -64,9 +65,22 @@
 
   // 2. 主應用狀態
   const isVsCode = (typeof window !== 'undefined' && Boolean(window.INITIAL_IS_VSCODE)) || false;
+  const isCursor = (typeof window !== 'undefined' && Boolean(window.INITIAL_IS_CURSOR)) || false;
+  if (isCursor) {
+    document.body.classList.add('is-cursor');
+    const btnOpenMcpDirEarly = document.getElementById('btn-open-mcp-dir');
+    if (btnOpenMcpDirEarly) {
+      btnOpenMcpDirEarly.setAttribute('data-i18n-title', 'btn_open_mcp_dir_title_cursor');
+    }
+  } else if (isVsCode) {
+    const btnOpenMcpDirEarly = document.getElementById('btn-open-mcp-dir');
+    if (btnOpenMcpDirEarly) {
+      btnOpenMcpDirEarly.setAttribute('data-i18n-title', 'btn_open_mcp_dir_title_vscode');
+    }
+  }
   const savedState = vscode.getState() || {};
   let currentData = null;
-  let currentMode = isVsCode ? 'live' : (savedState.mode || 'live'); // 'live' | 'snapshot'
+  let currentMode = savedState.mode || 'live'; // 'live' | 'snapshot'
   let currentConvLimit = savedState.convLimit || 10;
   let selectedConvId = savedState.selectedConvId || null;
   let searchKeyword = '';
@@ -74,7 +88,10 @@
   let ruleCondTitleMode = savedState.ruleCondTitleMode || 'title'; // 'title' (內文標題) | 'name' (檔案名稱)
   let skillTitleMode = savedState.skillTitleMode || 'title'; // 'title' (內文標題) | 'name' (技能名稱)
   let workspaceSkillsOpen = (savedState.workspaceSkillsOpen !== false);
-  let globalSkillsOpen = (savedState.globalSkillsOpen !== false);
+  let globalSkillsOpen = (isVsCode && !isCursor)
+    ? (savedState.globalSkillsOpen === true)
+    : (savedState.globalSkillsOpen !== false);
+  let extensionSkillsOpen = (savedState.extensionSkillsOpen === true);
   let builtinSkillsOpen = false; // 預設強制折疊
   let allConversations = [];
 
@@ -132,7 +149,8 @@
       ruleCondTitleMode: ruleCondTitleMode,
       skillTitleMode: skillTitleMode,
       workspaceSkillsOpen: workspaceSkillsOpen,
-      globalSkillsOpen: globalSkillsOpen
+      globalSkillsOpen: globalSkillsOpen,
+      extensionSkillsOpen: extensionSkillsOpen
     });
   }
 
@@ -248,21 +266,15 @@
     }
   };
 
+  function snapshotModeLabel() {
+    return (isCursor || (isVsCode && !isCursor))
+      ? I18nModule.t('status_mode_snapshot_cursor')
+      : I18nModule.t('status_mode_snapshot');
+  }
+
   function syncModeUI() {
-    if (isVsCode) {
-      document.body.classList.add('is-vscode');
-      currentMode = 'live';
-      dom.btnLive?.classList.add('active');
-      dom.btnSnapshot?.classList.remove('active');
-      if (dom.convWrapper) {
-        dom.convWrapper.classList.add('is-hidden');
-      }
-      closeConvPopover();
-      if (dom.modeLabel) {
-        dom.modeLabel.textContent = I18nModule.t('status_mode_live');
-      }
-      return;
-    }
+    if (isVsCode) document.body.classList.add('is-vscode');
+    if (isCursor) document.body.classList.add('is-cursor');
     if (currentMode === 'snapshot') {
       dom.btnSnapshot?.classList.add('active');
       dom.btnLive?.classList.remove('active');
@@ -281,7 +293,11 @@
       closeConvPopover();
     }
     if (dom.modeLabel) {
-      dom.modeLabel.textContent = currentMode === 'live' ? I18nModule.t('status_mode_live') : I18nModule.t('status_mode_snapshot');
+      if (currentMode === 'live') {
+        dom.modeLabel.textContent = I18nModule.t('status_mode_live');
+      } else {
+        dom.modeLabel.textContent = snapshotModeLabel();
+      }
     }
   }
 
@@ -486,6 +502,10 @@
     if (currentGlobalEl) {
       globalSkillsOpen = currentGlobalEl.open;
     }
+    const currentExtEl = document.querySelector('.subgroup-details[data-subgroup="extension"]');
+    if (currentExtEl) {
+      extensionSkillsOpen = currentExtEl.open;
+    }
 
     // 紀錄當前已展開項目的 Key，重新渲染時精確恢復 open 狀態
     const openedKeys = new Set();
@@ -495,7 +515,11 @@
     });
 
     dom.timeLabel.textContent = currentData.timestamp ? new Date(currentData.timestamp).toLocaleTimeString() : '';
-    dom.modeLabel.textContent = currentMode === 'live' ? I18nModule.t('status_mode_live') : I18nModule.t('status_mode_snapshot');
+    if (currentMode === 'live') {
+      dom.modeLabel.textContent = I18nModule.t('status_mode_live');
+    } else {
+      dom.modeLabel.textContent = snapshotModeLabel();
+    }
     updateToggleButtons();
 
     // 常態顯示專案/來源標籤（單專案、多專案工作區或快照模式皆完整顯示，利於區分專案與全域規範）
@@ -583,11 +607,15 @@
 
     // 3. 技能清單
     const isVsCodeEnv = Boolean(isVsCode || currentData.isVsCode);
+    const isCursorEnv = Boolean(isCursor || currentData.isCursor);
+    const isVsCodeOnly = isVsCodeEnv && !isCursorEnv;
+    const showBuiltin = !isVsCodeEnv || isCursorEnv || isVsCodeOnly;
     let rawSkills = [
       ...(currentData.skills?.workspace || []),
-      ...(currentData.skills?.global || [])
+      ...(currentData.skills?.global || []),
+      ...(currentData.skills?.extension || [])
     ];
-    if (!isVsCodeEnv) {
+    if (showBuiltin) {
       rawSkills.push(...(currentData.skills?.builtin || []));
     }
     if (currentMode === 'snapshot') {
@@ -598,7 +626,9 @@
     dom.badgeSkills.textContent = I18nModule.t('unit_items', { count: allSkills.length });
 
     if (currentMode === 'snapshot') {
-      if (dom.metaModel) dom.metaModel.textContent = currentData.model || 'Gemini Flash';
+      if (dom.metaModel) {
+        dom.metaModel.textContent = currentData.model || (isCursor || isVsCode ? '—' : 'Gemini Flash');
+      }
     }
 
     if (allSkills.length === 0) {
@@ -607,52 +637,36 @@
       let html = '';
       const workspace = allSkills.filter(s => s.type === 'workspace');
       const global = allSkills.filter(s => s.type === 'global');
-      const builtin = isVsCodeEnv ? [] : allSkills.filter(s => s.type === 'builtin');
+      const extension = allSkills.filter(s => s.type === 'extension');
+      const builtin = showBuiltin ? allSkills.filter(s => s.type === 'builtin') : [];
+      const globalLabelKey = isVsCodeOnly ? 'group_skills_user' : 'group_skills_global';
 
-      if (workspace.length > 0) {
+      const groups = isVsCodeOnly
+        ? [
+            { type: 'workspace', list: workspace, icon: Codicons.folder, labelKey: 'group_skills_workspace', open: workspaceSkillsOpen },
+            { type: 'builtin', list: builtin, icon: Codicons.package, labelKey: 'group_skills_builtin', open: builtinSkillsOpen },
+            { type: 'global', list: global, icon: Codicons.globe, labelKey: globalLabelKey, open: globalSkillsOpen },
+            { type: 'extension', list: extension, icon: Codicons.puzzle, labelKey: 'group_skills_extension', open: extensionSkillsOpen }
+          ]
+        : [
+            { type: 'workspace', list: workspace, icon: Codicons.folder, labelKey: 'group_skills_workspace', open: workspaceSkillsOpen },
+            { type: 'global', list: global, icon: Codicons.globe, labelKey: globalLabelKey, open: globalSkillsOpen },
+            { type: 'builtin', list: builtin, icon: Codicons.package, labelKey: 'group_skills_builtin', open: builtinSkillsOpen }
+          ];
+
+      for (const group of groups) {
+        if (group.list.length === 0) continue;
         html += `
-          <details class="subgroup-details" data-subgroup="workspace" ${workspaceSkillsOpen ? 'open' : ''}>
+          <details class="subgroup-details" data-subgroup="${group.type}" ${group.open ? 'open' : ''}>
             <summary class="subgroup-summary" title="${escapeHtml(I18nModule.t('subgroup_toggle_tooltip'))}">
               <div class="subgroup-title-left">
                 <span class="subgroup-chevron">${Codicons.chevronRight}</span>
-                <span class="subgroup-icon">${Codicons.folder}</span>
-                <span class="subgroup-label">${I18nModule.t('group_skills_workspace', { count: workspace.length })}</span>
+                <span class="subgroup-icon">${group.icon}</span>
+                <span class="subgroup-label">${I18nModule.t(group.labelKey, { count: group.list.length })}</span>
               </div>
             </summary>
             <div class="subgroup-list">
-              ${workspace.map(s => renderSkillItem(s, openedKeys, showSourceTag)).join('')}
-            </div>
-          </details>
-        `;
-      }
-      if (global.length > 0) {
-        html += `
-          <details class="subgroup-details" data-subgroup="global" ${globalSkillsOpen ? 'open' : ''}>
-            <summary class="subgroup-summary" title="${escapeHtml(I18nModule.t('subgroup_toggle_tooltip'))}">
-              <div class="subgroup-title-left">
-                <span class="subgroup-chevron">${Codicons.chevronRight}</span>
-                <span class="subgroup-icon">${Codicons.globe}</span>
-                <span class="subgroup-label">${I18nModule.t('group_skills_global', { count: global.length })}</span>
-              </div>
-            </summary>
-            <div class="subgroup-list">
-              ${global.map(s => renderSkillItem(s, openedKeys, false)).join('')}
-            </div>
-          </details>
-        `;
-      }
-      if (builtin.length > 0) {
-        html += `
-          <details class="subgroup-details" data-subgroup="builtin" ${builtinSkillsOpen ? 'open' : ''}>
-            <summary class="subgroup-summary" title="${escapeHtml(I18nModule.t('subgroup_toggle_tooltip'))}">
-              <div class="subgroup-title-left">
-                <span class="subgroup-chevron">${Codicons.chevronRight}</span>
-                <span class="subgroup-icon">${Codicons.package}</span>
-                <span class="subgroup-label">${I18nModule.t('group_skills_builtin', { count: builtin.length })}</span>
-              </div>
-            </summary>
-            <div class="subgroup-list">
-              ${builtin.map(s => renderSkillItem(s, openedKeys, false)).join('')}
+              ${group.list.map(s => renderSkillItem(s, openedKeys, group.type === 'workspace' ? showSourceTag : false)).join('')}
             </div>
           </details>
         `;
@@ -674,17 +688,19 @@
       dom.listMcp.innerHTML = `<div class="empty-state">${currentMode === 'snapshot' ? I18nModule.t('empty_mcp_snapshot') : I18nModule.t('empty_mcp_live')}</div>`;
     } else {
       dom.listMcp.innerHTML = mcpServers.map(s => {
-        const tools = s.tools || [];
         const scopeShort = (s.scope || '').replace(/Global MCP|MCP Server/gi, 'Global').replace(/Workspace \(([^)]+)\)/, '$1');
+        const hint = s.url || [s.command, ...(s.args || [])].filter(Boolean).join(' ');
+        const disabledClass = s.disabled ? ' is-disabled' : '';
+        const invokedClass = s.isInvoked ? ' highlight-invoked' : '';
         return `
-          <div class="mcp-row-item ${s.isInvoked ? 'highlight-invoked' : ''}">
+          <div class="mcp-row-item${invokedClass}${disabledClass}" title="${escapeHtml(hint)}">
             <div class="mcp-info-left">
               <span class="mcp-name">${escapeHtml(s.name)}</span>
-              <span class="mcp-scope-tag" title="${escapeHtml(s.scope || '')}">${escapeHtml(scopeShort || 'Global')}</span>
+              ${s.disabled ? `<span class="mcp-scope-tag">${escapeHtml(I18nModule.t('mcp_disabled'))}</span>` : ''}
             </div>
             <div class="mcp-actions-right">
               ${s.instructionsPath ? `<button class="item-btn btn-open-file" data-path="${escapeHtml(s.instructionsPath)}">${I18nModule.t('btn_open_file')}</button>` : ''}
-              <span class="badge purple">${I18nModule.t('unit_apis', { count: tools.length })}</span>
+              <span class="badge purple" title="${escapeHtml(s.scope || '')}">${escapeHtml(scopeShort || 'Global')}</span>
             </div>
           </div>
         `;
@@ -744,6 +760,7 @@
         const isOpen = el.open;
         if (type === 'workspace') workspaceSkillsOpen = isOpen;
         else if (type === 'global') globalSkillsOpen = isOpen;
+        else if (type === 'extension') extensionSkillsOpen = isOpen;
         else if (type === 'builtin') builtinSkillsOpen = isOpen;
         saveState();
       });
@@ -806,11 +823,16 @@
     condList.forEach(r => lines.push(`- **${r.displayName || r.name}**: ${r.description || ''}`));
     lines.push('');
 
+    const isVsCodeEnv = Boolean(isVsCode || currentData.isVsCode);
+    const isCursorEnv = Boolean(isCursor || currentData.isCursor);
+    const isVsCodeOnly = isVsCodeEnv && !isCursorEnv;
+    const showBuiltin = !isVsCodeEnv || isCursorEnv || isVsCodeOnly;
     let skillList = [
       ...(currentData.skills?.workspace || []),
-      ...(currentData.skills?.global || [])
+      ...(currentData.skills?.global || []),
+      ...(currentData.skills?.extension || [])
     ];
-    if (!isVsCodeEnv) {
+    if (showBuiltin) {
       skillList.push(...(currentData.skills?.builtin || []));
     }
     if (currentMode === 'snapshot') {
@@ -823,14 +845,17 @@
     });
     lines.push('');
 
-    if (!isVsCodeEnv) {
-      let mcpList = currentData.mcpServers || [];
-      if (currentMode === 'snapshot') {
-        mcpList = mcpList.filter(s => s.isInvoked);
-      }
-      lines.push(`## 🔌 ${I18nModule.t('card_mcp_title')} (${mcpList.length})`);
-      mcpList.forEach(m => lines.push(`- **${m.name}** (${I18nModule.t('unit_apis', { count: m.tools?.length || 0 })})`));
+    let mcpList = currentData.mcpServers || [];
+    if (currentMode === 'snapshot') {
+      mcpList = mcpList.filter(s => s.isInvoked);
     }
+    lines.push(`## 🔌 ${I18nModule.t('card_mcp_title')} (${mcpList.length})`);
+    mcpList.forEach(m => {
+      const extra = (m.tools && m.tools.length)
+        ? I18nModule.t('unit_apis', { count: m.tools.length })
+        : (m.transport === 'http' ? (m.url || I18nModule.t('mcp_transport_http')) : (m.transport === 'stdio' ? I18nModule.t('mcp_transport_stdio') : I18nModule.t('unit_apis', { count: 0 })));
+      lines.push(`- **${m.name}** (${extra})`);
+    });
 
     return lines.join('\n');
   }
@@ -975,7 +1000,6 @@
 
     // 模式切換：最近對話快照
     dom.btnSnapshot.addEventListener('click', () => {
-      if (isVsCode) return;
       currentMode = 'snapshot';
       saveState();
       syncModeUI();
@@ -1031,12 +1055,10 @@
       if (type === 'updateData') {
         currentData = payload;
 
-        if (payload.isVsCode || isVsCode) {
-          document.body.classList.add('is-vscode');
-          currentMode = 'live';
-          syncModeUI();
-        } else if (payload.mode) {
-          // 同步後端回傳之 mode
+        const payloadIsCursor = Boolean(payload.isCursor || isCursor);
+        if (payload.isVsCode || isVsCode) document.body.classList.add('is-vscode');
+        if (payloadIsCursor) document.body.classList.add('is-cursor');
+        if (payload.mode) {
           currentMode = payload.mode;
           saveState();
           syncModeUI();
@@ -1048,7 +1070,7 @@
         }
 
         // 更新歷史對話清單快取並刷新自訂選單
-        if (payload.conversationsList && payload.conversationsList.length > 0) {
+        if (Array.isArray(payload.conversationsList)) {
           allConversations = payload.conversationsList;
           updateConvDropdown();
         }

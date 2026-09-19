@@ -32,6 +32,7 @@
       // 狀態列
       status_mode_live: '模式：環境即時掃描',
       status_mode_snapshot: '模式：對話已調用快照',
+      status_mode_snapshot_cursor: '模式：對話足跡還原',
 
       // 卡片 1：常駐規範
       card_rules_active_title: '常駐規範 (Always-Active)',
@@ -50,6 +51,8 @@
       btn_title_mode_skill_name_tooltip: '目前顯示：技能名稱（點擊切換為：內文標題）',
       group_skills_workspace: '工作區專屬技能 ({count})',
       group_skills_global: '全域客製技能 ({count})',
+      group_skills_user: '使用者技能 ({count})',
+      group_skills_extension: '擴充技能 ({count})',
       group_skills_builtin: 'IDE 內建技能 ({count})',
       subgroup_toggle_tooltip: '點擊展開 / 收合分組',
       subgroup_expand: '展開',
@@ -59,6 +62,11 @@
       card_mcp_title: 'MCP 伺服器與 API',
       btn_open_mcp_dir: '開啟',
       btn_open_mcp_dir_title: '開啟 MCP 存放資料夾 (C:\\Users\\User\\.gemini\\antigravity-ide\\mcp)',
+      btn_open_mcp_dir_title_cursor: '開啟 Cursor MCP 設定檔 (~/.cursor/mcp.json)',
+      btn_open_mcp_dir_title_vscode: '開啟 VS Code MCP 設定檔 (%APPDATA%/Code/User/mcp.json)',
+      mcp_transport_stdio: 'stdio',
+      mcp_transport_http: 'HTTP',
+      mcp_disabled: '停用',
 
       // 卡片子項目通用動作按鈕
       btn_copy_name: '複製名稱',
@@ -133,6 +141,7 @@
       // Status Bar
       status_mode_live: 'Mode: Live Environment Scan',
       status_mode_snapshot: 'Mode: Conversation Snapshot',
+      status_mode_snapshot_cursor: 'Mode: Conversation Footprint',
 
       // Card 1: Always-Active Rules
       card_rules_active_title: 'Always-Active Rules',
@@ -151,6 +160,8 @@
       btn_title_mode_skill_name_tooltip: 'Currently: Skill Name (Click to switch to Doc Title)',
       group_skills_workspace: 'Workspace Skills ({count})',
       group_skills_global: 'Global Skills ({count})',
+      group_skills_user: 'User Skills ({count})',
+      group_skills_extension: 'Extension Skills ({count})',
       group_skills_builtin: 'Built-in Skills ({count})',
       subgroup_toggle_tooltip: 'Click to expand / collapse group',
       subgroup_expand: 'Expand',
@@ -160,6 +171,11 @@
       card_mcp_title: 'MCP Servers & Tools',
       btn_open_mcp_dir: 'Open',
       btn_open_mcp_dir_title: 'Open MCP Storage Folder (C:\\Users\\User\\.gemini\\antigravity-ide\\mcp)',
+      btn_open_mcp_dir_title_cursor: 'Open Cursor MCP config (~/.cursor/mcp.json)',
+      btn_open_mcp_dir_title_vscode: 'Open VS Code MCP config (%APPDATA%/Code/User/mcp.json)',
+      mcp_transport_stdio: 'stdio',
+      mcp_transport_http: 'HTTP',
+      mcp_disabled: 'Disabled',
 
       // Item Actions
       btn_copy_name: 'Copy Name',

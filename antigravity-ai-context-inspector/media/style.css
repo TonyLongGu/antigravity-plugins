@@ -13,7 +13,6 @@
   --bg-item-hover: rgba(255, 255, 255, 0.08);
 
   --border-color: var(--vscode-widget-border, rgba(255, 255, 255, 0.12));
-  --border-focus: var(--vscode-focusBorder, #007acc);
 
   --text-primary: var(--vscode-foreground, #cccccc);
   --text-secondary: var(--vscode-descriptionForeground, #888888);
@@ -176,14 +175,10 @@ body {
   text-align: left;
 }
 
-.custom-dropdown-trigger:hover {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: var(--border-focus);
-}
-
+.custom-dropdown-trigger:hover,
 .custom-dropdown-trigger.is-open {
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 1px var(--border-focus);
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(200, 200, 200, 0.48);
 }
 
 .custom-dropdown-trigger .trigger-icon {
@@ -310,13 +305,19 @@ body {
   width: 100%;
   height: 25px;
   background: var(--vscode-input-background, rgba(0, 0, 0, 0.3));
-  border: 1px solid var(--vscode-input-border, rgba(255, 255, 255, 0.25));
+  border: none;
   border-radius: var(--radius-sm);
   padding: 0 22px 0 24px;
   font-size: 11px;
   color: var(--text-primary);
   outline: none;
-  transition: all 0.15s ease;
+  box-shadow: none;
+}
+
+.popover-search-input:focus {
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
 
 .popover-search-input::placeholder {
@@ -1070,6 +1071,10 @@ details[open] > summary .subgroup-chevron {
   flex-shrink: 0;
 }
 
+.mcp-row-item.is-disabled {
+  opacity: 0.55;
+}
+
 /* 按鈕樣式 */
 .btn {
   height: 26px;
@@ -1254,14 +1259,9 @@ body.is-rmb-dragging * {
 }
 
 /* ==============================================================================
-   VS Code 環境智慧感應樣式：自動隱藏對話快照、內建技能與 MCP，專注於工作區即時配置
+   VS Code 環境智慧感應樣式：隱藏 Antigravity 內建技能分組以外的專屬區塊
+   Cursor / VS Code 都顯示 MCP 與對話足跡快照
    ============================================================================== */
-body.is-vscode .mode-switch-grid,
-body.is-vscode #conv-select-wrapper,
-body.is-vscode #card-mcp,
-body.is-vscode [data-subgroup="builtin"] {
-  display: none !important;
-}
 
 body.is-vscode .header-title-row {
   margin-bottom: var(--space-xs);

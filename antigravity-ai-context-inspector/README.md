@@ -12,8 +12,14 @@
      - **最近對話快照**：精準解析 Antigravity `transcript.jsonl` 日誌與歷史對話資料庫，100% 還原每次對話 AI 實際被注入的記憶上下文。
      - **歷史對話任務切換**：可下拉選擇歷史對話任務進行復盤與環境對比。
    - 💻 **Cursor / Visual Studio Code 環境**：
-     - **智慧收斂**：自動隱藏 Antigravity 專屬的對話快照歷史切換選單，僅保留並鎖定 **⚡ 當前環境配置**。
+     - **智慧收斂**：純 VS Code / Cursor 隱藏 Antigravity 內建技能；Cursor 與 VS Code Copilot 另提供對話足跡快照。
      - **全工作區規則掃描**：直接掃描所有開啟工作區資料夾下的 `.agents/rules` 與 `.agents/skills`，即便在 Cursor / VS Code 下也能清晰掌握 AI Agent 指引結構！
+     - **Cursor MCP 清單**：讀取使用者 `~/.cursor/mcp.json` 與各工作區 `.cursor/mcp.json`，顯示已註冊的 MCP 伺服器。
+     - **Cursor 內建技能**：掃描 `~/.cursor/skills-cursor`，在技能清單顯示「IDE 內建技能」。
+     - **VS Code MCP 清單**：讀取 `%APPDATA%/Code/User/mcp.json` 與各工作區 `.vscode/mcp.json`，顯示已註冊的 MCP 伺服器（只列名稱與範圍，不讀取 env / headers）。
+     - **VS Code 技能清單**：對齊 Copilot 三分類——使用者（`~/.claude/skills` 等）、擴充（已安裝套件 `skills/`）、內建（Copilot 隨附 skills）。
+     - **Cursor 對話足跡**：掃描 `~/.cursor/projects/*/agent-transcripts`，還原該對話實際讀過的 Rules / Skills，以及實際呼叫的 MCP。下拉標題優先讀取 Composer 官方名稱。
+     - **VS Code Copilot 對話足跡**：掃描 `%APPDATA%/Code/User/workspaceStorage/*/chatSessions/*.jsonl`，用官方 `customTitle` 列出對話，並還原實際讀過的 Rules / Skills 與 `mcp_*` 工具。這不是 Antigravity 那種 session prompt 注入快照。
 2. **一鍵跳轉開啟**：點擊任一項目旁的 `📄 開啟` 按鈕，立即在編輯器開啟對應的 `.md` 檔案。
 3. **即時過濾與搜尋**：輸入關鍵字即時篩選 Rules / Skills / MCP 名稱與描述。
 4. **一鍵複製摘要**：點擊頂部 `📋` 按鈕，將整份生效上下文整理為 Markdown 格式並複製至剪貼簿。
