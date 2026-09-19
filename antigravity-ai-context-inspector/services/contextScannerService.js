@@ -212,28 +212,71 @@ class ContextScannerService {
         index: wsIndex
       });
 
-      // 掃描 Workspace Rules（專案內依檔名自然排序）
-      const wsRulesDir = path.join(wsPath, '.agents', 'rules');
-      const wsRules = await this.scanRulesInDir(wsRulesDir, wsName, false, wsIndex);
-      for (const r of wsRules) {
-        if (r.isAlwaysActive) {
-          result.rules.alwaysActive.push(r);
-        } else {
-          result.rules.conditional.push(r);
+      // 1.1 掃描專案獨立常駐規範 (AGENTS.md / GEMINI.md，支援工作區根目錄與 .agents 目錄)
+      const standaloneCandidates = [
+        path.join(wsPath, 'AGENTS.md'),
+        path.join(wsPath, 'GEMINI.md'),
+        path.join(wsPath, '.agents', 'AGENTS.md'),
+        path.join(wsPath, '.agents', 'GEMINI.md')
+      ];
+      for (const candPath of standaloneCandidates) {
+        if (fs.existsSync(candPath)) {
+          const rule = await this.parseSingleRuleFile(candPath, wsName, false, wsIndex);
+          if (rule) {
+            const alreadyExists = result.rules.alwaysActive.some(r => r.filePath && r.filePath.toLowerCase() === rule.filePath.toLowerCase());
+            if (!alreadyExists) {
+              result.rules.alwaysActive.push(rule);
+            }
+          }
         }
       }
 
-      // 掃描 Workspace Skills（專案內依資料夾名稱自然排序）
+      // 1.2 掃描 Workspace Rules（專案內依檔名自然排序）
+      const wsRulesDir = path.join(wsPath, '.agents', 'rules');
+      const wsRules = await this.scanRulesInDir(wsRulesDir, wsName, false, wsIndex);
+      for (const r of wsRules) {
+        const alreadyExists = [...result.rules.alwaysActive, ...result.rules.conditional].some(existing => existing.filePath && existing.filePath.toLowerCase() === r.filePath.toLowerCase());
+        if (!alreadyExists) {
+          if (r.isAlwaysActive) {
+            result.rules.alwaysActive.push(r);
+          } else {
+            result.rules.conditional.push(r);
+          }
+        }
+      }
+
+      // 1.3 掃描 Workspace Skills（專案內依資料夾名稱自然排序）
       const wsSkillsDir = path.join(wsPath, '.agents', 'skills');
       const wsSkills = await this.scanSkillsInDir(wsSkillsDir, wsName, 'workspace', wsIndex);
       result.skills.workspace.push(...wsSkills);
     }
 
     // 2. 掃描全域 Rules 與 Skills (排在工作區之後)
+    // 2.1 全域獨立常駐規範 (AGENTS.md / GEMINI.md)
+    const globalStandaloneCandidates = [
+      path.join(globalConfigDir, 'AGENTS.md'),
+      path.join(globalConfigDir, 'GEMINI.md')
+    ];
+    for (const candPath of globalStandaloneCandidates) {
+      if (fs.existsSync(candPath)) {
+        const rule = await this.parseSingleRuleFile(candPath, '全域設定 (Global)', true, 1000);
+        if (rule) {
+          const alreadyExists = result.rules.alwaysActive.some(r => r.filePath && r.filePath.toLowerCase() === rule.filePath.toLowerCase());
+          if (!alreadyExists) {
+            result.rules.alwaysActive.push(rule);
+          }
+        }
+      }
+    }
+
+    // 2.2 全域 Rules 目錄
     const globalRulesDir = path.join(globalConfigDir, 'rules');
     const globalRules = await this.scanRulesInDir(globalRulesDir, '全域設定 (Global)', true, 1000);
     for (const r of globalRules) {
-      result.rules.alwaysActive.push(r);
+      const alreadyExists = result.rules.alwaysActive.some(existing => existing.filePath && existing.filePath.toLowerCase() === r.filePath.toLowerCase());
+      if (!alreadyExists) {
+        result.rules.alwaysActive.push(r);
+      }
     }
 
     const globalSkillsDir = path.join(globalConfigDir, 'skills');
@@ -298,7 +341,7 @@ class ContextScannerService {
    */
   static findWorkspaceRoot(filePath) {
     const cleanPath = this.normalizeFsPath(filePath).replace(/[\\/]+$/, '');
-    if (!cleanPath) return null;
+    if (!cleanPath || !path.isAbsolute(cleanPath)) return null;
 
     // 1. 如果路徑中包含 .agents，直接截取 .agents 前一層作為工作區根目錄
     const agentsIdx = cleanPath.toLowerCase().indexOf(path.sep + '.agents');
@@ -320,7 +363,7 @@ class ContextScannerService {
         // 避免將 C:\Users\User 或磁碟根目錄誤判為專案工作區
         if (curNorm === userHomeNorm || curNorm === root.toLowerCase()) break;
 
-        if (fs.existsSync(path.join(current, '.agents'))) {
+        if (fs.existsSync(path.join(current, '.agents')) || fs.existsSync(path.join(current, '.git'))) {
           return path.normalize(current);
         }
         const parent = path.dirname(current);
@@ -353,7 +396,9 @@ class ContextScannerService {
         }
       }
 
-      const isAlwaysActive = meta.trigger === 'always_on' || fileName.toLowerCase().includes('core-guidelines') || isGlobal;
+      // 判斷是否為獨立常駐規範 (AGENTS.md 或 GEMINI.md，官方標準原生常駐)
+      const isStandaloneRule = /^(agents|gemini)\.md$/i.test(fileName);
+      const isAlwaysActive = meta.trigger === 'always_on' || fileName.toLowerCase().includes('core-guidelines') || isGlobal || isStandaloneRule;
 
       let desc = meta.description || '';
       if (!desc) {
@@ -363,7 +408,24 @@ class ContextScannerService {
         }
       }
 
-      const finalSource = sourceName || (isGlobal ? '全域設定 (Global)' : this.formatWorkspaceName(path.resolve(cleanPath, '../..')));
+      let finalSource = sourceName;
+      if (!finalSource) {
+        if (isGlobal) {
+          finalSource = '全域設定 (Global)';
+        } else {
+          const wsRoot = this.findWorkspaceRoot(cleanPath);
+          if (wsRoot) {
+            finalSource = this.formatWorkspaceName(wsRoot);
+          } else {
+            const parentDir = path.dirname(cleanPath);
+            if (cleanPath.toLowerCase().includes(path.sep + '.agents' + path.sep + 'rules')) {
+              finalSource = this.formatWorkspaceName(path.resolve(cleanPath, '../..'));
+            } else {
+              finalSource = this.formatWorkspaceName(parentDir);
+            }
+          }
+        }
+      }
 
       return {
         name: fileName,

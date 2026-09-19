@@ -1,7 +1,7 @@
 {
 	"name": "antigravity-quick-access",
 	"displayName": "常用捷徑與暫存清單 (Quick Access)",
-	"description": "在 Antigravity IDE 檔案總管提供快速存取與暫存視窗：支援滑鼠拖曳引用至 Chat 對話框與編輯器、檔案與資料夾樹狀展開、雙擊開啟、右鍵一鍵加入、工作區隱藏連動過濾與持久化儲存",
+	"description": "在 Cursor / VS Code / Antigravity 檔案總管提供快速存取與暫存視窗：支援滑鼠拖曳引用至 AI Chat 與編輯器、檔案與資料夾樹狀展開、雙擊開啟、右鍵一鍵加入、工作區隱藏連動過濾與持久化儲存",
 	"version": "1.2.6",
 	"publisher": "antigravity-toolkit",
 	"engines": {

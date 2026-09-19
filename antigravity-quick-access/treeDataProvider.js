@@ -413,7 +413,7 @@ class QuickAccessDragAndDropController {
 
     if (uris.length > 0) {
       // 1. 設定標準 text/uri-list（以 CRLF 分隔之 URI 字串）
-      // Antigravity Chat 對話框與編輯器透過此 MIME 格式辨識拖入的檔案並生成引用
+      // 目前 IDE 的 AI Chat / 編輯器透過此 MIME 格式辨識拖入的檔案並生成引用
       const uriListText = uris.map(u => u.toString()).join('\r\n');
       treeDataTransfer.set(MIME_URI_LIST, new vscode.DataTransferItem(uriListText));
 

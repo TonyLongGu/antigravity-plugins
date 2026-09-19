@@ -1,6 +1,6 @@
-# Antigravity IDE Native Extensions Suite 🚀
+# Antigravity Plugins 🚀
 
-> 專為 **Google Antigravity IDE** 量身打造的原生 Webview 擴充套件生態系，賦予 AI 輔助編程前所未有的掌控力與流暢度。
+> 源於 **Google Antigravity IDE**，同一套也可掛到 **Cursor** 與 **VS Code**。各套件支援範圍不同：MCP Manager 與 Quota Status 僅支援 Antigravity；其餘可依環境掛載。
 
 ---
 
@@ -23,16 +23,16 @@
 
 ### 方式一：AI 智能引導安裝（最推薦 • 複製 Prompt 即裝）
 
-直接將以下提示詞複製並貼到 **Antigravity IDE 的 AI Chat** 對話框：
+直接將以下提示詞複製並貼到 **目前 IDE 的 AI Chat**（Cursor / Antigravity / VS Code Copilot Chat）：
 
 ```text
-請幫我從 GitHub (https://github.com/TonyLongGu/antigravity-plugins.git) 安裝 Antigravity IDE 原生擴充套件。
+請幫我從 GitHub (https://github.com/TonyLongGu/antigravity-plugins.git) 安裝 Antigravity Plugins。
 
 請依序執行以下引導流程：
-1. 先詢問我要安裝哪些套件（提供選項：一鍵安裝全部 6 大套件，或自選個別套件）。
-2. 詢問我希望將專案原始碼 Clone/放置在本機的哪個目錄（提供預設建議路徑，如 D:\antigravity-plugins）。
-3. 根據我的回覆，自動在該目錄執行 Git Clone，並自動為選定的套件建立 IDE 擴充功能掛載。
-4. 安裝完成後，提醒我重新載入視窗 (Developer: Reload Window)。
+1. 先確認我目前使用的 IDE（Antigravity / Cursor / VS Code）。
+2. 詢問我要安裝哪些套件（全部，或自選）。不相容目前 IDE 的套件請略過並說明原因（MCP Manager 與 Quota Status 僅支援 Antigravity）。
+3. 詢問本機放置目錄（預設建議 D:\antigravity-plugins），然後 Git Clone 並掛載到該 IDE 的 extensions 目錄。
+4. 完成後提醒重載視窗 (Developer: Reload Window)；若是 VS Code，建議完整關閉再開。
 ```
 
 ---
@@ -42,7 +42,7 @@
 1. 下載或 Clone 本倉庫至本地任意目錄（例如 `D:\antigravity-plugins`）。
 2. **安裝全部套件**：雙擊根目錄下的 `install-all.bat`（或以 PowerShell 執行 `install-all.ps1`）。
 3. **單獨安裝特定套件**：進入該套件資料夾（例如 `antigravity-toolbox/`），雙擊其內部的 `install-extension.bat`。
-4. 在 Antigravity IDE 中按 `Ctrl + Shift + P`，輸入並執行 **`Developer: Reload Window`** 即可立即生效！
+4. Antigravity / Cursor：按 `Ctrl + Shift + P`，執行 **`Developer: Reload Window`**。VS Code：建議完整關閉後再重開。安裝腳本會詢問目標 IDE；不相容套件會自動略過。
 
 ---
 

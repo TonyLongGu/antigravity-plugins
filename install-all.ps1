@@ -51,6 +51,6 @@ if ($total -gt 0 -and $success -eq $total) {
 } else {
     Write-Host "  [Info] Installation finished: $success / $total extensions installed." -ForegroundColor Yellow
 }
-Write-Host "  In Antigravity IDE, press [Ctrl + Shift + P] and run:" -ForegroundColor White
-Write-Host "  Developer: Reload Window to activate immediately!" -ForegroundColor Cyan
+Write-Host "  Antigravity / Cursor: press [Ctrl + Shift + P] and run Developer: Reload Window." -ForegroundColor White
+Write-Host "  VS Code: fully quit and reopen so extensions.json is not overwritten." -ForegroundColor Cyan
 Write-Host "========================================================" -ForegroundColor Cyan

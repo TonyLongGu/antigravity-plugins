@@ -1,13 +1,13 @@
 # 常用捷徑與暫存清單 (Quick Access)
 
-專為 **Google Antigravity IDE** 設計的檔案總管獨立暫存與快速存取視窗。
+檔案總管獨立暫存與快速存取視窗，支援 **Cursor**、**Google Antigravity IDE** 與 **Visual Studio Code**。同一份擴充套件可掛到各 IDE 的 `extensions` 目錄，不必另打包。
 
 ## 核心功能
 
 1. **檔案總管獨立視圖**：直接常駐於檔案總管（Explorer）側邊欄，可隨意收合與調整順序。
 2. **滑鼠拖曳支援 (Drag & Drop)**：
-   - **拖曳至 Chat 對話框**：選取清單中的檔案/資料夾（支援多選）直接拖入 Antigravity 對話框，以標準 `text/uri-list` 引用為 `@檔案` 或路徑。
-   - **拖曳至編輯器/終端機**：拖曳至程式碼編輯器中插入相對路徑，拖曳至終端機直接貼上完整路徑。
+   - **拖曳至 AI Chat / 編輯器**：選取清單中的檔案/資料夾（支援多選）拖入目前 IDE 的 AI Chat 或編輯器，以標準 `text/uri-list` 引用為 `@檔案` 或路徑。
+   - **拖曳至終端機**：拖曳至終端機直接貼上完整路徑。
    - **從外部/檔案總管拖入**：直接將檔案總管中的檔案/資料夾拖進「常規釘選」或「臨時暫存」分組完成加入。
    - **分類拖曳切換**：在「常規釘選」與「臨時暫存」兩分類之間拖曳以切換狀態。
 3. **多選與批次操作 (Multi-Select)**：
@@ -28,7 +28,7 @@
 
 ## 操作方式
 
-- **拖曳引用**：按住滑鼠左鍵將清單項目拖入 **Chat 對話框**（支援單選或多選批次拖曳），即可快速引用檔案。
+- **拖曳引用**：按住滑鼠左鍵將清單項目拖入 **AI Chat 或編輯器**（支援單選或多選批次拖曳），即可快速引用檔案。
 - **拖放加入**：從 IDE 內建檔案總管或系統檔案總管將項目拖進清單或釘選區塊。
 - **加入暫存**：在檔案總管任意檔案/資料夾按右鍵（支援單選與多選）➔ 選擇 **「加入暫存清單 (Scratchpad)」** 或 **「加入常規釘選 (Pinned)」**。
 - **編輯器加入**：在分頁標籤按右鍵 ➔ 選擇 **「加入暫存清單」**。
@@ -41,9 +41,9 @@
   - `[Pin]` 切換 釘選 / 臨時（支援頂層項目及資料夾展開內部之子項目）
   - `[Remove]` 從清單移除（僅針對頂層加入之項目）
 
-## 安裝與卸載 (僅支援 Antigravity IDE)
+## 安裝與卸載 (Cursor / Antigravity / VS Code)
 
-腳本具備**智慧環境偵測**機制：僅會部署至本機已安裝的 Antigravity IDE，若未安裝會自動略過，絕不建立多餘的空資料夾。安裝時也會清除先前掛在 Cursor / VS Code 的殘留 Junction。
+腳本具備智慧環境偵測，會辨識本機已安裝的 IDE（Cursor、VS Code、VS Code Insiders、Antigravity IDE）並按你選擇的目標掛載：
 
-- **安裝**：執行 `install-extension.ps1` 或雙擊 `install-extension.bat`，腳本只會部署至 Antigravity IDE，**不會安裝至 Cursor 或 VS Code**。完成後按 `Ctrl + Shift + P` 執行 `Developer: Reload Window`。
-- **卸載**：執行 `uninstall-extension.ps1` 或雙擊 `uninstall-extension.bat`，自動清理本機所有已部署環境的擴充連結與註冊紀錄（含 Cursor / VS Code 殘留）。
+- **安裝**：執行 `install-extension.ps1` 或雙擊 `install-extension.bat`，選擇安裝目標後建立 Junction。Antigravity / Cursor 完成後按 `Ctrl + Shift + P` 執行 `Developer: Reload Window`；VS Code 建議完整關閉後再重開。
+- **卸載**：執行 `uninstall-extension.ps1` 或雙擊 `uninstall-extension.bat`，自動清理本機所有已部署環境的擴充連結與註冊紀錄。

@@ -277,7 +277,7 @@ class TranscriptParserService {
   static async _extractSessionMetadataFromDb(convId) {
     const dbPath = path.join(this.getConversationsDir(), `${convId}.db`);
     if (!fs.existsSync(dbPath)) {
-      return { alwaysActiveRules: [], conditionalRules: [], availableSkills: [], workspaces: [] };
+      return { hasSessionPrompt: false, alwaysActiveRules: [], conditionalRules: [], availableSkills: [], workspaces: [] };
     }
 
     try {
@@ -332,14 +332,21 @@ class TranscriptParserService {
         }
       }
 
+      const hasSessionPrompt = str.includes('<user_rules>') || 
+                               str.includes('Available skills:') || 
+                               str.includes('<customizations>') || 
+                               availableSkills.size > 0 || 
+                               alwaysActiveRules.size > 0;
+
       return {
+        hasSessionPrompt: hasSessionPrompt,
         alwaysActiveRules: Array.from(alwaysActiveRules),
         conditionalRules: Array.from(conditionalRules),
         availableSkills: Array.from(availableSkills),
         workspaces: Array.from(workspaces)
       };
     } catch (err) {
-      return { alwaysActiveRules: [], conditionalRules: [], availableSkills: [], workspaces: [] };
+      return { hasSessionPrompt: false, alwaysActiveRules: [], conditionalRules: [], availableSkills: [], workspaces: [] };
     }
   }
 
@@ -439,11 +446,11 @@ class TranscriptParserService {
 
               // 檢查 Cwd 或 DirectoryPath 是否指向專案
               if (tc.args?.Cwd && typeof tc.args.Cwd === 'string') {
-                const wsRoot = ContextScannerService.findWorkspaceRoot(tc.args.Cwd) || (fs.existsSync(tc.args.Cwd) ? path.normalize(tc.args.Cwd) : null);
+                const wsRoot = ContextScannerService.findWorkspaceRoot(tc.args.Cwd) || (path.isAbsolute(tc.args.Cwd) && fs.existsSync(tc.args.Cwd) ? path.normalize(tc.args.Cwd) : null);
                 if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
               }
               if (tc.args?.DirectoryPath && typeof tc.args.DirectoryPath === 'string') {
-                const wsRoot = ContextScannerService.findWorkspaceRoot(tc.args.DirectoryPath) || (fs.existsSync(tc.args.DirectoryPath) ? path.normalize(tc.args.DirectoryPath) : null);
+                const wsRoot = ContextScannerService.findWorkspaceRoot(tc.args.DirectoryPath) || (path.isAbsolute(tc.args.DirectoryPath) && fs.existsSync(tc.args.DirectoryPath) ? path.normalize(tc.args.DirectoryPath) : null);
                 if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
               }
 
@@ -518,8 +525,12 @@ class TranscriptParserService {
                     const wsRoot = ContextScannerService.findWorkspaceRoot(cleanFp);
                     if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
                   }
-                  if (lowerFp.includes('.agents\\rules') || lowerFp.includes('/.agents/rules') || lowerFp.includes('.gemini\\config\\rules') || lowerFp.includes('/.gemini/config/rules')) {
-                    const ruleKey = path.basename(cleanFp).toLowerCase();
+                  const baseName = path.basename(cleanFp).toLowerCase();
+                  const isStandaloneRule = baseName === 'agents.md' || baseName === 'gemini.md';
+                  const isRulesDirFile = lowerFp.includes('.agents\\rules') || lowerFp.includes('/.agents/rules') || lowerFp.includes('.gemini\\config\\rules') || lowerFp.includes('/.gemini/config/rules');
+
+                  if (isRulesDirFile || isStandaloneRule) {
+                    const ruleKey = baseName;
                     invokedRules.add(ruleKey);
                     discoveredRulePaths.set(ruleKey, cleanFp);
                     const wsRoot = ContextScannerService.findWorkspaceRoot(cleanFp);
@@ -549,8 +560,12 @@ class TranscriptParserService {
                   const wsRoot = ContextScannerService.findWorkspaceRoot(cleanFp);
                   if (wsRoot) discoveredWorkspaceRoots.add(wsRoot);
                 }
-                if (lowerFp.includes('.agents\\rules') || lowerFp.includes('/.agents/rules') || lowerFp.includes('.gemini\\config\\rules') || lowerFp.includes('/.gemini/config/rules')) {
-                  const ruleKey = path.basename(cleanFp).toLowerCase();
+                const baseName = path.basename(cleanFp).toLowerCase();
+                const isStandaloneRule = baseName === 'agents.md' || baseName === 'gemini.md';
+                const isRulesDirFile = lowerFp.includes('.agents\\rules') || lowerFp.includes('/.agents/rules') || lowerFp.includes('.gemini\\config\\rules') || lowerFp.includes('/.gemini/config/rules');
+
+                if (isRulesDirFile || isStandaloneRule) {
+                  const ruleKey = baseName;
                   invokedRules.add(ruleKey);
                   discoveredRulePaths.set(ruleKey, cleanFp);
                   const wsRoot = ContextScannerService.findWorkspaceRoot(cleanFp);
@@ -591,10 +606,15 @@ class TranscriptParserService {
     const seenWsPaths = new Set();
 
     for (const wsRoot of discoveredWorkspaceRoots) {
+      if (!wsRoot || typeof wsRoot !== 'string' || !path.isAbsolute(wsRoot)) continue;
       const lower = wsRoot.toLowerCase();
       if (!seenWsPaths.has(lower) && fs.existsSync(wsRoot)) {
-        seenWsPaths.add(lower);
-        effectiveWsPaths.push(wsRoot);
+        try {
+          if (fs.statSync(wsRoot).isDirectory()) {
+            seenWsPaths.add(lower);
+            effectiveWsPaths.push(wsRoot);
+          }
+        } catch (e) {}
       }
     }
 
@@ -620,124 +640,172 @@ class TranscriptParserService {
     // 5. 透過 ContextScanner 取得環境基準
     const baseEnv = await ContextScannerService.scanLiveEnvironment(effectiveWorkspaceObjects);
 
-    // 6. DB 原生 System Prompt 逆向注入與日誌足跡直接補全
-    // 6.1 補全 Always-Active Rules
-    for (const rulePath of dbSessionMeta.alwaysActiveRules) {
-      const exists = baseEnv.rules.alwaysActive.some(r => r.filePath && r.filePath.toLowerCase() === rulePath.toLowerCase());
-      if (!exists) {
-        const parsedRule = await ContextScannerService.parseSingleRuleFile(rulePath);
+    // 6. DB 原生 System Prompt 逆向還原與日誌足跡歷史對齊（消除時空矛盾，嚴格還原歷史現場）
+    const hasSessionDb = Boolean(dbSessionMeta && dbSessionMeta.hasSessionPrompt);
+    const normDbAlwaysActive = new Set((dbSessionMeta.alwaysActiveRules || []).map(p => ContextScannerService.normalizeFsPath(p).toLowerCase()));
+    const normDbConditional = new Set((dbSessionMeta.conditionalRules || []).map(p => ContextScannerService.normalizeFsPath(p).toLowerCase()));
+    const normDbSkills = new Set((dbSessionMeta.availableSkills || []).map(p => ContextScannerService.normalizeFsPath(p).toLowerCase()));
+
+    // 輔助函式：檢查實體檔案建立時間是否早於該對話活躍時間（時空防護：防範未來新增的檔案倒灌）
+    const isFileCreatedBeforeConv = (filePath) => {
+      if (!filePath) return false;
+      try {
+        const cleanFp = ContextScannerService.normalizeFsPath(filePath);
+        if (!cleanFp || !fs.existsSync(cleanFp)) return false;
+        const stat = fs.statSync(cleanFp);
+        const birthMs = stat.birthtimeMs || stat.ctimeMs || stat.mtimeMs;
+        return birthMs <= (targetConv.mtime + 60000);
+      } catch (e) {
+        return false;
+      }
+    };
+
+    // 6.1 嚴格時光機還原：Always-Active Rules
+    const finalAlwaysActive = [];
+    if (hasSessionDb) {
+      // 具備 DB System Prompt 紀錄：以此對話建立時真正注入之 <RULE[...]> 為唯一依據
+      for (const rulePath of dbSessionMeta.alwaysActiveRules) {
+        const cleanP = ContextScannerService.normalizeFsPath(rulePath);
+        const lowerP = cleanP.toLowerCase();
+        let ruleObj = baseEnv.rules.alwaysActive.find(r => ContextScannerService.normalizeFsPath(r.filePath).toLowerCase() === lowerP);
+        if (!ruleObj) {
+          ruleObj = await ContextScannerService.parseSingleRuleFile(cleanP);
+        }
+        if (ruleObj) {
+          finalAlwaysActive.push({
+            ...ruleObj,
+            isAlwaysActive: true,
+            isInvoked: true
+          });
+        }
+      }
+    } else {
+      // 無 DB 紀錄時：過濾掉該對話結束之後才建立的未來檔案
+      for (const r of baseEnv.rules.alwaysActive) {
+        if (isFileCreatedBeforeConv(r.filePath)) {
+          finalAlwaysActive.push({
+            ...r,
+            isAlwaysActive: true,
+            isInvoked: true
+          });
+        }
+      }
+    }
+
+    // 6.2 嚴格時光機還原：Conditional Rules
+    const finalConditional = [];
+    if (hasSessionDb) {
+      for (const rulePath of dbSessionMeta.conditionalRules) {
+        const cleanP = ContextScannerService.normalizeFsPath(rulePath);
+        const lowerP = cleanP.toLowerCase();
+        let ruleObj = baseEnv.rules.conditional.find(r => ContextScannerService.normalizeFsPath(r.filePath).toLowerCase() === lowerP);
+        if (!ruleObj) {
+          ruleObj = await ContextScannerService.parseSingleRuleFile(cleanP);
+        }
+        if (ruleObj) {
+          const isInvoked = invokedRules.has(path.basename(cleanP).toLowerCase());
+          finalConditional.push({
+            ...ruleObj,
+            isAlwaysActive: false,
+            isInvoked: isInvoked
+          });
+        }
+      }
+    } else {
+      for (const r of baseEnv.rules.conditional) {
+        if (isFileCreatedBeforeConv(r.filePath)) {
+          const isInvoked = invokedRules.has(r.name.toLowerCase());
+          finalConditional.push({
+            ...r,
+            isAlwaysActive: false,
+            isInvoked: isInvoked
+          });
+        }
+      }
+    }
+
+    // 6.3 補充動態日誌中調用、且在當前環境中存在的 Rules（去重保護）
+    for (const [ruleKey, rulePath] of discoveredRulePaths.entries()) {
+      const cleanRulePath = ContextScannerService.normalizeFsPath(rulePath);
+      if (!cleanRulePath || !fs.existsSync(cleanRulePath)) continue;
+      const lowerCleanP = cleanRulePath.toLowerCase();
+
+      const inAlways = finalAlwaysActive.some(r => ContextScannerService.normalizeFsPath(r.filePath).toLowerCase() === lowerCleanP);
+      const inCond = finalConditional.some(r => ContextScannerService.normalizeFsPath(r.filePath).toLowerCase() === lowerCleanP);
+
+      if (!inAlways && !inCond) {
+        const parsedRule = await ContextScannerService.parseSingleRuleFile(cleanRulePath);
         if (parsedRule) {
-          parsedRule.isAlwaysActive = true;
-          baseEnv.rules.alwaysActive.push(parsedRule);
+          parsedRule.isInvoked = true;
+          if (parsedRule.isAlwaysActive) {
+            finalAlwaysActive.push(parsedRule);
+          } else {
+            finalConditional.push(parsedRule);
+          }
         }
       }
     }
 
-    // 6.2 補全 Conditional Rules
-    for (const rulePath of dbSessionMeta.conditionalRules) {
-      const exists = [...baseEnv.rules.alwaysActive, ...baseEnv.rules.conditional].some(r => r.filePath && r.filePath.toLowerCase() === rulePath.toLowerCase());
-      if (!exists) {
-        const parsedRule = await ContextScannerService.parseSingleRuleFile(rulePath);
-        if (parsedRule) {
-          baseEnv.rules.conditional.push(parsedRule);
+    // 6.4 嚴格時光機還原：Skills
+    const filterAndAnnotateSkills = (skillsList) => {
+      const result = [];
+      for (const s of (skillsList || [])) {
+        const cleanP = ContextScannerService.normalizeFsPath(s.filePath);
+        const lowerP = cleanP.toLowerCase();
+        const skillKey = (s.name || s.dirName || '').toLowerCase();
+        const isInvoked = invokedSkills.has(skillKey) || (s.dirName && invokedSkills.has(s.dirName.toLowerCase()));
+
+        if (hasSessionDb) {
+          const inDb = normDbSkills.has(lowerP) || normDbSkills.has(skillKey);
+          if (inDb || isInvoked) {
+            result.push({ ...s, isInvoked: isInvoked });
+          }
+        } else {
+          if (isFileCreatedBeforeConv(s.filePath) || isInvoked) {
+            result.push({ ...s, isInvoked: isInvoked });
+          }
         }
       }
-    }
+      return result;
+    };
 
-    // 6.3 補全 Available Skills
-    for (const skillPath of dbSessionMeta.availableSkills) {
-      const exists = [
-        ...(baseEnv.skills.workspace || []),
-        ...(baseEnv.skills.global || []),
-        ...(baseEnv.skills.builtin || [])
-      ].some(s => s.filePath && s.filePath.toLowerCase() === skillPath.toLowerCase());
-      if (!exists) {
-        const parsedSkill = await ContextScannerService.parseSingleSkillFile(skillPath);
-        if (parsedSkill) {
-          baseEnv.skills.workspace.push(parsedSkill);
-        }
-      }
-    }
+    const finalSkillsWorkspace = filterAndAnnotateSkills(baseEnv.skills.workspace);
+    const finalSkillsGlobal = filterAndAnnotateSkills(baseEnv.skills.global);
+    const finalSkillsBuiltin = filterAndAnnotateSkills(baseEnv.skills.builtin);
 
-    // 6.4 補全動態日誌中的 Skills（僅保留實體檔案真實存在者）
+    // 6.5 補充動態日誌中調用的 Skills（去重保護）
     for (const [skillKey, skillPath] of discoveredSkillPaths.entries()) {
       const cleanSkillPath = ContextScannerService.normalizeFsPath(skillPath);
-      if (!cleanSkillPath || !fs.existsSync(cleanSkillPath)) {
-        continue;
-      }
+      if (!cleanSkillPath || !fs.existsSync(cleanSkillPath)) continue;
+      const lowerCleanP = cleanSkillPath.toLowerCase();
 
       const alreadyExists = [
-        ...(baseEnv.skills.workspace || []),
-        ...(baseEnv.skills.global || []),
-        ...(baseEnv.skills.builtin || [])
-      ].some(s => (s.filePath && s.filePath.toLowerCase() === cleanSkillPath.toLowerCase()) || 
-                  (s.dirName && s.dirName.toLowerCase() === skillKey) || 
+        ...finalSkillsWorkspace,
+        ...finalSkillsGlobal,
+        ...finalSkillsBuiltin
+      ].some(s => ContextScannerService.normalizeFsPath(s.filePath).toLowerCase() === lowerCleanP ||
+                  (s.dirName && s.dirName.toLowerCase() === skillKey) ||
                   (s.name && s.name.toLowerCase() === skillKey));
 
       if (!alreadyExists) {
         const parsedSkill = await ContextScannerService.parseSingleSkillFile(cleanSkillPath);
         if (parsedSkill) {
           parsedSkill.isInvoked = true;
-          baseEnv.skills.workspace.push(parsedSkill);
+          finalSkillsWorkspace.push(parsedSkill);
         }
       }
     }
 
-    // 6.5 補全動態日誌中的 Rules（僅保留實體檔案真實存在者）
-    for (const [ruleKey, rulePath] of discoveredRulePaths.entries()) {
-      const cleanRulePath = ContextScannerService.normalizeFsPath(rulePath);
-      if (!cleanRulePath || !fs.existsSync(cleanRulePath)) {
-        continue;
-      }
-
-      const alreadyExists = [
-        ...(baseEnv.rules.alwaysActive || []),
-        ...(baseEnv.rules.conditional || [])
-      ].some(r => (r.filePath && r.filePath.toLowerCase() === cleanRulePath.toLowerCase()) || 
-                  (r.name && r.name.toLowerCase() === ruleKey));
-
-      if (!alreadyExists) {
-        const parsedRule = await ContextScannerService.parseSingleRuleFile(cleanRulePath);
-        if (parsedRule) {
-          parsedRule.isInvoked = true;
-          if (parsedRule.isAlwaysActive) {
-            baseEnv.rules.alwaysActive.push(parsedRule);
-          } else {
-            baseEnv.rules.conditional.push(parsedRule);
-          }
-        }
-      }
-    }
-
-    // 7. 標註並過濾 Rules
-    const annotateRule = (r) => {
-      const isAlwaysActive = r.isAlwaysActive || dbSessionMeta.alwaysActiveRules.some(p => p.toLowerCase() === r.filePath?.toLowerCase());
-      const isInvoked = invokedRules.has(r.name.toLowerCase()) || isAlwaysActive;
-      return {
-        ...r,
-        isAlwaysActive: isAlwaysActive,
-        isInvoked: isInvoked
-      };
-    };
-
+    // 7. 彙整最終 Rules 與 Skills 清單
     const annotatedRules = {
-      alwaysActive: baseEnv.rules.alwaysActive.map(annotateRule),
-      conditional: baseEnv.rules.conditional.map(annotateRule)
-    };
-
-    // 8. 標註 Skills
-    const annotateSkill = (s) => {
-      const isInvoked = invokedSkills.has(s.name.toLowerCase()) || invokedSkills.has(s.dirName?.toLowerCase());
-      return {
-        ...s,
-        isInvoked: isInvoked
-      };
+      alwaysActive: finalAlwaysActive,
+      conditional: finalConditional
     };
 
     const annotatedSkills = {
-      workspace: (baseEnv.skills.workspace || []).map(annotateSkill),
-      global: (baseEnv.skills.global || []).map(annotateSkill),
-      builtin: (baseEnv.skills.builtin || []).map(annotateSkill)
+      workspace: finalSkillsWorkspace,
+      global: finalSkillsGlobal,
+      builtin: finalSkillsBuiltin
     };
 
     // 9. 精準標註 MCP 伺服器與其個別子工具的調用狀態
