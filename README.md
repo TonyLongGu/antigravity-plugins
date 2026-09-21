@@ -1,19 +1,19 @@
 # Antigravity Plugins 🚀
 
-> 源於 **Google Antigravity IDE**，同一套也可掛到 **Cursor** 與 **VS Code**。各套件支援範圍不同：MCP Manager 與 Quota Status 僅支援 Antigravity；其餘可依環境掛載。
+> 源於 **Google Antigravity IDE**，同一套也可掛到 **Cursor** 與 **VS Code**。目前僅 **AI 額度即時監控** 不支援 VS Code（該 IDE 沒有對應額度 API）；其餘套件三端皆可安裝。
 
 ---
 
 ## 📦 收錄套件清單 (6 大核心套件)
 
-| 套件名稱 | 目錄名稱 | 核心功能說明 |
-| :--- | :--- | :--- |
-| 🛠️ **全能控制中心** | `antigravity-toolbox` | 整合原生 Webview 側邊欄面板、IDE 狀態監控與高頻工具快捷中心 |
-| 📊 **AI 額度即時監控** | `antigravity-quota-status` | 狀態列即時顯示 AI 模型額度用量、重置倒數與警示提示 |
-| 🔌 **MCP 伺服器管理器** | `antigravity-mcp-manager` | 視覺化管理 MCP 設定檔、一鍵檢視工具狀態與服務熱重載 |
-| ⚡ **高頻操作快捷面板** | `antigravity-quick-access` | 提供高頻 AI 指令、工作區切換與自訂 Snippet 快速觸發面板 |
-| 📜 **專案腳本執行助手** | `antigravity-script-runner` | 自動解析 package.json / Makefile / Powershell 腳本並提供視覺化執行器 |
-| 🔍 **AI 上下文檢視儀** | `antigravity-ai-context-inspector` | 即時追蹤 Agent Context Window 注入狀況、Token 消耗與規則審計 |
+| 套件名稱 | 目錄名稱 | 核心功能說明 | 支援 IDE |
+| :--- | :--- | :--- | :--- |
+| 🛠️ **全能控制中心** | `antigravity-toolbox` | 整合原生 Webview 側邊欄面板、IDE 狀態監控與高頻工具快捷中心 | Antigravity / Cursor / VS Code |
+| 📊 **AI 額度即時監控** | `antigravity-quota-status` | 狀態列顯示額度用量與重置倒數。Antigravity 走本機 Language Server；Cursor 走雲端 usage API | Antigravity / Cursor |
+| 🔌 **MCP 伺服器管理器** | `antigravity-mcp-manager` | 視覺化列出 MCP、連線探測與備註。Antigravity 可原生開關；Cursor / VS Code 為檢視模式（開關請用各 IDE 原生 UI） | Antigravity / Cursor / VS Code |
+| ⚡ **高頻操作快捷面板** | `antigravity-quick-access` | 檔案總管獨立釘選／暫存清單，支援拖曳至 Chat、終端機與批次操作 | Antigravity / Cursor / VS Code |
+| 📜 **專案腳本執行助手** | `antigravity-script-runner` | 檔案總管／編輯器右鍵執行腳本，並提供圖片、音訊、影片檢視 | Antigravity / Cursor / VS Code |
+| 🔍 **AI 上下文檢視儀** | `antigravity-ai-context-inspector` | 即時檢視 Rules、Skills、MCP 與工作區綁定，並追蹤對話注入內容 | Antigravity / Cursor / VS Code |
 
 ---
 
@@ -30,7 +30,7 @@
 
 請依序執行以下引導流程：
 1. 先確認我目前使用的 IDE（Antigravity / Cursor / VS Code）。
-2. 詢問我要安裝哪些套件（全部，或自選）。不相容目前 IDE 的套件請略過並說明原因（MCP Manager 與 Quota Status 僅支援 Antigravity）。
+2. 詢問我要安裝哪些套件（全部，或自選）。不相容目前 IDE 的套件請略過並說明原因（目前僅 Quota Status 不支援 VS Code；MCP Manager 在 Cursor / VS Code 為檢視模式）。
 3. 詢問本機放置目錄（預設建議 D:\antigravity-plugins），然後 Git Clone 並掛載到該 IDE 的 extensions 目錄。
 4. 完成後提醒重載視窗 (Developer: Reload Window)；若是 VS Code，建議完整關閉再開。
 ```
@@ -50,7 +50,7 @@
 
 - **全套一鍵卸載**：雙擊根目錄下的 `uninstall-all.bat`（或以 PowerShell 執行 `uninstall-all.ps1`）。
 - **單獨卸載**：進入特定套件目錄雙擊 `uninstall-extension.bat`。
-- 卸載後執行 `Developer: Reload Window` 即可乾淨無痕移除。
+- 卸載後：Antigravity / Cursor 執行 `Developer: Reload Window`；VS Code 建議完整關閉再開。
 
 ---
 
