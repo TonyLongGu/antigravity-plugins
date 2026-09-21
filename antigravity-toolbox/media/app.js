@@ -1238,7 +1238,31 @@
     render(brain) {
       if (!brain) return;
       if (this.dom.size) this.dom.size.textContent = `${brain.totalMB || '0.0'} MB`;
-      if (this.dom.count) this.dom.count.textContent = I18nModule.t('unit_items', { count: brain.folderCount || 0 });
+      if (this.dom.count) {
+        this.dom.count.textContent = I18nModule.t('unit_items', { count: brain.folderCount || 0 });
+
+        // Copilot 環境：對話紀錄分散於多個工作區，以 tooltip 呈現分佈明細與索引同步狀態
+        const hints = [];
+        if (Array.isArray(brain.groups) && brain.groups.length > 0) {
+          const detail = brain.groups
+            .slice(0, 12)
+            .map((g) => I18nModule.t('brain_count_tooltip_group', {
+              label: g.label,
+              count: g.count,
+              mb: g.totalMB,
+            }))
+            .join('\n');
+          hints.push(I18nModule.t('brain_count_tooltip', {
+            containers: brain.containers || brain.groups.length,
+            groups: detail,
+          }));
+        }
+        if (typeof brain.indexSyncAvailable === 'boolean') {
+          hints.push(I18nModule.t(brain.indexSyncAvailable ? 'brain_index_sync_on' : 'brain_index_sync_off'));
+        }
+        if (hints.length > 0) this.dom.count.title = hints.join('\n\n');
+        else this.dom.count.removeAttribute('title');
+      }
     },
   };
 
@@ -1386,6 +1410,17 @@
       }
       if (brainModule) {
         brainModule.classList.toggle('hidden-by-env', !shouldShow);
+      }
+
+      // 將實際目標路徑寫入按鈕 tooltip，讓使用者在點擊前即知道會開啟何處
+      if (envInfo.paths) {
+        document.querySelectorAll('#module-config [data-target]').forEach((btn) => {
+          const target = btn.getAttribute('data-target');
+          const targetPath = envInfo.paths[target];
+          if (targetPath) btn.title = targetPath;
+        });
+        const brainBtn = document.querySelector('#module-brain [data-target="brain"]');
+        if (brainBtn && envInfo.paths.brain) brainBtn.title = envInfo.paths.brain;
       }
     },
   };

@@ -1,6 +1,6 @@
 # Antigravity 控制中心 (Antigravity Toolbox)
 
-VS Code 相容 IDE 原生側邊欄擴充套件（Cursor、VS Code、VS Code Insiders、VSCodium、Google Antigravity），支援環境智慧感應與按需掛載。
+VS Code 相容 IDE 原生側邊欄擴充套件（Cursor、VS Code、VS Code Insiders、VSCodium、Google Antigravity），支援環境智慧感應與按需掛載，並內建 GitHub Copilot 對話紀錄統計與清理。
 
 ---
 
@@ -27,6 +27,8 @@ VS Code 相容 IDE 原生側邊欄擴充套件（Cursor、VS Code、VS Code Insi
 3. **全域自訂目錄捷徑（依目前 IDE 自動切換）**：
    - **Cursor**：`~/.cursor` 根目錄、`mcp.json`、個人 Skills（`~/.cursor/skills`）、專案 Rules（`.cursor/rules`）、Plugins、`%APPDATA%\Cursor\User`
    - **Antigravity**：`~/.gemini/config`、`mcp_config.json`、Skills / Rules / Plugins、`~/.gemini/antigravity-ide`
+   - **VS Code + Copilot**：`%APPDATA%\Code\User`、`mcp.json`、Skills（`~/.agents/skills`）、個人規範（`User\prompts`）、Plugins（`~/.copilot/installed-plugins`）、`globalStorage`
+   - 🖱️ **按鈕 tooltip 顯示實際目標路徑**：點擊前即可確認會開啟哪個目錄。
 
 4. **IDE 設定檔與檔案總管過濾開關**：
    - 📄 **開啟 settings.json** (直接在 IDE 編輯器分頁開啟)
@@ -40,6 +42,13 @@ VS Code 相容 IDE 原生側邊欄擴充套件（Cursor、VS Code、VS Code Insi
 5. **對話記憶庫管理與清理**：
    - **Cursor**：統計並清理 `~/.cursor/projects/*/agent-transcripts` 各對話資料夾；開啟按鈕會進目前專案的 transcripts 目錄。
    - **Antigravity**：統計並清理 `~/.gemini/antigravity-ide/brain`。
+   - **VS Code + Copilot**：統計並清理 Copilot Chat 對話紀錄，跨所有工作區聚合：
+     - 對話本體：`workspaceStorage/<hash>/chatSessions/<sessionId>.jsonl`（各專案獨立）＋ `globalStorage/emptyWindowChatSessions`（無工作區視窗）。
+     - 單筆對話數與空間會依專案分組，滑鼠移至「對話紀錄數」可看分佈明細。
+     - ⚠️ **清理時會一併同步 VS Code 對話索引**（`state.vscdb` 內的 `chat.ChatSessionStore.index`），避免歷史清單殘留點不開的幽靈項目；因對話索引載入後常駐記憶體，清理建議日後**重載視窗**以確保清單一致。
+     - 索引同步需 VS Code 內建 `node:sqlite`（約 VS Code 1.11x 以上）；較舊版本會自動降級為僅刪除檔案，並於介面提示。
+     - 寫入索引前會自動備份該 `state.vscdb`（副檔名 `.toolbox-bak`），且僅動對話索引單一鍵，不影響其他儲存資料。
+     - 範圍說明：Copilot CLI / Agent Host 的對話（`~/.copilot/session-state`）不屬本卡片管理範圍，故不會被清理。
    - 🎚️ **動態時間滑桿（2 ~ 4 個月，預設 3 個月）**，清理前有二次確認。
 
 ---
@@ -65,4 +74,42 @@ Cursor、VS Code 與 Antigravity 都實作 VS Code Extension API（`require('vsc
    - 點擊左側活動列的 **🛠️ (Antigravity 控制中心)** 圖示。
    - 或點擊右下角狀態列 **`$(tools) 控制中心`** 按鈕。
 
-> 💡 **環境感應**：在 Cursor 會顯示 Cursor 本機路徑（`~/.cursor`、agent-transcripts）；在 Antigravity 則顯示 `~/.gemini`。純 VS Code 且本機沒有 Antigravity 時，這兩張卡片會自動隱藏。
+> 💡 **環境感應**：在 Cursor 會顯示 Cursor 本機路徑（`~/.cursor`、agent-transcripts）；在 Antigravity 則顯示 `~/.gemini`；在 VS Code 偵測到 GitHub Copilot 時顯示 Copilot 專屬路徑與 `chatSessions` 對話紀錄。
+
+### 卡片顯示決策
+
+「全域自訂」與「對話記憶庫」兩張卡片會依環境自動切換內容，決策優先序如下：
+
+| 順位 | 環境 | 顯示內容 |
+| :--- | :--- | :--- |
+| 1 | Cursor | `~/.cursor`、`agent-transcripts` |
+| 2 | Antigravity IDE | `~/.gemini`、`brain` |
+| 3 | VS Code ＋ 手動開啟 `showAntigravityModulesInVsCode` 且有 Antigravity | `~/.gemini`、`brain` |
+| 4 | VS Code ＋ 偵測到 GitHub Copilot | Copilot 路徑、`chatSessions` |
+| 5 | 其他 | 兩張卡片自動隱藏 |
+
+相關設定：
+
+| 設定鍵 | 預設 | 說明 |
+| :--- | :--- | :--- |
+| `antigravity.showAntigravityModulesInVsCode` | `false` | 在 VS Code 顯示 Antigravity 專屬卡片；優先於 Copilot 卡片 |
+| `antigravity.showCopilotModulesInVsCode` | `true` | 在 VS Code 偵測到 Copilot 時顯示對應卡片；設為 `false` 可隱藏 |
+
+## 🗂️ 模組結構
+
+```
+extension.js                        擴充套件進入點（Webview 訊息路由、命令註冊、事件監聽）
+services/
+  systemService.js                  IDE 偵測、全域路徑對照、環境特徵、檔案總管過濾
+  workspaceService.js               多專案工作區分析與同名修正
+  scriptService.js                  專案腳本執行器
+  brainService.js                   對話記憶庫分派層（依環境轉派 Cursor / Antigravity / Copilot）
+  copilotChatService.js             Copilot Chat 對話紀錄統計與清理（含索引同步）
+  skillSyncService.js               全域 Skills 連結同步
+lib/
+  chat-session-index.js             VS Code 對話索引（state.vscdb）外部讀寫
+  skill-junction-sync.js            Windows Junction 零複製連結
+media/
+  app.js / index.html / style.css   側邊欄 Webview 介面
+  locales.js                        多國語言字典（zh-TW / en，兩邊鍵必須對稱）
+```

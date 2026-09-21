@@ -1,8 +1,8 @@
 {
 	"name": "antigravity-toolbox",
 	"displayName": "Antigravity 控制中心 (Toolbox)",
-	"description": "VS Code 相容 IDE 側邊欄控制中心（Cursor / VS Code / Antigravity）：整合多專案工作區同名修正、專案腳本執行器 (ps1/bat/cmd)、全域設定/技能/規範目錄直達、Brain 對話歷史紀錄清理與 settings.json 快速編輯",
-	"version": "1.3.8",
+	"description": "VS Code 相容 IDE 側邊欄控制中心（Cursor / VS Code / VS Code Insiders / VSCodium / Antigravity）：整合多專案工作區同名修正、專案腳本執行器 (ps1/bat/cmd)、全域設定/技能/規範目錄直達、GitHub Copilot 對話紀錄統計與清理、Brain 對話歷史紀錄清理與 settings.json 快速編輯",
+	"version": "1.4.0",
 	"publisher": "antigravity-toolkit",
 	"engines": {
 		"vscode": "^1.80.0"
@@ -34,7 +34,12 @@
 				"antigravity.showAntigravityModulesInVsCode": {
 					"type": "boolean",
 					"default": false,
-					"description": "在純 VS Code 等相容環境中若偵測到本機有 Antigravity，是否顯示 Antigravity 專屬卡片（全域自訂 ~/.gemini 與對話記憶庫 Brain）。預設為關閉 (false)；Cursor 環境自帶專屬配置不受此限制"
+					"description": "在純 VS Code 等相容環境中若偵測到本機有 Antigravity，是否顯示 Antigravity 專屬卡片（全域自訂 ~/.gemini 與對話記憶庫 Brain）。預設為關閉 (false)；Cursor 環境自帶專屬配置不受此限制。注意：此設定優先於 Copilot 卡片，若本機同時具備 Antigravity 與 Copilot，開啟本設定將改顯示 Antigravity 路徑"
+				},
+				"antigravity.showCopilotModulesInVsCode": {
+					"type": "boolean",
+					"default": true,
+					"description": "在 VS Code 偵測到 GitHub Copilot 時，是否顯示對應的全域自訂卡片（User 設定目錄、mcp.json、Skills、prompts、Plugins）與對話記憶庫卡片（Copilot Chat 對話紀錄統計與清理）。預設為開啟 (true)；設為 false 可隱藏這兩張卡片"
 				},
 				"antigravity.syncSkillsOnFolderToggle": {
 					"type": "boolean",

@@ -82,6 +82,55 @@ function detectHostIde() {
   };
 }
 
+/** @type {boolean | null} */
+let _copilotEnvironmentCache = null;
+
+/**
+ * 偵測目前環境是否為「VS Code 家族 + GitHub Copilot」
+ *
+ * 判定優先序（由強至弱）：
+ *   1. Extension API 是否載入 Copilot 擴充套件（最準確）
+ *   2. 使用者資料目錄是否已有 Copilot Chat 儲存區
+ *   3. 是否存在 BYOK 語言模型設定或 Copilot CLI 家目錄
+ *
+ * @returns {boolean}
+ */
+function isCopilotEnvironment() {
+  if (_copilotEnvironmentCache !== null) return _copilotEnvironmentCache;
+
+  const host = detectHostIde();
+  const isVsCodeFamily = host.id === 'vscode' || host.id === 'vscode-insiders' || host.id === 'vscodium';
+  if (!isVsCodeFamily) {
+    _copilotEnvironmentCache = false;
+    return _copilotEnvironmentCache;
+  }
+
+  try {
+    const ext = vscode.extensions.getExtension('github.copilot-chat')
+      || vscode.extensions.getExtension('github.copilot');
+    if (ext) {
+      _copilotEnvironmentCache = true;
+      return _copilotEnvironmentCache;
+    }
+  } catch {}
+
+  const homeDir = getHomeDir();
+  const markers = [
+    path.join(host.userSettingsDir, 'globalStorage', 'github.copilot-chat'),
+    path.join(host.userSettingsDir, 'chatLanguageModels.json'),
+    path.join(homeDir, '.copilot', 'session-store.db'),
+  ];
+  _copilotEnvironmentCache = markers.some((marker) => fs.existsSync(marker));
+  return _copilotEnvironmentCache;
+}
+
+/**
+ * 清除 Copilot 環境偵測快取（供設定變更或測試時重新判定）
+ */
+function resetCopilotEnvironmentCache() {
+  _copilotEnvironmentCache = null;
+}
+
 /**
  * 輔助安全建立並獲取目錄
  * @param {string} dirPath
@@ -276,6 +325,29 @@ function getGlobalPaths() {
     };
   }
 
+  if (isCopilotEnvironment()) {
+    const userDir = host.userSettingsDir;
+    const copilotHome = path.join(homeDir, '.copilot');
+    const workspaceRoot = path.join(userDir, 'workspaceStorage');
+
+    return {
+      globalConfig: userDir,
+      // Copilot 支援 .agents/skills 作為專案層級 Skills；本工具既有同步機制亦以此為全域集散地
+      skills: path.join(homeDir, '.agents', 'skills'),
+      // 使用者層級客製化（*.instructions.md / *.prompt.md / *.agent.md），會隨 Settings Sync 漫遊
+      rules: path.join(userDir, 'prompts'),
+      plugins: path.join(copilotHome, 'installed-plugins'),
+      mcpConfig: path.join(userDir, 'mcp.json'),
+      appData: path.join(userDir, 'globalStorage'),
+      // 對話紀錄分散於各工作區，開啟入口統一導向 workspaceStorage 根
+      brain: workspaceRoot,
+      brainScanRoot: workspaceRoot,
+      userSettingsDir: userDir,
+      userSettingsPath: host.userSettingsPath,
+      ideExtensions: host.ideExtensionsDir,
+    };
+  }
+
   const globalConfigRoot = path.join(homeDir, '.gemini', 'config');
   const globalAppRoot = path.join(homeDir, '.gemini', 'antigravity-ide');
 
@@ -302,6 +374,10 @@ function collectBrainSessionDirs() {
   const paths = getGlobalPaths();
   const host = detectHostIde();
   const sessions = [];
+
+  // Copilot 的對話為「單檔 jsonl 分散於各工作區」，非資料夾結構，
+  // 一律改由 copilotChatService 處理，此處不提供項目以免語意混淆。
+  if (isCopilotEnvironment()) return sessions;
 
   if (host.id === 'cursor') {
     const projectsRoot = paths.brainScanRoot;
@@ -361,12 +437,35 @@ function getEnvironmentInfo() {
   const config = vscode.workspace.getConfiguration('antigravity');
   // 預設為 false：在純 VS Code 等外部 IDE 中預設不顯示 Antigravity 專屬卡片
   const showInVsCode = config.get('showAntigravityModulesInVsCode', false);
+  // 預設為 true：VS Code 偵測到 Copilot 時自動顯示對應卡片
+  const showCopilotInVsCode = config.get('showCopilotModulesInVsCode', true);
+  const isCopilot = isCopilotEnvironment();
 
-  const uiFlavor = host.isCursor ? 'cursor' : 'antigravity';
-  // 1. Antigravity IDE：顯示原生的 ~/.gemini 與 Brain
-  // 2. Cursor：顯示 Cursor 專屬的 ~/.cursor 與 Transcripts
-  // 3. VS Code 等環境：預設隱藏，僅當使用者手動開啟設定時才顯示
-  const showHostModules = host.isCursor || isAntigravityIDE || Boolean(showInVsCode);
+  // UI 語系變體（決定採用的 i18n 鍵後綴）與卡片顯示權限決策：
+  // 1. Cursor            → cursor（顯示 ~/.cursor 與 agent-transcripts）
+  // 2. Antigravity IDE   → antigravity（顯示 ~/.gemini 與 brain）
+  // 3. VS Code + 手動開啟設定且有 Antigravity → antigravity（尊重使用者明確設定）
+  // 4. VS Code + Copilot → copilot（顯示 Copilot 對應路徑與 chatSessions 對話紀錄）
+  // 5. 其餘               → 隱藏兩張主機相依卡片
+  let uiFlavor = 'antigravity';
+  let showHostModules = false;
+
+  if (host.isCursor) {
+    uiFlavor = 'cursor';
+    showHostModules = true;
+  } else if (isAntigravityIDE) {
+    uiFlavor = 'antigravity';
+    showHostModules = true;
+  } else if (Boolean(showInVsCode) && hasAntigravity) {
+    uiFlavor = 'antigravity';
+    showHostModules = true;
+  } else if (isCopilot && showCopilotInVsCode) {
+    uiFlavor = 'copilot';
+    showHostModules = true;
+  }
+
+  // 實際目標路徑摘要（前端用於按鈕 tooltip，讓使用者點擊前就知道會開啟何處）
+  const paths = getGlobalPaths();
 
   return {
     appName: host.appName,
@@ -374,11 +473,22 @@ function getEnvironmentInfo() {
     hostDisplayName: host.displayName,
     isAntigravityIDE,
     isCursor: host.isCursor,
+    isCopilot,
     hasAntigravity,
     hasCursor: host.isCursor || cursorHomeExists,
     uiFlavor,
+    hostMode: uiFlavor,
     showHostModules,
     showAntigravityCards: showHostModules,
+    paths: {
+      globalConfig: paths.globalConfig,
+      mcpConfig: paths.mcpConfig,
+      skills: paths.skills,
+      rules: paths.rules,
+      plugins: paths.plugins,
+      appData: paths.appData,
+      brain: paths.brain,
+    },
   };
 }
 
@@ -500,6 +610,8 @@ async function toggleExplorerSetting(settingKey, provider) {
 module.exports = {
   bindExtensionContext,
   detectHostIde,
+  isCopilotEnvironment,
+  resetCopilotEnvironmentCache,
   collectBrainSessionDirs,
   ensureDirectory,
   safeJsonParse,

@@ -436,6 +436,10 @@ function activate(context) {
         provider.broadcastLocale(newLocale);
       }
       if (e.affectsConfiguration('antigravity.showAntigravityModulesInVsCode')) {
+        systemService.resetCopilotEnvironmentCache();
+        provider.pushStatus(50);
+      }
+      if (e.affectsConfiguration('antigravity.showCopilotModulesInVsCode')) {
         provider.pushStatus(50);
       }
       if (

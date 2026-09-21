@@ -5,7 +5,9 @@ const {
   getDirectorySizeBytesAsync,
   collectBrainSessionDirs,
   detectHostIde,
+  isCopilotEnvironment,
 } = require('./systemService');
+const copilotChatService = require('./copilotChatService');
 
 let _cachedBrainStats = null;
 let _cachedBrainStatsTime = 0;
@@ -15,10 +17,26 @@ function isCursorHost() {
 }
 
 /**
+ * 是否為 VS Code + Copilot 環境
+ *
+ * Copilot 的對話儲存架構與 Antigravity / Cursor 完全不同
+ * （單檔 jsonl 分散於各個 workspaceStorage/<hash>/chatSessions，而非單一 Brain 目錄），
+ * 故統計與清理皆委派給 copilotChatService 專責處理。
+ * @returns {boolean}
+ */
+function isCopilotHost() {
+  return isCopilotEnvironment();
+}
+
+/**
  * 取得對話記憶庫統計資訊 (具備 5 秒快取以保證 UI 極致流暢)
  * @param {boolean} [forceRefresh=false]
  */
 async function getBrainStats(forceRefresh = false) {
+  if (isCopilotHost()) {
+    return copilotChatService.getStats(forceRefresh);
+  }
+
   const now = Date.now();
   if (!forceRefresh && _cachedBrainStats && (now - _cachedBrainStatsTime < 5000)) {
     return _cachedBrainStats;
@@ -65,6 +83,10 @@ async function getBrainStats(forceRefresh = false) {
  * @param {object} [provider]
  */
 async function cleanBrainHistory(months = 3, provider = null) {
+  if (isCopilotHost()) {
+    return copilotChatService.cleanHistory(months, provider);
+  }
+
   const safeMonths = Math.max(2, Math.min(4, parseInt(months, 10) || 3));
   const days = safeMonths * 30;
   const cutoffMs = Date.now() - days * 24 * 60 * 60 * 1000;
