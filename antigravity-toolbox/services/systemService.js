@@ -493,6 +493,25 @@ function getEnvironmentInfo() {
 }
 
 /**
+ * 以一般文字編輯器開啟目前 IDE 的 User settings.json。
+ *
+ * 不可改回 workbench.action.openSettingsJson：Cursor 的 Settings UI
+ * 會走 serializeReplyOK IPC；從 Webview 觸發時，renderer 常因大型物件圖
+ * 與 Method not found: toJSON 進入忙等，整個視窗卡住甚至當機。
+ * 直接開實體檔與 mcp.json 同一條路徑，避開 Settings UI。
+ */
+async function openUserSettingsJson() {
+  const paths = getGlobalPaths();
+  ensureDirectory(paths.userSettingsDir);
+  if (!fs.existsSync(paths.userSettingsPath)) {
+    fs.writeFileSync(paths.userSettingsPath, '{}\n', 'utf-8');
+  }
+  const uri = vscode.Uri.file(paths.userSettingsPath);
+  const doc = await vscode.workspace.openTextDocument(uri);
+  await vscode.window.showTextDocument(doc, { preview: false });
+}
+
+/**
  * 處理開啟特定目標（設定檔、JSON、目錄）
  * @param {string} target
  * @param {object} provider
@@ -501,7 +520,7 @@ async function handleOpenTarget(target, provider) {
   const paths = getGlobalPaths();
   try {
     if (target === 'settingsJson') {
-      await vscode.commands.executeCommand('workbench.action.openSettingsJson');
+      await openUserSettingsJson();
     } else if (target === 'settingsFolder') {
       await openFolderInside(paths.userSettingsDir);
     } else if (target === 'agentsSkills') {
@@ -620,6 +639,7 @@ module.exports = {
   getDirectorySizeBytesAsync,
   getGlobalPaths,
   getEnvironmentInfo,
+  openUserSettingsJson,
   handleOpenTarget,
   getExplorerSettings,
   toggleExplorerSetting,

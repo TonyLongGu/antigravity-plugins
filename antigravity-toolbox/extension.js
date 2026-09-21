@@ -386,10 +386,10 @@ function activate(context) {
     vscode.commands.registerCommand('antigravity.toolbox.resetWorkspace.en', resetWorkspaceHandler)
   );
 
-  // 5. 註冊 VS Code 命令：開啟 settings.json
+  // 5. 註冊 VS Code 命令：開啟 settings.json（直接開檔，避開 Cursor Settings UI 卡住）
   context.subscriptions.push(
     vscode.commands.registerCommand('antigravity.toolbox.openSettings', () => {
-      vscode.commands.executeCommand('workbench.action.openSettingsJson');
+      systemService.handleOpenTarget('settingsJson');
     })
   );
 
