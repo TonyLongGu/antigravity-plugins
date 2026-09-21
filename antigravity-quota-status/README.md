@@ -1,6 +1,9 @@
 # AI 模型額度狀態監控擴充套件 (AI Quota Status Extension)
 
-專為 **Google Antigravity IDE** 設計的極致簡約狀態列常駐擴充套件，直連本地 Language Server 即時監控配額。
+極致簡約狀態列常駐擴充套件，依目前 IDE **自動切換資料源**：
+
+- **Google Antigravity IDE**：直連本機 Language Server，監控 Gemini / Claude+GPT 的每週 + 5 小時配額。
+- **Cursor IDE**：讀取本機登入憑證，查詢雲端 usage API，監控 Auto / API 月結剩餘額度。
 
 全套件採用**純文字排版**，無任何 Emoji 或小圖示，無冗贅前綴，最大化節省狀態列空間，且完全不改變狀態列底色。
 
@@ -9,20 +12,20 @@
 ## 主要功能
 
 1. **極致乾淨狀態列**：
-   - **極簡雙欄 (預設 `compact`)**：`$(sparkle) 59%, 53% | 7%, 100%`
-   - **標準模式 (`standard`)**：`$(sparkle) Gemini: 59%, 53% | Claude: 7%, 100%`（每週額度, 5小時即時額度）
+   - **Antigravity compact**：`$(sparkle) 59%, 53% | 7%, 100%`
+   - **Cursor compact**：`$(sparkle) 45% | 0%`
+   - **標準模式 (`standard`)**：帶模型家族或 Auto / API 標籤
    - **原生無干擾**：搭配 IDE 原生向量圖示與主題色彩，完美融合 IDE 底部狀態列。
 
 2. **懸浮詳細資訊 (Tooltip)**：
-   - 游標懸停在狀態列上，完整查看：
-     - Gemini Models (每週配額 + 5 小時配額即時重置倒數 + **建議今日餘額** + **偏差值**)
-     - Claude & GPT models (每週配額 + 5 小時配額即時重置倒數 + **建議今日餘額** + **偏差值**)
-     - 依據每週 168 小時勻速消耗模型計算「建議今日餘額」（今日安全可用額度）
-     - 依據每週 10080 分鐘勻速消耗模型計算「偏差值（實際剩餘 - 理論剩餘）」：正值代表進度超前結餘，負值代表目前消耗超支
-     - 精確到日時分的重置倒數與最後檢查時間
+   - Antigravity：每週配額、5 小時配額、重置倒數、**建議今日餘額**、**偏差值**
+   - Cursor：帳單週期、Auto / API 剩餘、方案內含美金用量、建議今日餘額、偏差值
+   - 精確到日時分的重置倒數與最後檢查時間
 
 3. **點擊管理選單 (QuickPick)**：
-   - 點擊狀態列文字可立即重新整理、切換顯示模式、**設定背景顏色樣式**或自訂背景檢查頻率。
+   - 重新整理、切換顯示模式、設定背景顏色、自訂檢查頻率
+   - Antigravity 可切換監控的 Language Server 帳號
+   - Cursor 可開啟 Spending 儀表板
 
 4. **自訂背景色彩支援 (`aiQuota.backgroundColor`)**：
    - `default`：無底色（與狀態列原生融為一體，預設）。
@@ -33,6 +36,9 @@
 
 ## 啟用方式
 
-1. 在 Antigravity IDE 按快捷鍵 `Ctrl + Shift + P`。
-2. 輸入並執行 `Developer: Reload Window`（重新載入視窗）。
-3. 底部狀態列即會顯示極簡純文字 AI 額度狀態！
+1. 執行本目錄 `install-extension.ps1`，安裝至 Antigravity 與／或 Cursor。
+2. 按快捷鍵 `Ctrl + Shift + P`。
+3. 輸入並執行 `Developer: Reload Window`（重新載入視窗）。
+4. 底部狀態列即會顯示極簡純文字 AI 額度狀態。
+
+資料源預設 `aiQuota.backend = auto`，依 IDE 自動選擇。Cursor 路徑使用未公開雲端 API，官方更新後可能失效；權威數字仍以 [Spending dashboard](https://cursor.com/dashboard/spending) 為準。

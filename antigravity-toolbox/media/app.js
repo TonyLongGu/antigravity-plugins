@@ -247,6 +247,8 @@
 
   // 追蹤處理中（樂觀鎖定）的專案切換狀態，防止後端過期事件造成狀態回跳閃爍
   const pendingToggles = new Map(); // key: path -> { active: boolean, time: number }
+  const PENDING_TOGGLE_MS = 2000;
+  let pendingSkillSync = null; // { enabled: boolean, time: number }
 
   /**
    * 立即原地更新專案卡片的顯示/隱藏視覺狀態與樂觀計數器 (0ms 即時反饋)
@@ -254,7 +256,7 @@
   function applyFolderItemVisualState(item, targetPath, nextActive) {
     if (!item || !targetPath) return;
 
-    // 1. 登記操作意圖樂觀鎖（保護 1500ms，防止後端過期事件覆蓋）
+    // 1. 登記操作意圖樂觀鎖（保護 2000ms，防止後端過期事件覆蓋）
     pendingToggles.set(targetPath, { active: nextActive, time: Date.now() });
 
     // 2. 原地切換卡片類別樣式
@@ -586,6 +588,10 @@
       btnShowOnlyFirst: document.getElementById('btn-show-only-first'),
       btnInvert: document.getElementById('btn-invert'),
       btnShowAll: document.getElementById('btn-show-all'),
+      skillSyncList: document.getElementById('ws-skill-sync-list'),
+      skillSyncRow: document.getElementById('ws-skill-sync-row'),
+      skillSyncRefresh: document.getElementById('btn-refresh-skill-sync'),
+      skillSyncToggle: document.getElementById('toggle-sync-skills'),
       folderList: document.getElementById('folder-list'),
       folderListCount: document.getElementById('folder-list-count'),
     },
@@ -629,6 +635,46 @@
           vscode.postMessage({ type: 'showAllFolders' });
         });
       }
+
+      if (this.dom.skillSyncRow) {
+        this.dom.skillSyncRow.addEventListener('click', (e) => {
+          if (e.target.closest('.folder-switch') || e.target.closest('.skill-sync-refresh')) return;
+          e.stopPropagation();
+          vscode.postMessage({ type: 'openTarget', target: 'agentsSkills' });
+        });
+      }
+
+      if (this.dom.skillSyncRefresh) {
+        this.dom.skillSyncRefresh.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          vscode.postMessage({ type: 'refreshSkillSync' });
+        });
+      }
+
+      if (this.dom.skillSyncToggle) {
+        this.dom.skillSyncToggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const switchEl = this.dom.skillSyncToggle;
+          const nextEnabled = !switchEl.classList.contains('is-checked');
+          pendingSkillSync = { enabled: nextEnabled, time: Date.now() };
+          if (switchEl.classList.contains('is-checked') !== nextEnabled) {
+            switchEl.classList.toggle('is-checked', nextEnabled);
+          }
+
+          const curState = vscode.getState() || {};
+          if (curState.workspace) {
+            curState.workspace.syncSkillsOnFolderToggle = nextEnabled;
+          }
+          vscode.setState({
+            ...curState,
+            pendingSkillSync,
+          });
+
+          vscode.postMessage({ type: 'toggleSkillSync', enabled: nextEnabled });
+        });
+      }
     },
 
     /**
@@ -660,7 +706,7 @@
 
         if (nextActive) actCount++;
 
-        // 1. 登記樂觀鎖（保護 800ms，防止後端中途推送舊狀態）
+        // 1. 登記樂觀鎖（防止後端中途推送舊狀態）
         if (targetPath) {
           pendingToggles.set(targetPath, { active: nextActive, time: now });
         }
@@ -729,9 +775,9 @@
           let isEnabled = f.enabled !== false;
           const pending = pendingToggles.get(f.path);
           if (pending) {
-            // 在使用者操作後的 1500ms 窗口內，始終以使用者的最新操作意圖為絕對準則
+            // 在使用者操作後的窗口內，始終以使用者的最新操作意圖為絕對準則
             // 絕不過早解除鎖定，徹底免疫多專案快速交錯切換時延遲事件的污染
-            if (now - pending.time < 1500) {
+            if (now - pending.time < PENDING_TOGGLE_MS) {
               isEnabled = pending.active;
               f.enabled = pending.active;
             } else {
@@ -751,6 +797,30 @@
       }
       if (this.dom.folderListCount) {
         this.dom.folderListCount.textContent = `${activeCount}/${totalCount}`;
+      }
+
+      if (this.dom.skillSyncToggle) {
+        const savedPending = pendingSkillSync || (vscode.getState() || {}).pendingSkillSync;
+        let skillSyncEnabled = !!workspace.syncSkillsOnFolderToggle;
+        if (savedPending && now - savedPending.time < PENDING_TOGGLE_MS) {
+          skillSyncEnabled = !!savedPending.enabled;
+          workspace.syncSkillsOnFolderToggle = skillSyncEnabled;
+          pendingSkillSync = savedPending;
+        } else if (savedPending) {
+          pendingSkillSync = null;
+          const curState = vscode.getState() || {};
+          if (curState.pendingSkillSync) {
+            delete curState.pendingSkillSync;
+            vscode.setState(curState);
+          }
+        }
+        const isChecked = this.dom.skillSyncToggle.classList.contains('is-checked');
+        if (isChecked !== skillSyncEnabled) {
+          this.dom.skillSyncToggle.classList.toggle('is-checked', skillSyncEnabled);
+        }
+      }
+      if (this.dom.skillSyncList) {
+        this.dom.skillSyncList.classList.toggle('hidden', !workspace.hasMultiRoot);
       }
 
       if (workspace.hasMultiRoot) {
@@ -833,7 +903,9 @@
 
           const switchEl = item.querySelector('.folder-switch');
           if (switchEl) {
-            switchEl.classList.toggle('is-checked', isEnabled);
+            if (switchEl.classList.contains('is-checked') !== isEnabled) {
+              switchEl.classList.toggle('is-checked', isEnabled);
+            }
             switchEl.title = I18nModule.t('switch_title', { nextStatus });
           }
         } else {
@@ -1069,7 +1141,7 @@
   const SettingsModule = {
     dom: {
       card: document.getElementById('module-settings'),
-      rows: document.querySelectorAll('.setting-toggle-row'),
+      rows: document.querySelectorAll('#explorer-toggle-list .setting-toggle-row'),
       toggleGitignore: document.getElementById('toggle-hide-gitignore'),
       toggleExcludeGitIgnore: document.getElementById('toggle-exclude-gitignore'),
       toggleSystemJunk: document.getElementById('toggle-hide-system-junk'),

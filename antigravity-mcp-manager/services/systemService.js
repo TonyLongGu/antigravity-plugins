@@ -5,6 +5,7 @@
 
 const vscode = require('vscode');
 const fsPromises = require('node:fs/promises');
+const I18n = require('./i18nService');
 
 class SystemService {
   /**
@@ -24,14 +25,16 @@ class SystemService {
    */
   static async openConfigFile(targetPath) {
     if (!targetPath || !(await this._exists(targetPath))) {
-      vscode.window.showWarningMessage(`找不到設定檔：${targetPath || '未指定路徑'}`);
+      vscode.window.showWarningMessage(
+        I18n.t('msg_config_not_found', { path: targetPath || I18n.t('msg_path_unspecified') })
+      );
       return;
     }
     try {
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
       await vscode.window.showTextDocument(doc, { preview: false });
     } catch (e) {
-      vscode.window.showErrorMessage(`開啟設定檔失敗：${e.message}`);
+      vscode.window.showErrorMessage(I18n.t('toast_open_config_failed', { msg: e.message }));
     }
   }
 
@@ -40,7 +43,9 @@ class SystemService {
    */
   static async revealProjectFile(targetPath) {
     if (!targetPath || !(await this._exists(targetPath))) {
-      vscode.window.showWarningMessage(`找不到該檔案：${targetPath || '未指定路徑'}`);
+      vscode.window.showWarningMessage(
+        I18n.t('msg_file_not_found', { path: targetPath || I18n.t('msg_path_unspecified') })
+      );
       return;
     }
     try {
@@ -49,7 +54,7 @@ class SystemService {
       await vscode.window.showTextDocument(doc, { preview: false });
       await vscode.commands.executeCommand('revealInExplorer', uri);
     } catch (e) {
-      vscode.window.showErrorMessage(`開啟檔案失敗：${e.message}`);
+      vscode.window.showErrorMessage(I18n.t('msg_file_open_failed', { msg: e.message }));
     }
   }
 }

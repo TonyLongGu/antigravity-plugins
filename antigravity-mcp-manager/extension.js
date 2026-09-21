@@ -1,6 +1,6 @@
 // ==============================================================================
 // 檔案名稱：extension.js
-// 功能說明：Google Antigravity IDE - MCP 管理儀表板 Extension Host 主進入點 (全域模式)
+// 功能說明：Antigravity / Cursor MCP 管理儀表板 Extension Host 主進入點 (全域模式)
 // 遵循規範：ide-extension-workflow 模組化服務架構與 Design System 準則
 // ==============================================================================
 
@@ -13,19 +13,17 @@ const path = require('node:path');
 const McpConfigService = require('./services/mcpConfigService');
 const ProbeService = require('./services/probeService');
 const SystemService = require('./services/systemService');
+const I18n = require('./services/i18nService');
 
-function resolveLocale() {
-  const runnerLocale = vscode.workspace.getConfiguration('scriptRunner').get('locale');
-  if (runnerLocale === 'zh-TW' || runnerLocale === 'en') return runnerLocale;
-  const customLocale = vscode.workspace.getConfiguration('antigravity').get('locale');
-  if (customLocale === 'zh-TW' || customLocale === 'en') return customLocale;
-  const envLang = (vscode.env.language || '').toLowerCase();
-  if (envLang.startsWith('en')) return 'en';
-  return 'zh-TW';
-}
+// 原生 UI（狀態列、通知、Toast）的語言須與面板一致，
+// 故統一由 I18nService 提供；解析順序見該模組。
+const resolveLocale = () => I18n.currentLocale;
 
+/**
+ * 寫入全域語言設定（供面板切換語系時呼叫）
+ */
 async function persistGlobalLocale(locale) {
-  if (locale !== 'zh-TW' && locale !== 'en') return;
+  if (!I18n.isSupported(locale)) return;
   try {
     await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
   } catch (_) {}
@@ -41,6 +39,7 @@ class MCPManagerViewProvider {
     this._view = undefined;
     this._panel = undefined;
     this._refreshDebounceTimer = null;
+    this._lastFingerprint = '';
   }
 
   async resolveWebviewView(webviewView, _context, _token) {
@@ -51,9 +50,6 @@ class MCPManagerViewProvider {
       localResourceRoots: [this._extensionUri],
     };
 
-    webviewView.webview.html = await this._getHtmlForWebview(webviewView.webview);
-
-    // 監聽來自 Webview 前端的訊息分發
     webviewView.webview.onDidReceiveMessage(async (message) => {
       await this._handleMessage(message, webviewView.webview);
     });
@@ -61,6 +57,9 @@ class MCPManagerViewProvider {
     webviewView.onDidDispose(() => {
       this._view = undefined;
     });
+
+    webviewView.webview.html = await this._getHtmlForWebview(webviewView.webview);
+    await this.refreshWebviewData(true, 0, true);
   }
 
   /**
@@ -76,7 +75,7 @@ class MCPManagerViewProvider {
 
     this._panel = vscode.window.createWebviewPanel(
       'antigravity.mcpManagerEditor',
-      'MCP 伺服器管理',
+      I18n.t('header_title'),
       column,
       {
         enableScripts: true,
@@ -91,8 +90,6 @@ class MCPManagerViewProvider {
       light: vscode.Uri.joinPath(this._extensionUri, 'media', 'icons', 'mcp-icon-light.svg'),
     };
 
-    this._panel.webview.html = await this._getHtmlForWebview(this._panel.webview);
-
     this._panel.webview.onDidReceiveMessage(async (message) => {
       await this._handleMessage(message, this._panel.webview);
     });
@@ -101,7 +98,8 @@ class MCPManagerViewProvider {
       this._panel = undefined;
     });
 
-    await this.refreshWebviewData();
+    this._panel.webview.html = await this._getHtmlForWebview(this._panel.webview);
+    await this.refreshWebviewData(true, 0, true);
 
     // 自動鎖定該編輯器群組 (避免後續點選代碼檔案覆蓋儀表板)
     this._lockEditorGroup();
@@ -128,23 +126,23 @@ class MCPManagerViewProvider {
     await new Promise((resolve) => setTimeout(resolve, 180));
   }
 
-  _toggleAppliedMessage(name, disabled) {
-    const action = disabled ? '停用' : '啟用';
-    return `[${McpConfigService.envName}] 已${action} ${name}`;
-  }
-
   /**
    * 統一訊息分發處理器
    */
   async _handleMessage(message, senderWebview) {
     switch (message.type) {
       case 'getData': {
-        await this.refreshWebviewData();
+        await this.refreshWebviewData(true, 0, true);
         break;
       }
 
       case 'openGlobalConfig': {
-        await SystemService.openConfigFile(McpConfigService.globalConfigPath);
+        try {
+          await McpConfigService.ensureConfigFile();
+          await SystemService.openConfigFile(McpConfigService.globalConfigPath);
+        } catch (err) {
+          this.pushToast(I18n.t('toast_open_config_failed', { msg: err.message }), 'danger');
+        }
         break;
       }
 
@@ -153,11 +151,10 @@ class MCPManagerViewProvider {
         try {
           const result = await McpConfigService.toggleServer(name, disabled);
           await this.refreshWebviewData();
-          this.pushToast(`已${disabled ? '停用' : '啟用'} ${name}`, disabled ? 'warning' : 'success');
-          vscode.window.setStatusBarMessage(this._toggleAppliedMessage(name, disabled), 5000);
+          this.pushToast(I18n.t(disabled ? 'toast_toggled_off' : 'toast_toggled_on', { name }), disabled ? 'warning' : 'success');
           await this._syncLiveMcp((result && result.changes) || [{ name, disabled: !!disabled }]);
         } catch (err) {
-          this.pushToast(`切換失敗：${err.message}`, 'danger');
+          this.pushToast(I18n.t('toast_toggle_failed', { msg: err.message }), 'danger');
           await this.refreshWebviewData();
         }
         break;
@@ -168,9 +165,9 @@ class MCPManagerViewProvider {
         try {
           await McpConfigService.updateServerDescription(name, description);
           await this.refreshWebviewData();
-          this.pushToast(`已更新 ${name} 的用途說明`, 'success');
+          this.pushToast(I18n.t('toast_desc_updated', { name }), 'success');
         } catch (err) {
-          this.pushToast(`更新說明失敗：${err.message}`, 'danger');
+          this.pushToast(I18n.t('toast_desc_failed', { msg: err.message }), 'danger');
         }
         break;
       }
@@ -182,12 +179,12 @@ class MCPManagerViewProvider {
           await this.refreshWebviewData(true); // 立即推播最新資料，繞過 120ms 防抖
           const isEnable = action === 'enableAll' || action === 'enable_all';
           const isDisable = action === 'disableAll' || action === 'disable_all';
-          const actionText = isEnable ? '全部啟用' : isDisable ? '全部停用' : '反向切換';
-          this.pushToast(`[${McpConfigService.envName}] MCP 伺服器已${actionText}`, 'success');
-          vscode.window.setStatusBarMessage(`[${McpConfigService.envName}] MCP 批次操作完成`, 5000);
+          const actionText = I18n.t(isEnable ? 'action_enable_all' : isDisable ? 'action_disable_all' : 'action_invert');
+          this.pushToast(I18n.t('toast_batch_done', { env: McpConfigService.envName, action: actionText }), 'success');
+          vscode.window.setStatusBarMessage(I18n.t('status_batch_done', { env: McpConfigService.envName }), 5000);
           await this._syncLiveMcp((result && result.changes) || []);
         } catch (err) {
-          this.pushToast(`批次操作失敗：${err.message}`, 'danger');
+          this.pushToast(I18n.t('toast_batch_failed', { msg: err.message }), 'danger');
           await this.refreshWebviewData(true);
         }
         break;
@@ -200,7 +197,7 @@ class MCPManagerViewProvider {
           const serverConfig = globalData.config.mcpServers && globalData.config.mcpServers[name];
 
           if (!serverConfig) {
-            throw new Error(`找不到伺服器設定：${name}`);
+            throw new Error(I18n.t('err_server_not_found', { name }));
           }
 
           const result = await ProbeService.testServerConnection(serverConfig);
@@ -247,7 +244,7 @@ class MCPManagerViewProvider {
     }
   }
 
-  async refreshWebviewData(immediate = false, delayMs = 120) {
+  async refreshWebviewData(immediate = false, delayMs = 120, force = false) {
     if (this._refreshDebounceTimer) {
       clearTimeout(this._refreshDebounceTimer);
       this._refreshDebounceTimer = null;
@@ -256,30 +253,68 @@ class MCPManagerViewProvider {
     const doRefresh = async () => {
       try {
         const globalData = await McpConfigService.getGlobalData();
+        const servers = (globalData.config && globalData.config.mcpServers) || {};
+        const fingerprint = JSON.stringify({
+          path: globalData.path,
+          viewOnly: globalData.viewOnly === true,
+          stats: globalData.stats || { total: 0, enabled: 0, disabled: 0 },
+          servers: Object.keys(servers)
+            .sort()
+            .map((name) => [
+              name,
+              servers[name].disabled === true,
+              servers[name].effectiveDisabled === true,
+              servers[name].workspaceOverride || 'inherit',
+              servers[name].description || '',
+            ]),
+        });
+        const hasTarget = !!(this._view || this._panel);
+        if (!force && hasTarget && fingerprint === this._lastFingerprint) {
+          return;
+        }
 
         // 更新 IDE 底部 Status Bar
         if (this._statusBarItem) {
-          this._statusBarItem.text = `$(plug) MCP: ${globalData.stats.enabled}/${globalData.stats.total}`;
+          const viewOnly = globalData.viewOnly === true;
+          const stats = globalData.stats || { total: 0, enabled: 0, disabled: 0 };
 
-          const servers = (globalData.config && globalData.config.mcpServers) || {};
-          const enabledServers = Object.keys(servers).filter((name) => servers[name].disabled !== true);
+          this._statusBarItem.text = `$(plug) MCP: ${stats.enabled}/${stats.total}`;
+
+          const listedServers = Object.keys(servers).filter((name) => servers[name].disabled !== true);
 
           const tooltipLines = [];
-          tooltipLines.push(`【${globalData.envName} MCP 儀表板】`);
-          if (enabledServers.length > 0) {
-            tooltipLines.push('已啟用的 MCP 工具:');
-            enabledServers.forEach((name) => {
-              tooltipLines.push(`• ${name}`);
+          tooltipLines.push(I18n.t('status_tooltip_title', { env: globalData.envName }));
+          if (viewOnly) {
+            // 唯讀提示：與面板橫幅使用同一組語系鍵，確保兩處文字一致
+            const hintKey = McpConfigService.isVsCode ? 'view_only_hint_vscode' : 'view_only_hint';
+            tooltipLines.push(I18n.t(hintKey));
+          }
+          if (listedServers.length > 0) {
+            tooltipLines.push(I18n.t('status_tooltip_enabled'));
+            listedServers.forEach((name) => {
+              const override = servers[name].workspaceOverride;
+              const mark = override === 'off'
+                ? I18n.t('status_tooltip_ws_off')
+                : override === 'on'
+                  ? I18n.t('status_tooltip_ws_on')
+                  : '';
+              tooltipLines.push(`• ${name}${mark}`);
             });
           } else {
-            tooltipLines.push('(目前無啟用的 MCP 工具)');
+            tooltipLines.push(I18n.t('status_tooltip_none'));
           }
 
-          tooltipLines.push('點擊展開側邊欄');
+          tooltipLines.push(I18n.t('status_tooltip_click'));
 
           this._statusBarItem.tooltip = tooltipLines.join('\n');
           this._statusBarItem.show();
         }
+
+        if (!hasTarget) {
+          return;
+        }
+
+        this._lastFingerprint = fingerprint;
 
         // 推送最新完整資料至 Webview 前端 (同時廣播至側邊欄與編輯分頁)
         const updatePayload = {
@@ -297,8 +332,8 @@ class MCPManagerViewProvider {
       } catch (err) {
         console.error('MCP Manager Data Refresh Error:', err);
         if (this._statusBarItem) {
-          this._statusBarItem.text = '$(plug) MCP: 讀取失敗';
-          this._statusBarItem.tooltip = `MCP 設定讀取失敗：${err.message}`;
+          this._statusBarItem.text = `$(plug) ${I18n.t('status_bar_error')}`;
+          this._statusBarItem.tooltip = I18n.t('status_read_failed', { msg: err.message });
           this._statusBarItem.show();
         }
         const errorPayload = { type: 'error', message: err.message };
@@ -339,7 +374,7 @@ class MCPManagerViewProvider {
     try {
       html = await fsPromises.readFile(htmlPath, 'utf-8');
     } catch {
-      html = `<!DOCTYPE html><html><body><h3>找不到 index.html</h3></body></html>`;
+      html = `<!DOCTYPE html><html><body><h3>${I18n.t('err_index_missing')}</h3></body></html>`;
     }
 
     // 讀取外部純 JSON 字典 (Qt 風格解耦翻譯檔)
@@ -365,6 +400,8 @@ class MCPManagerViewProvider {
       isVsCode: McpConfigService.isVsCode,
       hostKind: McpConfigService.hostKind,
       envName: McpConfigService.envName,
+      viewOnly: McpConfigService.isViewOnly,
+      isCursor: McpConfigService.isCursor,
     };
     const jsonSafeString = JSON.stringify(initData).replace(/</g, '\\u003c');
 
@@ -383,9 +420,6 @@ class MCPManagerViewProvider {
  */
 async function activate(context) {
   McpConfigService.init(context);
-  if (McpConfigService.isUnsupportedHost) {
-    vscode.window.showWarningMessage('MCP 管理儀表板僅支援 Antigravity IDE，不支援 Cursor 與 Visual Studio Code。');
-  }
   const syncLocaleContext = () => {
     vscode.commands.executeCommand('setContext', 'mcpManager.isEnglish', resolveLocale() === 'en');
   };
@@ -393,7 +427,7 @@ async function activate(context) {
 
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 40);
   statusBarItem.command = 'antigravity.mcp.focusView';
-  statusBarItem.text = `$(plug) MCP: 載入中...`;
+  statusBarItem.text = `$(plug) ${I18n.t('status_loading')}`;
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
@@ -415,8 +449,8 @@ async function activate(context) {
     vscode.commands.registerCommand('antigravity.mcp.openInEditor', openInEditorHandler),
     vscode.commands.registerCommand('antigravity.mcp.openInEditor.en', openInEditorHandler),
     vscode.commands.registerCommand('antigravity.mcp.refresh', async () => {
-      await provider.refreshWebviewData();
-      provider.pushToast('狀態已重新整理', 'info');
+      await provider.refreshWebviewData(true, 0, true);
+      provider.pushToast(I18n.t('toast_refreshed'), 'info');
     }),
     vscode.commands.registerCommand('antigravity.mcp.focusView', async () => {
       await vscode.commands.executeCommand('antigravity.mcpManagerView.focus');
@@ -439,12 +473,56 @@ async function activate(context) {
     } catch (e) {}
   }
 
+  if (McpConfigService.isCursor) {
+    const refreshEnablement = () => provider.refreshWebviewData();
+    const poll = setInterval(() => {
+      if (vscode.window.state.focused) refreshEnablement();
+    }, 2500);
+    context.subscriptions.push({ dispose: () => clearInterval(poll) });
+    context.subscriptions.push(
+      vscode.window.onDidChangeWindowState((state) => {
+        if (state.focused) refreshEnablement();
+      })
+    );
+  }
+
+  // VS Code 原生開關連動：
+  // 開關存在 state.vscdb（非設定檔），且該檔位於工作區外，
+  // createFileSystemWatcher 對其不可靠，故以「變更簽章輪詢」偵測外部變更。
+  // 簽章僅由 stat 取得，成本極低；唯有實際變動才重新解析 SQLite。
+  if (McpConfigService.isVsCode) {
+    let lastSignature = McpConfigService.enablementSignature();
+
+    const syncNativeEnablement = () => {
+      const signature = McpConfigService.enablementSignature();
+      if (signature === lastSignature) return;
+      lastSignature = signature;
+      // 使用者於 VS Code 原生 UI 切換開關後，面板即時跟進
+      provider.refreshWebviewData(true, 0, true);
+    };
+
+    const poll = setInterval(() => {
+      if (vscode.window.state.focused) syncNativeEnablement();
+    }, 1500);
+    context.subscriptions.push({ dispose: () => clearInterval(poll) });
+
+    // 回到 VS Code 視窗時立即校正，避免等待輪詢週期
+    context.subscriptions.push(
+      vscode.window.onDidChangeWindowState((state) => {
+        if (state.focused) syncNativeEnablement();
+      })
+    );
+  }
+
   // 監聽全域語言變動設定 (支援跨外掛即時聯動廣播)
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('antigravity.locale') || e.affectsConfiguration('scriptRunner.locale')) {
         syncLocaleContext();
         provider.broadcastLocale(resolveLocale());
+        // 狀態列提示由 Extension Host 產生，不會隨 webview 重繪，
+        // 故語言變更時主動重算一次（force 略過指紋比對）。
+        provider.refreshWebviewData(true, 0, true);
       }
     })
   );

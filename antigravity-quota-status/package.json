@@ -1,8 +1,8 @@
 {
   "name": "ai-quota-status",
   "displayName": "AI 模型額度狀態監控",
-  "description": "於 IDE 狀態列常駐呈現 Gemini 與 Claude/GPT 模型的即時剩餘額度與重置倒數 (純文字)",
-  "version": "1.0.4",
+  "description": "於 IDE 狀態列常駐呈現 AI 額度：Antigravity 為 Gemini/Claude 雙層配額，Cursor 為 Auto/API 月結用量",
+  "version": "1.1.0",
   "publisher": "antigravity-toolkit",
   "engines": {
     "vscode": "^1.68.0"
@@ -26,6 +26,10 @@
         "title": "切換監控帳號 / 伺服器"
       },
       {
+        "command": "aiQuota.openDashboard",
+        "title": "開啟 Cursor Spending 儀表板"
+      },
+      {
         "command": "aiQuota.toggleDisplayMode",
         "title": "切換狀態列顯示模式"
       },
@@ -41,6 +45,36 @@
     "configuration": {
       "title": "AI 額度狀態監控設定",
       "properties": {
+        "aiQuota.backend": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "antigravity",
+            "cursor"
+          ],
+          "enumDescriptions": [
+            "依目前 IDE 自動選擇（Antigravity 用本機 LS，Cursor 用雲端 usage API）",
+            "強制使用 Antigravity Language Server",
+            "強制使用 Cursor 雲端 usage API"
+          ],
+          "description": "額度資料來源"
+        },
+        "aiQuota.locale": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "zh-TW",
+            "en"
+          ],
+          "enumDescriptions": [
+            "跟隨 Antigravity 語言或 IDE 介面語言",
+            "繁體中文",
+            "English"
+          ],
+          "description": "狀態列與 Tooltip 語言"
+        },
         "aiQuota.backgroundColor": {
           "type": "string",
           "default": "default",
@@ -64,8 +98,8 @@
             "standard"
           ],
           "enumDescriptions": [
-            "極簡雙欄 (例如: 59%, 53% | 7%, 100%)",
-            "標準模式 (例如: Gemini: 59%, 53% | Claude: 7%, 100%)"
+            "極簡雙欄（Antigravity: 59%, 53% | 7%, 100%；Cursor: 45% | 0%）",
+            "標準模式（Antigravity: Gemini / Claude；Cursor: Auto / API）"
           ],
           "description": "狀態列上的文字顯示格式"
         },

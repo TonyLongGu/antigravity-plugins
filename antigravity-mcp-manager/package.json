@@ -1,8 +1,8 @@
 {
 	"name": "antigravity-mcp-manager",
 	"displayName": "MCP 管理儀表板",
-	"description": "專為 Antigravity IDE 打造的 MCP 伺服器視覺化管理、開關控制、獨立註解與連線探測儀表板",
-	"version": "1.4.0",
+	"description": "Antigravity IDE / Cursor / VS Code 相容的 MCP 儀表板：Antigravity 支援原生開關；Cursor 與 VS Code 提供清單、連線探測與備註（開關請用各 IDE 原生 UI）",
+	"version": "1.9.0",
 	"publisher": "antigravity-toolkit",
 	"engines": {
 		"vscode": "^1.80.0"

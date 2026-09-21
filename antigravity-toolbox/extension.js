@@ -7,6 +7,7 @@ const systemService = require('./services/systemService');
 const workspaceService = require('./services/workspaceService');
 const scriptService = require('./services/scriptService');
 const brainService = require('./services/brainService');
+const skillSyncService = require('./services/skillSyncService');
 
 /**
  * 側邊欄 Webview View Provider (主控制器與訊息轉發層)
@@ -124,6 +125,30 @@ class ToolboxViewProvider {
         await systemService.toggleExplorerSetting(msg.key, this);
         this.pushStatus();
         break;
+
+      case 'refreshSkillSync': {
+        const ctx = workspaceService.loadWorkspaceContext(this, true);
+        skillSyncService.refreshSkillSync(
+          this,
+          Array.isArray(ctx?.json?.folders) ? ctx.json.folders : [],
+          ctx?.wsDir || ''
+        );
+        this.pushStatus();
+        break;
+      }
+
+      case 'toggleSkillSync': {
+        const ctx = workspaceService.loadWorkspaceContext(this, true);
+        const enabledFolders = Array.isArray(ctx?.json?.folders) ? ctx.json.folders : [];
+        await skillSyncService.setSyncEnabled(
+          !!msg.enabled,
+          this,
+          enabledFolders,
+          ctx?.wsDir || ''
+        );
+        this.pushStatus();
+        break;
+      }
 
       case 'toggleWorkspaceFolder':
       case 'setWorkspaceFolderEnabled':
@@ -315,6 +340,7 @@ class ToolboxViewProvider {
 function activate(context) {
   systemService.bindExtensionContext(context);
   const provider = new ToolboxViewProvider(context.extensionUri);
+  skillSyncService.bindSkillSync(context);
 
   // 1. 註冊 Webview View Provider
   context.subscriptions.push(
@@ -412,6 +438,13 @@ function activate(context) {
       if (e.affectsConfiguration('antigravity.showAntigravityModulesInVsCode')) {
         provider.pushStatus(50);
       }
+      if (
+        e.affectsConfiguration('antigravity.syncSkillsOnFolderToggle')
+        && !skillSyncService.isSyncWriteInFlight()
+      ) {
+        skillSyncService.syncWatchersToSetting();
+        provider.pushStatus(50);
+      }
     })
   );
 
@@ -419,6 +452,7 @@ function activate(context) {
   context.subscriptions.push(
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       workspaceService.invalidateWorkspaceCache();
+      skillSyncService.refreshSkillWatchers();
       provider.pushStatus(150);
     })
   );
@@ -432,6 +466,7 @@ function activate(context) {
       wsFileWatcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(wsDir, wsName));
       const onWsChange = () => {
         workspaceService.invalidateWorkspaceCache();
+        skillSyncService.syncWatchersToSetting();
         provider.pushStatus(100);
       };
       wsFileWatcher.onDidChange(onWsChange);

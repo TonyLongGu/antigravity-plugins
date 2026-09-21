@@ -367,15 +367,6 @@ details[open] > summary .chevron {
   white-space: nowrap;
 }
 
-.card-sub-path {
-  font-size: 10px;
-  color: var(--text-dim);
-  font-family: var(--font-mono);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .card-body {
   padding: var(--space-md);
   display: flex;
@@ -505,6 +496,77 @@ details[open] > summary .chevron {
 .badge-muted {
   background: rgba(255, 255, 255, 0.05);
   color: var(--text-dim);
+}
+
+/* 來源與工作區覆寫徽章 (VS Code) */
+.src-badge {
+  font-size: 10px;
+  line-height: 1.2;
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 徽章容器：供就地更新整組徽章時使用，避免逐一尋找節點 */
+.server-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+}
+
+.server-badges:empty {
+  display: none;
+}
+
+.src-workspace {
+  background: rgba(168, 85, 247, 0.16);
+  color: #debeff;
+  border: 1px solid rgba(208, 161, 255, 0.3);
+}
+
+.src-override-on {
+  background: var(--accent-green-soft);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.35);
+}
+
+.src-override-off {
+  background: rgba(248, 113, 113, 0.14);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.32);
+}
+
+.view-only-hint {
+  display: none;
+  align-items: center;
+  margin: 0 0 var(--space-sm);
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid rgba(6, 182, 212, 0.28);
+  background: var(--accent-cyan-soft);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.hint-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+body.is-view-only .batch-row {
+  display: none;
+}
+
+.switch.is-readonly {
+  cursor: default;
+}
+
+.switch.is-readonly input {
+  pointer-events: none;
 }
 
 /* 批次操作列 (與上排篩選列採用相同的 3 欄等寬 Grid 與 5px 間距) */
@@ -1157,19 +1219,6 @@ input:checked + .slider:before {
   background: rgba(255, 255, 255, 0.18);
   border-color: rgba(255, 255, 255, 0.35);
   color: #ffffff;
-}
-
-/* 等寬網格系統 */
-.grid-2col {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: var(--space-sm);
-}
-
-.grid-3col {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-sm);
 }
 
 

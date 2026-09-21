@@ -26,7 +26,14 @@ class I18n {
   }
 
   getLocale() {
-    return vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
+    const override = vscode.workspace.getConfiguration('aiQuota').get('locale', 'auto');
+    if (override === 'zh-TW' || override === 'en') return override;
+    const ag = vscode.workspace.getConfiguration('antigravity').get('locale');
+    if (ag === 'zh-TW' || ag === 'en') return ag;
+    const lang = String(vscode.env.language || '').toLowerCase();
+    if (lang.startsWith('zh')) return 'zh-TW';
+    if (lang.startsWith('en')) return 'en';
+    return 'zh-TW';
   }
 
   t(key, params = {}) {

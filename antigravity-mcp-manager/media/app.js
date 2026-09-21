@@ -30,21 +30,63 @@
   });
 
   /**
-   * Lucide / Linear 原生圓角線性向量圖示庫 (Inline SVG 零外部請求自包含)
+   * 線性向量圖示庫（Inline SVG 零外部請求自包含）
+   * 僅保留實際使用於卡片者；其餘（標題列按鈕等）直接寫在 index.html，
+   * 避免重複定義造成雙份來源。
    */
   const Icons = {
-    server: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg>',
-    globe: '<svg class="lucide-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>',
-    collapseAll: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="m4 14 8-8 8 8"/><path d="m4 20 8-8 8 8"/></svg>',
-    expandAll: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="m4 10 8 8 8-8"/><path d="m4 4 8 8 8-8"/></svg>',
     zap: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>',
-    refresh: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>',
-    search: '<svg class="lucide-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
     chevronRight: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>',
-    copy: '<svg class="lucide-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>',
-    edit: '<svg class="lucide-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>',
-    terminal: '<svg class="lucide-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>'
+    edit: '<svg class="lucide-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>'
   };
+
+  /** 工作區覆寫狀態 → i18n 鍵 */
+  function workspaceStateLabelKey(state) {
+    if (state === 'on') return 'ws_state_on';
+    if (state === 'off') return 'ws_state_off';
+    return 'ws_state_inherit';
+  }
+
+  /**
+   * 建立來源與工作區覆寫徽章（整卡重建與就地更新兩條路徑共用）
+   * @param {object} server 伺服器資料
+   * @param {boolean} isVscode 是否為 VS Code 宿主
+   */
+  function buildServerBadgesHtml(server, isVscode) {
+    const override = server.workspaceOverride || 'inherit';
+    // 工作區層有兩種來源位置，徽章標題需分別說明
+    const isWorkspaceRoot = server.source === 'workspaceRoot';
+    const isWorkspace = server.source === 'workspace' || isWorkspaceRoot;
+    const sourceBadge = isWorkspace
+      ? `<span class="src-badge src-workspace" title="${escapeHtml(I18nModule.t(isWorkspaceRoot ? 'badge_source_root_title' : 'badge_source_workspace_title'))}">${escapeHtml(I18nModule.t('badge_source_workspace'))}</span>`
+      : '';
+    const overrideBadge =
+      isVscode && override !== 'inherit'
+        ? `<span class="src-badge ${override === 'off' ? 'src-override-off' : 'src-override-on'}" title="${escapeHtml(I18nModule.t('badge_override_title'))}">${escapeHtml(I18nModule.t(workspaceStateLabelKey(override)))}</span>`
+        : '';
+    return sourceBadge + overrideBadge;
+  }
+
+  /**
+   * 唯讀提示字串：依宿主選擇（Cursor 與 VS Code 的開啟方式完全不同）
+   */
+  function readOnlyToggleMessage() {
+    return I18nModule.t(isVscodeHost() ? 'view_only_toggle_title_vscode' : 'view_only_toggle_title');
+  }
+
+  /**
+   * 開關游標提示：說明目前是哪一層在決定這個狀態
+   * 主開關反映「實際生效狀態」，若未加說明容易誤會為何切不過去
+   */
+  function buildSwitchTitle(server, viewOnly, isVscode) {
+    if (viewOnly) return readOnlyToggleMessage();
+    if (!isVscode) return '';
+    const override = server.workspaceOverride || 'inherit';
+    if (override === 'off') return I18nModule.t('switch_title_ws_off');
+    if (override === 'on') return I18nModule.t('switch_title_ws_on');
+    if (server.profileDisabled) return I18nModule.t('switch_title_profile_off');
+    return '';
+  }
 
   /**
    * HTML 字串轉義防護
@@ -57,6 +99,52 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
+  }
+
+  function isViewOnlyHost() {
+    return window.HOST_KIND === 'cursor' || window.VIEW_ONLY === true;
+  }
+
+  function isVscodeHost() {
+    return window.HOST_KIND === 'vscode';
+  }
+
+  function applyHostChrome() {
+    const viewOnly = isViewOnlyHost();
+    document.body.classList.toggle('is-view-only', viewOnly);
+    document.body.classList.toggle('is-cursor', window.HOST_KIND === 'cursor');
+    document.body.classList.toggle('is-vscode', isVscodeHost());
+
+    const btnOpen = document.getElementById('btn-open-global-config');
+    if (btnOpen) {
+      const titleKey = window.HOST_KIND === 'cursor'
+        ? 'btn_open_global_config_title_cursor'
+        : isVscodeHost()
+          ? 'btn_open_global_config_title_vscode'
+          : 'btn_open_global_config_title';
+      btnOpen.setAttribute('data-i18n-title', titleKey);
+    }
+
+    applyHintBanner(viewOnly);
+  }
+
+  /**
+   * 唯讀提示橫幅
+   * Cursor 與 VS Code 的開關都存在各自的內部狀態，不由此面板寫入，
+   * 故一律顯示提示，僅文字依宿主不同。
+   */
+  function applyHintBanner(viewOnly) {
+    const hint = document.getElementById('view-only-hint');
+    if (!hint) return;
+    hint.style.display = viewOnly ? 'flex' : 'none';
+    if (!viewOnly) return;
+
+    const textEl = hint.querySelector('.hint-text');
+    if (!textEl) return;
+    // 一律取用 i18n 字典：語言由 applyLanguage() 觸發 applyHostChrome() 重繪，
+    // 切換語系即即時更新。（先前改為優先採用後端字串，導致切語系時不會變。）
+    const key = isVscodeHost() ? 'view_only_hint_vscode' : 'view_only_hint';
+    textEl.textContent = I18nModule.t(key);
   }
 
   // ============================================================================
@@ -105,6 +193,8 @@
             if (parsed.initialLocale) window.INITIAL_LOCALE = parsed.initialLocale;
             if (parsed.hostKind) window.HOST_KIND = parsed.hostKind;
             if (parsed.envName) window.ENV_NAME = parsed.envName;
+            if (typeof parsed.viewOnly === 'boolean') window.VIEW_ONLY = parsed.viewOnly;
+            if (typeof parsed.isCursor === 'boolean') window.IS_CURSOR = parsed.isCursor;
           }
         }
       } catch (e) {
@@ -126,6 +216,7 @@
         this.currentLang = 'zh-TW';
       }
 
+      applyHostChrome();
       this.applyLanguage(this.currentLang, false);
 
       const btnLang = document.getElementById('btn-lang-toggle');
@@ -168,6 +259,7 @@
       }
 
       document.documentElement.lang = lang === 'zh-TW' ? 'zh-TW' : 'en';
+      applyHostChrome();
 
       const langIndicator = document.getElementById('lang-indicator');
       const btnLang = document.getElementById('btn-lang-toggle');
@@ -362,6 +454,10 @@
       filterPills: document.querySelectorAll('.pill[data-scope="global"]'),
     },
 
+    isViewOnly() {
+      return isViewOnlyHost() || (this.data && this.data.viewOnly === true);
+    },
+
     init() {
       if (this.dom.btnOpenConfig) {
         this.dom.btnOpenConfig.addEventListener('click', (e) => {
@@ -403,6 +499,7 @@
       });
 
       const applyBatchOptimistic = (action) => {
+        if (this.isViewOnly()) return;
         if (!this.data || !this.data.config) return;
         const servers = this.data.config.mcpServers || {};
         const now = Date.now();
@@ -438,6 +535,7 @@
 
       if (this.dom.btnEnableAll) {
         this.dom.btnEnableAll.addEventListener('click', () => {
+          if (this.isViewOnly()) return;
           applyBatchOptimistic('enable_all');
           vscode.postMessage({ type: 'batchToggleGlobal', action: 'enable_all' });
         });
@@ -445,6 +543,7 @@
 
       if (this.dom.btnDisableAll) {
         this.dom.btnDisableAll.addEventListener('click', () => {
+          if (this.isViewOnly()) return;
           applyBatchOptimistic('disable_all');
           vscode.postMessage({ type: 'batchToggleGlobal', action: 'disable_all' });
         });
@@ -452,6 +551,7 @@
 
       if (this.dom.btnInvert) {
         this.dom.btnInvert.addEventListener('click', () => {
+          if (this.isViewOnly()) return;
           applyBatchOptimistic('invert');
           vscode.postMessage({ type: 'batchToggleGlobal', action: 'invert' });
         });
@@ -460,11 +560,18 @@
 
     update(globalData) {
       this.data = globalData;
+      // 同步唯讀旗標：後續 applyHostChrome() / isViewOnlyHost() 都依賴它
+      if (globalData && typeof globalData.viewOnly === 'boolean') {
+        window.VIEW_ONLY = globalData.viewOnly === true;
+      }
       this.render();
     },
 
     render() {
       if (!this.data) return;
+
+      const viewOnly = this.isViewOnly();
+      applyHostChrome();
 
       const servers = (this.data.config && this.data.config.mcpServers) || {};
       const stats = this.data.stats || { total: 0, enabled: 0, disabled: 0 };
@@ -500,7 +607,19 @@
       // ─── 智慧就地比對（In-place Patching）：防止開關切換時卡片重構閃爍 ───
       const existingCards = Array.from(this.dom.listContainer.querySelectorAll('.server-card'));
       const existingKeys = existingCards.map((c) => c.getAttribute('data-name'));
+
+      // 來源或工作區覆寫變動時，徽章與按鈕需重建，故停用就地更新
+      const currentShape = filteredKeys
+        .map((k) => {
+          const s = servers[k] || {};
+          return `${k}|${s.source || 'user'}|${s.workspaceOverride || 'inherit'}`;
+        })
+        .join(',');
+      const shapeChanged = this._lastShape !== undefined && this._lastShape !== currentShape;
+      this._lastShape = currentShape;
+
       const canInPlacePatch =
+        !shapeChanged &&
         existingKeys.length === filteredKeys.length &&
         existingKeys.length > 0 &&
         existingKeys.every((k, idx) => k === filteredKeys[idx]);
@@ -605,6 +724,20 @@
           if (btnSaveDesc) btnSaveDesc.textContent = I18nModule.t('btn_save_desc');
           const btnCancelDesc = card.querySelector('.btn-desc-cancel');
           if (btnCancelDesc) btnCancelDesc.textContent = I18nModule.t('btn_cancel_desc');
+
+          // 7. 就地更新徽章與開關提示
+          //    外部（VS Code 原生 UI）切換開關時同樣走這條路徑，故必須同步，
+          //    否則會出現「開關變了、徽章沒變」的不一致。
+          const badgesWrap = card.querySelector('.server-badges');
+          if (badgesWrap) {
+            badgesWrap.innerHTML = buildServerBadgesHtml(server, isVscodeHost());
+          }
+          const switchLabel = card.querySelector('.switch');
+          if (switchLabel) {
+            const title = buildSwitchTitle(server, viewOnly, isVscodeHost());
+            if (title) switchLabel.setAttribute('title', title);
+            else switchLabel.removeAttribute('title');
+          }
         });
 
         if (this.dom.emptyState) this.dom.emptyState.style.display = 'none';
@@ -617,7 +750,13 @@
         if (this.dom.emptyState) {
           this.dom.emptyState.style.display = 'block';
           const emptySpan = this.dom.emptyState.querySelector('span');
-          if (emptySpan) emptySpan.textContent = I18nModule.t('empty_servers');
+          if (emptySpan) {
+            // 完全沒有伺服器且設定檔不存在時，明講路徑，避免靜默空清單難以除錯
+            const noConfig = serverKeys.length === 0 && this.data.configMissing === true;
+            emptySpan.textContent = noConfig
+              ? I18nModule.t('empty_no_config', { path: this.data.path || '' })
+              : I18nModule.t('empty_servers');
+          }
         }
         return;
       }
@@ -687,20 +826,29 @@
         }
         const editDescLabel = I18nModule.t('btn_edit_desc');
 
+        // VS Code 專屬：來源與工作區覆寫徽章（純顯示，開關請用 VS Code 原生 UI）
+        const isVscode = isVscodeHost();
+        const badgesHtml = buildServerBadgesHtml(server, isVscode);
+
+        // 主開關 = 實際生效狀態；標題說明目前由哪一層決定
+        const switchTitle = buildSwitchTitle(server, viewOnly, isVscode);
+        const switchHtml = `<label class="switch${viewOnly ? ' is-readonly' : ''}"${switchTitle ? ` title="${escapeHtml(switchTitle)}"` : ''}>
+                <input type="checkbox" ${isEnabled ? 'checked' : ''} data-name="${escapeHtml(key)}"${viewOnly ? ' tabindex="-1"' : ''}>
+                <span class="slider"></span>
+              </label>`;
+
         card.innerHTML = `
           <summary class="server-card-summary">
             <div class="server-info-left">
               <span class="server-chevron">${Icons.chevronRight}</span>
               <div class="server-title-wrap">
                 <span class="server-name">${escapeHtml(key)}</span>
+                <span class="server-badges">${badgesHtml}</span>
               </div>
             </div>
             <div class="server-controls-right">
               <button class="btn-test ${btnTestStatusClass}" data-name="${escapeHtml(key)}" title="${escapeHtml(btnTestDynamicTitle)}">${Icons.zap}</button>
-              <label class="switch">
-                <input type="checkbox" ${isEnabled ? 'checked' : ''} data-name="${escapeHtml(key)}">
-                <span class="slider"></span>
-              </label>
+              ${switchHtml}
             </div>
           </summary>
 
@@ -743,13 +891,19 @@
           }
         });
 
-        // 綁定 Switch Toggle (防冒泡與樂觀更新鎖)
+        // 綁定 Switch Toggle (防冒泡與樂觀更新鎖；唯讀宿主點擊時提示如何開啟)
         const switchLabel = card.querySelector('.switch');
         const checkbox = card.querySelector('input[type="checkbox"]');
         if (switchLabel) {
-          switchLabel.addEventListener('click', (e) => e.stopPropagation());
+          switchLabel.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (viewOnly) {
+              e.preventDefault();
+              ToastModule.show(readOnlyToggleMessage(), 'info');
+            }
+          });
         }
-        if (checkbox) {
+        if (checkbox && !viewOnly) {
           checkbox.addEventListener('change', (e) => {
             e.stopPropagation();
             const shouldDisable = !e.target.checked;

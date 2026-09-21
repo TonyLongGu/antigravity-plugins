@@ -76,7 +76,7 @@ $sourceDir = $PSScriptRoot
 $pkgJsonPath = Join-Path $sourceDir "package.json"
 $extPublisher = "antigravity-toolkit"
 $extName = "ai-quota-status"
-$extVersion = "1.0.4"
+$extVersion = "1.1.0"
 $displayName = "AI 模型額度狀態監控"
 
 if (Test-Path -LiteralPath $pkgJsonPath) {
@@ -99,13 +99,13 @@ if ($Target -eq "Prompt") {
         Write-Host "========================================" -ForegroundColor Cyan
         Write-Host "  安裝擴充套件: $displayName" -ForegroundColor Yellow
         Write-Host "  識別碼: $fullExtId (v$extVersion)" -ForegroundColor Gray
-        Write-Host "  提示: 此套件專為 Google Antigravity IDE 額度監控設計" -ForegroundColor DarkGray
+        Write-Host "  提示: Antigravity 走本機 LS；Cursor 走雲端 usage API" -ForegroundColor DarkGray
         Write-Host "========================================" -ForegroundColor Cyan
         Write-Host "  請選擇安裝目標 IDE 環境 (嚴格隔離，互不干涉)：" -ForegroundColor Yellow
-        Write-Host "  [1] Google Antigravity IDE (專屬推薦)" -ForegroundColor Green
-        Write-Host "  [2] Visual Studio Code (不支援額度 API)" -ForegroundColor White
-        Write-Host "  [3] Cursor (不支援額度 API)" -ForegroundColor White
-        Write-Host "  [4] 全部已安裝的 IDE (僅安裝至支援環境)" -ForegroundColor Magenta
+        Write-Host "  [1] Google Antigravity IDE (預設)" -ForegroundColor Green
+        Write-Host "  [2] Visual Studio Code (無對應額度 API，略過)" -ForegroundColor White
+        Write-Host "  [3] Cursor (Auto / API 月結額度)" -ForegroundColor White
+        Write-Host "  [4] 全部已支援的 IDE (Antigravity + Cursor)" -ForegroundColor Magenta
         Write-Host "========================================" -ForegroundColor Cyan
         $choice = Read-Host "請輸入選項編號 [1-4] (直接按 Enter 為 1)"
         switch ($choice.Trim()) {
@@ -119,14 +119,13 @@ if ($Target -eq "Prompt") {
     }
 }
 
-if ($Target -eq "VSCode" -or $Target -eq "Cursor") {
+if ($Target -eq "VSCode") {
     Write-Host ""
-    Write-Host "[提示] 此套件 ($displayName) 專為 Google Antigravity IDE 額度監控打造。" -ForegroundColor Yellow
-    Write-Host "在 VS Code / Cursor 環境中無法存取 Antigravity 額度 API，已安全略過安裝。" -ForegroundColor Gray
+    Write-Host "[提示] 此套件 ($displayName) 在 VS Code 沒有對應額度 API，已安全略過安裝。" -ForegroundColor Yellow
     Exit 0
 }
 
-# 候選 IDE 環境定義 (僅 Antigravity)
+# 候選 IDE 環境定義
 $antigravityTargets = @(
     [PSCustomObject]@{
         Name = "Antigravity IDE"
@@ -145,8 +144,26 @@ $antigravityTargets = @(
     }
 )
 
+$cursorTargets = @(
+    [PSCustomObject]@{
+        Name = "Cursor"
+        ExtensionsRoot = (Join-Path $env:USERPROFILE ".cursor\extensions")
+        CheckPaths = @(
+            (Join-Path $env:USERPROFILE ".cursor"),
+            (Join-Path $env:APPDATA "Cursor")
+        )
+    }
+)
+
+$candidatePool = switch ($Target) {
+    "Antigravity" { $antigravityTargets }
+    "Cursor"      { $cursorTargets }
+    "All"         { $antigravityTargets + $cursorTargets }
+    Default       { $antigravityTargets }
+}
+
 $targetEnvironments = @()
-foreach ($c in $antigravityTargets) {
+foreach ($c in $candidatePool) {
     $matched = $false
     if (Test-Path -LiteralPath $c.ExtensionsRoot) {
         $matched = $true
@@ -166,7 +183,7 @@ foreach ($c in $antigravityTargets) {
 
 if ($targetEnvironments.Count -eq 0) {
     Write-Host ""
-    Write-Host "[警告] 未於本機偵測到任何符合條件的 Antigravity IDE！" -ForegroundColor Yellow
+    Write-Host "[警告] 未於本機偵測到任何符合條件的目標 IDE！" -ForegroundColor Yellow
     Write-Host "腳本已中止，未建立任何多餘資料夾。" -ForegroundColor Gray
     Exit 0
 }
@@ -317,5 +334,5 @@ foreach ($envTarget in $targetEnvironments) {
 
 Write-Host ""
 if ($successCount -gt 0) {
-    Write-Host "擴充套件安裝成功！請於 Antigravity IDE 按 [Ctrl + Shift + P] -> [Developer: Reload Window] 載入。" -ForegroundColor Green
+    Write-Host "擴充套件安裝成功！請於目標 IDE 按 [Ctrl + Shift + P] -> [Developer: Reload Window] 載入。" -ForegroundColor Green
 }

@@ -762,6 +762,59 @@ details[open] > summary .item-chevron {
 /* ==============================================================================
    列表與折疊明細 (Folder & Details Lists)
    ============================================================================== */
+#ws-skill-sync-list {
+  margin: 6px 0 4px;
+}
+
+#ws-skill-sync-row {
+  position: relative;
+  overflow: hidden;
+}
+
+#ws-skill-sync-row .skill-sync-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+#ws-skill-sync-row .skill-sync-refresh {
+  position: relative;
+  z-index: 1;
+  width: 22px;
+  height: 22px;
+  color: var(--text-secondary);
+  border: 1px solid #4b5563;
+}
+
+#ws-skill-sync-row .skill-sync-refresh:hover {
+  color: #d1d5db;
+  border-color: #374151;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+#ws-skill-sync-row .skill-sync-refresh .lucide-icon {
+  width: 13px;
+  height: 13px;
+}
+
+#ws-skill-sync-row .skill-sync-switch::after {
+  top: -4px;
+  bottom: -4px;
+  left: -6px;
+  right: -4px;
+}
+
+#ws-skill-sync-row .skill-sync-switch.is-checked {
+  background: #9a9a9a;
+  border-color: #b0b0b0;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.12);
+}
+
+#ws-skill-sync-row .skill-sync-switch.is-checked:hover {
+  background: #b0b0b0;
+}
+
 .folder-details {
   font-size: 11px;
   color: var(--text-secondary);

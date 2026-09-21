@@ -2,6 +2,7 @@ const vscode = require('vscode');
 const fs = require('node:fs');
 const path = require('node:path');
 const { getCanonicalPath, safeJsonParse } = require('./systemService');
+const skillSyncService = require('./skillSyncService');
 
 let cachedWorkspaceContext = null;
 let saveDebounceTimer = null;
@@ -11,6 +12,31 @@ let saveDebounceTimer = null;
  */
 function invalidateWorkspaceCache() {
   cachedWorkspaceContext = null;
+}
+
+/**
+ * 同步開關開啟時，依目前 folders 比對 Junction 並重整 Skills 目錄監看
+ * @param {object} json
+ * @param {string} wsDir
+ * @param {object} [provider]
+ * @param {{ notify?: boolean, force?: boolean }} [options]
+ */
+function maybeSyncSkills(json, wsDir, provider = null, options = {}) {
+  try {
+    if (!options.force && !skillSyncService.isSyncEnabled()) return;
+    const folders = Array.isArray(json?.folders) ? json.folders : [];
+    skillSyncService.syncEnabledProjectSkills(
+      folders,
+      wsDir,
+      provider,
+      { notify: options.notify !== false, force: !!options.force }
+    );
+    skillSyncService.refreshSkillWatchers(folders, wsDir);
+  } catch (err) {
+    if (provider?.pushToast) {
+      provider.pushToast(`Skills 同步失敗：${err.message}`, 'error');
+    }
+  }
 }
 
 /**
@@ -287,6 +313,7 @@ function analyzeWorkspace() {
       duplicateCount: 0,
       customNameCount: 0,
       hasCustomNames: false,
+      syncSkillsOnFolderToggle: skillSyncService.isSyncEnabled(),
       folders: folders.map((f) => {
         const fullPath = getCanonicalPath(f.uri.fsPath);
         return {
@@ -347,6 +374,7 @@ function analyzeWorkspace() {
     duplicateCount,
     customNameCount,
     hasCustomNames: customNameCount > 0,
+    syncSkillsOnFolderToggle: skillSyncService.isSyncEnabled(),
     folders: allInfos,
   };
 }
@@ -404,6 +432,7 @@ function setWorkspaceFolderEnabled(targetPath, targetEnabled = null, provider = 
     json.disabledFolders.sort(comparator);
 
     saveWorkspaceJson(wsPath, json);
+    maybeSyncSkills(json, wsDir, provider);
   }
 
   return true;
@@ -462,6 +491,7 @@ function batchSetWorkspaceFoldersEnabled(updates, provider = null) {
     json.folders.sort(comparator);
     json.disabledFolders.sort(comparator);
     saveWorkspaceJson(wsPath, json);
+    maybeSyncSkills(json, wsDir, provider);
   }
 
   return true;
@@ -506,6 +536,7 @@ function showOnlyFirstWorkspaceFolder(provider = null) {
   json.disabledFolders = allItems.slice(1);
 
   saveWorkspaceJson(wsPath, json);
+  maybeSyncSkills(json, wsDir, provider);
   if (provider?.pushToast) provider.pushToast('已切換為僅顯示首項專案！', 'success');
   return true;
 }
@@ -539,6 +570,7 @@ function showAllWorkspaceFolders(provider = null) {
   json.disabledFolders = [];
 
   saveWorkspaceJson(wsPath, json);
+  maybeSyncSkills(json, wsDir, provider);
   if (provider?.pushToast) provider.pushToast('已全部顯示工作區專案！', 'success');
   return true;
 }
@@ -588,6 +620,7 @@ function invertWorkspaceFolders(provider = null) {
   json.disabledFolders = nextDisabled;
 
   saveWorkspaceJson(wsPath, json);
+  maybeSyncSkills(json, wsDir, provider);
   if (provider?.pushToast) provider.pushToast('已反轉專案顯示狀態！', 'success');
   return true;
 }
@@ -732,6 +765,7 @@ module.exports = {
   loadWorkspaceContext,
   invalidateWorkspaceCache,
   saveWorkspaceJson,
+  maybeSyncSkills,
   analyzeWorkspace,
   setWorkspaceFolderEnabled,
   batchSetWorkspaceFoldersEnabled,

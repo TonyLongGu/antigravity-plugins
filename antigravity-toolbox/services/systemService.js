@@ -394,6 +394,9 @@ async function handleOpenTarget(target, provider) {
       await vscode.commands.executeCommand('workbench.action.openSettingsJson');
     } else if (target === 'settingsFolder') {
       await openFolderInside(paths.userSettingsDir);
+    } else if (target === 'agentsSkills') {
+      const skillDir = path.join(getHomeDir(), '.agents', 'skills');
+      await openFolderInside(skillDir);
     } else if (target === 'mcpConfig') {
       ensureDirectory(paths.globalConfig);
       if (fs.existsSync(paths.mcpConfig)) {

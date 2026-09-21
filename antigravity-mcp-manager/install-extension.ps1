@@ -73,10 +73,11 @@ $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 $sourceDir = $PSScriptRoot
 
 # 動態讀取 package.json 資訊
+# 下方為「讀取失敗時」的退路值，須與 package.json 保持一致
 $pkgJsonPath = Join-Path $sourceDir "package.json"
 $extPublisher = "antigravity-toolkit"
 $extName = "antigravity-mcp-manager"
-$extVersion = "1.4.0"
+$extVersion = "1.9.0"
 $displayName = $extName
 
 if (Test-Path -LiteralPath $pkgJsonPath) {
@@ -101,10 +102,10 @@ if ($Target -eq "Prompt") {
         Write-Host "  識別碼: $fullExtId (v$extVersion)" -ForegroundColor Gray
         Write-Host "========================================" -ForegroundColor Cyan
         Write-Host "  請選擇安裝目標 IDE 環境 (嚴格隔離，互不干涉)：" -ForegroundColor Yellow
-        Write-Host "  [1] Google Antigravity IDE (預設推薦)" -ForegroundColor Green
-        Write-Host "  [2] Visual Studio Code" -ForegroundColor White
-        Write-Host "  [3] Cursor" -ForegroundColor White
-        Write-Host "  [4] 全部已安裝的 IDE (All)" -ForegroundColor Magenta
+        Write-Host "  [1] Google Antigravity IDE (預設推薦，原生開關)" -ForegroundColor Green
+        Write-Host "  [2] Visual Studio Code（清單／探測／備註；開關請用 VS Code 原生 UI）" -ForegroundColor White
+        Write-Host "  [3] Cursor（清單／探測／備註；開關請用 Customize）" -ForegroundColor White
+        Write-Host "  [4] 全部已支援的 IDE (Antigravity + VS Code + Cursor)" -ForegroundColor Magenta
         Write-Host "========================================" -ForegroundColor Cyan
         $choice = Read-Host "請輸入選項編號 [1-4] (直接按 Enter 為 1)"
         switch ($choice.Trim()) {
@@ -116,12 +117,6 @@ if ($Target -eq "Prompt") {
     } else {
         $Target = "Antigravity"
     }
-}
-if ($Target -eq "VSCode" -or $Target -eq "Cursor") {
-    Write-Host ""
-    Write-Host "[提示] 此套件 ($displayName) 專為 Google Antigravity IDE 原生 MCP 伺服器管理打造。" -ForegroundColor Yellow
-    Write-Host "在 VS Code / Cursor 環境中不支援，已安全略過安裝。" -ForegroundColor Gray
-    Exit 0
 }
 
 # 候選 IDE 環境定義

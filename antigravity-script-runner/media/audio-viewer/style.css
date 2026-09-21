@@ -238,8 +238,20 @@ body.is-right-dragging * {
   height: 4px;
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.15);
-  outline: none;
+  outline: none !important;
+  box-shadow: none;
   cursor: pointer;
+}
+
+.slider-input:focus,
+.slider-input:focus-visible,
+.slider-input:active {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.slider-input::-moz-focus-outer {
+  border: 0 !important;
 }
 
 .slider-input::-webkit-slider-thumb {

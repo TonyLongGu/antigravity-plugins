@@ -7,6 +7,7 @@ const I18n = require('./i18n');
 
 const UNLIMITED = -1; // -1 代表無限制或尚未初始化標記
 const STATUS_ICON = '$(sparkle)'; // 狀態列前綴圖示，可自由改為 $(flame)、$(zap)、$(sparkle)、$(plug)、$(chip) 等
+const CURSOR_DASHBOARD_URL = 'https://cursor.com/dashboard/spending';
 
 /** 將百分比數字格式化為顯示文字 */
 function fmtPct(pct) {
@@ -14,13 +15,21 @@ function fmtPct(pct) {
   return pct === UNLIMITED ? '∞' : `${pct}%`;
 }
 
-/** 將偏差值格式化為顯示文字（例如 +3.3% 或 -10.8%） */
-function fmtDaily(budget) {
-  if (!budget) return '+0.0%';
-  if (budget.isUnlimited) return '∞';
-  if (budget.usablePercent === null || budget.usablePercent === undefined) return '+0.0%';
-  const val = budget.usablePercent;
-  return val > 0 ? `+${val.toFixed(1)}%` : `${val.toFixed(1)}%`;
+/** 將美分金額格式化為美元文字 */
+function fmtUsdCents(cents) {
+  if (cents === null || cents === undefined || !Number.isFinite(cents)) return '--';
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+/** 將 ISO 日期格式化為 YYYY-MM-DD */
+function fmtDate(iso) {
+  if (!iso) return '--';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '--';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 let extContext = null;
@@ -49,7 +58,7 @@ function activate(context) {
 
   statusBarItem = vscode.window.createStatusBarItem(alignment, priority);
   statusBarItem.command = 'aiQuota.showMenu';
-  statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+  statusBarItem.backgroundColor = undefined;
   statusBarItem.color = undefined;
   statusBarItem.text = `${STATUS_ICON} ${i18n.t('status_checking')}`;
   statusBarItem.show();
@@ -58,7 +67,6 @@ function activate(context) {
   // 2. 註冊命令
   context.subscriptions.push(
     vscode.commands.registerCommand('aiQuota.refresh', async () => {
-      statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
       statusBarItem.text = `${STATUS_ICON} ${i18n.t('status_refreshing')}`;
       await updateStatusBar(true);
       vscode.window.setStatusBarMessage(i18n.t('toast_refreshed'), 2500);
@@ -92,6 +100,12 @@ function activate(context) {
   context.subscriptions.push(
     vscode.commands.registerCommand('aiQuota.switchAccount', async () => {
       await promptSwitchAccount();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('aiQuota.openDashboard', async () => {
+      await vscode.env.openExternal(vscode.Uri.parse(CURSOR_DASHBOARD_URL));
     })
   );
 
@@ -138,8 +152,10 @@ function activate(context) {
     }
   });
 
-  // 7. 監聽 Stop Hook 寫入的 sentinel 觸發檔（對話結束 → 立即刷新）
-  setupSentinelWatcher(context);
+  // 7. Antigravity：監聽 Stop Hook 寫入的 sentinel 觸發檔（對話結束 → 立即刷新）
+  if (quotaService.getBackend() === 'antigravity') {
+    setupSentinelWatcher(context);
+  }
 }
 
 /**
@@ -247,6 +263,130 @@ function formatCalculatedText(item, percent) {
   return i18n.t('calculating');
 }
 
+function applyBackground(config) {
+  const bgMode = config.get('backgroundColor', 'default');
+  let bgColor = undefined;
+  if (bgMode === 'warning') {
+    bgColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+  } else if (bgMode === 'error') {
+    bgColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+  }
+  statusBarItem.backgroundColor = bgColor;
+  statusBarItem.color = undefined;
+}
+
+function appendFooter(md) {
+  md.appendMarkdown(`---\n`);
+  const updatedTime = new Date().toLocaleTimeString(i18n.getLocale() === 'en' ? 'en-US' : 'zh-TW', { hour12: false });
+  md.appendMarkdown(i18n.t('tooltip_last_updated', { time: updatedTime }));
+  md.appendMarkdown(i18n.t('tooltip_click_menu'));
+}
+
+function renderCursorStatus(data, displayMode) {
+  if (!data?.success) {
+    statusBarItem.text = `${STATUS_ICON} ${data?.note || i18n.t('status_checking')}`;
+    const md = new vscode.MarkdownString();
+    md.isTrusted = true;
+    md.appendMarkdown(i18n.t('tooltip_title'));
+    md.appendMarkdown(i18n.t('status_error_tooltip', { error: data?.note || i18n.t('checking') }));
+    md.appendMarkdown('\n\n');
+    appendFooter(md);
+    md.appendMarkdown(i18n.t('tooltip_unofficial'));
+    statusBarItem.tooltip = md;
+    return;
+  }
+
+  const autoHas = !!(data?.auto?.exists && data.auto.percent !== null && data.auto.percent !== undefined);
+  const apiHas = !!(data?.api?.exists && data.api.percent !== null && data.api.percent !== undefined);
+  const reqHas = !!(data?.requests?.exists);
+  const autoPct = autoHas ? data.auto.percent : null;
+  const apiPct = apiHas ? data.api.percent : null;
+
+  let text = '';
+  if (reqHas && data.billingModel === 'request_count') {
+    const used = data.requests.used;
+    const max = data.requests.max;
+    text = displayMode === 'standard' ? `Requests: ${used}/${max}` : `${used}/${max}`;
+  } else if (autoHas || apiHas) {
+    const autoText = fmtPct(autoHas ? autoPct : null);
+    const apiText = fmtPct(apiHas ? apiPct : null);
+    if (displayMode === 'standard') {
+      if (autoHas && apiHas) text = `Auto: ${autoText} | API: ${apiText}`;
+      else if (autoHas) text = `Auto: ${autoText}`;
+      else text = `API: ${apiText}`;
+    } else if (autoHas && apiHas) {
+      text = `${autoText} | ${apiText}`;
+    } else {
+      text = autoHas ? autoText : apiText;
+    }
+  } else if (data?.included?.limitCents) {
+    text = `${fmtUsdCents(data.included.remainingCents)} / ${fmtUsdCents(data.included.limitCents)}`;
+  } else {
+    text = data?.note || i18n.t('checking');
+  }
+
+  statusBarItem.text = `${STATUS_ICON} ${text}`;
+
+  const md = new vscode.MarkdownString();
+  md.isTrusted = true;
+  md.appendMarkdown(i18n.t('tooltip_title'));
+  md.appendMarkdown(i18n.t('tooltip_plan', { plan: data?.account?.tier || 'Cursor' }));
+  if (data?.account?.email && data.account.email !== '連線中...') {
+    md.appendMarkdown(i18n.t('tooltip_account', { email: data.account.email }));
+  }
+  md.appendMarkdown(i18n.t('tooltip_cycle', {
+    start: fmtDate(data?.billing?.cycleStart),
+    end: fmtDate(data?.billing?.cycleEnd)
+  }));
+  if (data?.included?.limitCents != null) {
+    md.appendMarkdown(i18n.t('tooltip_included', {
+      used: fmtUsdCents(data.included.usedCents),
+      limit: fmtUsdCents(data.included.limitCents)
+    }));
+    md.appendMarkdown(i18n.t('tooltip_remaining_dollars', {
+      value: fmtUsdCents(data.included.remainingCents)
+    }));
+  }
+  if (data?.bonus?.spendCents) {
+    md.appendMarkdown(i18n.t('tooltip_bonus', { value: fmtUsdCents(data.bonus.spendCents) }));
+  }
+  if (data?.messages?.display) {
+    md.appendMarkdown(i18n.t('tooltip_message', { message: data.messages.display }));
+  }
+  if (data?.account?.pendingCancellationDate) {
+    md.appendMarkdown(i18n.t('tooltip_cancel', { date: fmtDate(data.account.pendingCancellationDate) }));
+  }
+  md.appendMarkdown('\n');
+
+  if (reqHas && data.billingModel === 'request_count') {
+    const refresh = formatResetTime(data.requests.resetTime, false, i18n.t('plenty'));
+    md.appendMarkdown(i18n.t('tooltip_requests_header'));
+    md.appendMarkdown(i18n.t('tooltip_requests', { used: data.requests.used, max: data.requests.max }));
+    md.appendMarkdown(i18n.t('tooltip_remaining', { value: fmtPct(data.requests.percent), refresh }));
+    md.appendMarkdown(i18n.t('tooltip_daily_budget', { value: formatCalculatedText(data.requests.dailyBudget, data.requests.percent) }));
+    md.appendMarkdown(i18n.t('tooltip_deviation', { value: formatCalculatedText(data.requests.deviation, data.requests.percent) }));
+  } else {
+    if (autoHas) {
+      const refresh = formatResetTime(data.auto.resetTime, autoPct === UNLIMITED, i18n.t('plenty'));
+      md.appendMarkdown(i18n.t('tooltip_auto_header'));
+      md.appendMarkdown(i18n.t('tooltip_remaining', { value: fmtPct(autoPct), refresh }));
+      md.appendMarkdown(i18n.t('tooltip_daily_budget', { value: formatCalculatedText(data.auto.dailyBudget, autoPct) }));
+      md.appendMarkdown(i18n.t('tooltip_deviation', { value: formatCalculatedText(data.auto.deviation, autoPct) }));
+    }
+    if (apiHas) {
+      const refresh = formatResetTime(data.api.resetTime, apiPct === UNLIMITED, i18n.t('plenty'));
+      md.appendMarkdown(i18n.t('tooltip_api_header'));
+      md.appendMarkdown(i18n.t('tooltip_remaining', { value: fmtPct(apiPct), refresh }));
+      md.appendMarkdown(i18n.t('tooltip_daily_budget', { value: formatCalculatedText(data.api.dailyBudget, apiPct) }));
+      md.appendMarkdown(i18n.t('tooltip_deviation', { value: formatCalculatedText(data.api.deviation, apiPct) }));
+    }
+  }
+
+  appendFooter(md);
+  md.appendMarkdown(i18n.t('tooltip_unofficial'));
+  statusBarItem.tooltip = md;
+}
+
 /**
  * 更新狀態列文字與 Tooltip
  * @param {boolean} forceRefresh
@@ -258,6 +398,13 @@ async function updateStatusBar(forceRefresh = false) {
     const data = await quotaService.getQuotaStatus(forceRefresh);
     const config = vscode.workspace.getConfiguration('aiQuota');
     const displayMode = config.get('displayMode', 'compact');
+
+    applyBackground(config);
+
+    if (data?.source === 'cursor') {
+      renderCursorStatus(data, displayMode);
+      return;
+    }
 
     const gPri = data?.gemini?.primary?.percent ?? 100;
     const cPri = data?.claude?.primary?.percent ?? 100;
@@ -291,17 +438,6 @@ async function updateStatusBar(forceRefresh = false) {
 
     statusBarItem.text = `${STATUS_ICON} ${text}`;
 
-    // 依據使用者設定配置狀態列底色 (預設 default 無底色)
-    const bgMode = config.get('backgroundColor', 'default');
-    let bgColor = undefined;
-    if (bgMode === 'warning') {
-      bgColor = new vscode.ThemeColor('statusBarItem.warningBackground');
-    } else if (bgMode === 'error') {
-      bgColor = new vscode.ThemeColor('statusBarItem.errorBackground');
-    }
-    statusBarItem.backgroundColor = bgColor;
-    statusBarItem.color = undefined;
-
     // 建立純文字 Markdown Tooltip (詳細資訊在懸停時查看)
     const md = new vscode.MarkdownString();
     md.isTrusted = true;
@@ -333,11 +469,7 @@ async function updateStatusBar(forceRefresh = false) {
     md.appendMarkdown(i18n.t('tooltip_daily_budget', { value: cDaily }));
     md.appendMarkdown(i18n.t('tooltip_deviation', { value: cDev }));
 
-    md.appendMarkdown(`---\n`);
-    const updatedTime = new Date().toLocaleTimeString(i18n.getLocale() === 'en' ? 'en-US' : 'zh-TW', { hour12: false });
-    md.appendMarkdown(i18n.t('tooltip_last_updated', { time: updatedTime }));
-    md.appendMarkdown(i18n.t('tooltip_click_menu'));
-
+    appendFooter(md);
     statusBarItem.tooltip = md;
   } catch (err) {
     statusBarItem.text = `${STATUS_ICON} ${i18n.t('status_error')}`;
@@ -365,6 +497,14 @@ async function showActionMenu() {
       label: i18n.t('menu_switch_account_label'),
       description: i18n.t('menu_switch_account_desc', { count: availableServers.length }),
       action: 'switchAccount'
+    });
+  }
+
+  if (quotaService.getBackend() === 'cursor') {
+    items.push({
+      label: i18n.t('menu_dashboard_label'),
+      description: i18n.t('menu_dashboard_desc'),
+      action: 'dashboard'
     });
   }
 
@@ -399,6 +539,9 @@ async function showActionMenu() {
       break;
     case 'switchAccount':
       await promptSwitchAccount();
+      break;
+    case 'dashboard':
+      await vscode.env.openExternal(vscode.Uri.parse(CURSOR_DASHBOARD_URL));
       break;
     case 'toggleMode':
       await promptChangeDisplayMode();

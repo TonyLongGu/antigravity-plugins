@@ -52,6 +52,10 @@
       </summary>
 
       <div class="card-body">
+        <div id="view-only-hint" class="view-only-hint">
+          <!-- 文字由 applyHintBanner() 依宿主決定，故不加 data-i18n（避免被語系迴圈覆寫） -->
+          <span class="hint-text"></span>
+        </div>
         <!-- 全域工具列 -->
         <section class="toolbar">
           <div class="search-box">
