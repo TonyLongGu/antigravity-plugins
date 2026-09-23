@@ -31,8 +31,7 @@ class SystemService {
       return;
     }
     try {
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(targetPath));
-      await vscode.window.showTextDocument(doc, { preview: false });
+      await this._showInEditor(targetPath);
     } catch (e) {
       vscode.window.showErrorMessage(I18n.t('toast_open_config_failed', { msg: e.message }));
     }
@@ -49,13 +48,25 @@ class SystemService {
       return;
     }
     try {
-      const uri = vscode.Uri.file(targetPath);
-      const doc = await vscode.workspace.openTextDocument(uri);
-      await vscode.window.showTextDocument(doc, { preview: false });
+      const uri = await this._showInEditor(targetPath);
       await vscode.commands.executeCommand('revealInExplorer', uri);
     } catch (e) {
       vscode.window.showErrorMessage(I18n.t('msg_file_open_failed', { msg: e.message }));
     }
+  }
+
+  /**
+   * 在編輯器開啟檔案，不把全文同步進 Extension Host。
+   * openTextDocument 會要求把檔案登記成可同步模型。
+   * 工作區外的 ~/.cursor/mcp.json 過不了這關，Cursor 丟出
+   * "Documents above the size limit cannot be synchronized with extensions."
+   * （與實際大小無關，本機這份只有約 2.6 KB 也會中）。
+   * vscode.open 只開編輯器分頁。
+   */
+  static async _showInEditor(targetPath) {
+    const uri = vscode.Uri.file(targetPath);
+    await vscode.commands.executeCommand('vscode.open', uri, { preview: false });
+    return uri;
   }
 }
 
