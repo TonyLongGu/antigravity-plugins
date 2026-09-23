@@ -53,6 +53,7 @@
   "err_cursor_view_only": "Cursor 的 MCP 開關請在 Customize 側邊欄操作，此面板不寫入 mcp.json",
   "err_vscode_view_only": "VS Code 的 MCP 開關請用 VS Code 原生 UI 操作（Copilot 設定或「MCP: List Servers」），此面板僅供檢視",
   "err_server_not_found": "找不到伺服器：{name}",
+  "err_json_parse": "無法解析設定檔 {path}：{msg}",
   "search_placeholder": "搜尋全域 MCP...",
   "filter_all": "全部",
   "filter_enabled": "啟用",

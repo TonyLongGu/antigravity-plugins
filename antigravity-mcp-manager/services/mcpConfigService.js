@@ -132,13 +132,31 @@ class McpConfigService {
     }
   }
 
-  static async safeReadJson(filePath, fallback = {}) {
+  /**
+   * 讀取 JSON。
+   * Windows 上 PowerShell 5.1 / 部分編輯器會寫入 UTF-8 BOM，Node 的 JSON.parse 會直接失敗。
+   * 主設定檔解析失敗時應拋出（throwOnError），不可回傳空物件，否則面板會誤顯示「沒有伺服器」，
+   * 後續寫入還可能把原檔覆蓋成空清單。
+   */
+  static async safeReadJson(filePath, fallback = {}, options = {}) {
+    let content;
     try {
-      const content = await fsPromises.readFile(filePath, 'utf-8');
-      return JSON.parse(content);
+      content = await fsPromises.readFile(filePath, 'utf-8');
     } catch (e) {
       if (e.code === 'ENOENT') return fallback;
-      console.warn(`解析 JSON 失敗或檔案不存在 [${filePath}]:`, e.message);
+      console.warn(`讀取 JSON 失敗 [${filePath}]:`, e.message);
+      if (options.throwOnError) throw e;
+      return fallback;
+    }
+
+    try {
+      const text = typeof content === 'string' ? content.replace(/^\uFEFF/, '') : content;
+      return JSON.parse(text);
+    } catch (e) {
+      console.warn(`解析 JSON 失敗 [${filePath}]:`, e.message);
+      if (options.throwOnError) {
+        throw new Error(I18n.t('err_json_parse', { path: filePath, msg: e.message }));
+      }
       return fallback;
     }
   }
@@ -235,7 +253,7 @@ class McpConfigService {
     const viewOnly = this.isViewOnly;
     const configPath = this.globalConfigPath;
     const notesPath = this.notesFilePath;
-    const rawConfig = await this.safeReadJson(configPath, { mcpServers: {} });
+    const rawConfig = await this.safeReadJson(configPath, { mcpServers: {} }, { throwOnError: true });
     const notes = await this.getNotes();
     const servers = rawConfig[this.serversKey] || {};
     const disabledNames = viewOnly ? await CursorEnablementService.getDisabledServerNames() : null;
@@ -357,7 +375,7 @@ class McpConfigService {
   static async getVscodeData() {
     const configPath = this.globalConfigPath;
     const notesPath = this.notesFilePath;
-    const rawConfig = await this.safeReadJson(configPath, { servers: {} });
+    const rawConfig = await this.safeReadJson(configPath, { servers: {} }, { throwOnError: true });
     const notes = await this.getNotes();
     const enablement = await VscodeEnablementService.readState();
     const normalizedServers = {};
@@ -416,7 +434,7 @@ class McpConfigService {
     this.assertWritableToggles();
 
     const configPath = this.globalConfigPath;
-    const rawConfig = await this.safeReadJson(configPath, { mcpServers: {} });
+    const rawConfig = await this.safeReadJson(configPath, { mcpServers: {} }, { throwOnError: true });
     const servers = rawConfig[this.serversKey] || {};
     if (!servers[serverName]) {
       throw new Error(I18n.t('err_server_not_found', { name: serverName }));
@@ -454,7 +472,7 @@ class McpConfigService {
 
     try {
       const configPath = this.globalConfigPath;
-      const rawConfig = await this.safeReadJson(configPath, { mcpServers: {} });
+      const rawConfig = await this.safeReadJson(configPath, { mcpServers: {} }, { throwOnError: true });
       const servers = rawConfig[this.serversKey];
       if (servers && servers[serverName]) {
         if (trimmed) {
@@ -476,7 +494,7 @@ class McpConfigService {
     const isInvert = action === 'invert';
 
     const configPath = this.globalConfigPath;
-    const rawConfig = await this.safeReadJson(configPath, { mcpServers: {} });
+    const rawConfig = await this.safeReadJson(configPath, { mcpServers: {} }, { throwOnError: true });
     const servers = rawConfig[this.serversKey] || {};
 
     for (const key of Object.keys(servers)) {

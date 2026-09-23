@@ -53,6 +53,7 @@
   "err_cursor_view_only": "Toggle Cursor MCP servers in the Customize sidebar; this panel does not write mcp.json",
   "err_vscode_view_only": "Use VS Code's own UI to toggle MCP servers (Copilot settings or \"MCP: List Servers\"); this panel is view-only",
   "err_server_not_found": "Server not found: {name}",
+  "err_json_parse": "Failed to parse config {path}: {msg}",
   "search_placeholder": "Search global MCP servers...",
   "filter_all": "All",
   "filter_enabled": "Enabled",
