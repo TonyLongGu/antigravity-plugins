@@ -56,6 +56,7 @@
   let lastVolume = 0.5;
   let justDraggedMarquee = false;
   let lastTargetAudioPath = null;
+  let isCustomEditor = false;
 
   // 3. DOM 節點引用 - 工具列與畫廊
   const playerAudioEl = document.getElementById('playerAudio');
@@ -114,6 +115,7 @@
   const volumeSliderEl = document.getElementById('volumeSlider');
   const ctrlOpenExternalBtnEl = document.getElementById('ctrlOpenExternalBtn');
   const closePlayerBtnEl = document.getElementById('closePlayerBtn');
+  const expandGalleryBtnEl = document.getElementById('expandGalleryBtn');
 
   const toastContainerEl = document.getElementById('toastContainer');
 
@@ -718,6 +720,66 @@
     updatePlayingCardState();
   }
 
+  /**
+   * 退出放大檢視（關閉底部播放列）
+   * - 檔案分頁 (自訂編輯器)：轉為「資料夾名」畫廊分頁並定位該音訊，直接檢視父層資料夾的全部檔案，
+   *   同時避免檔名分頁殘留（之後由檔案總管雙擊同一檔案仍可重新播放）
+   * - 資料夾畫廊分頁：僅關閉播放列並留在畫廊（維持既有瀏覽體驗）
+   */
+  function exitDockedPlayer() {
+    if (isCustomEditor) {
+      expandToFolderGallery(false);
+      return;
+    }
+    closeDockedPlayer();
+  }
+
+  /**
+   * 展開為資料夾畫廊：將檔案分頁轉換為資料夾畫廊分頁，並於畫廊中定位（可選取）目前音訊
+   * @param {boolean} selectFile 是否在畫廊中選取該音訊
+   */
+  function expandToFolderGallery(selectFile = false) {
+    const targetPath = lastTargetAudioPath
+      || (currentIndex >= 0 && currentIndex < filteredAudios.length ? filteredAudios[currentIndex].fullPath : null);
+    closeDockedPlayer();
+    if (!isCustomEditor || !vscode) return;
+    vscode.postMessage({ type: 'expandToFolderGallery', filePath: targetPath, selectFile: !!selectFile });
+  }
+
+  /**
+   * 在畫廊中定位指定音訊卡片（可選取），不自動播放
+   * @param {string} filePath
+   * @param {boolean} select
+   */
+  function revealInGalleryByPath(filePath, select = false) {
+    if (!filePath) return;
+    const normTarget = filePath.replace(/\\/g, '/').toLowerCase();
+    let targetIdx = filteredAudios.findIndex(a => a.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+    if (targetIdx === -1 && allAudios.length > 0 && searchInputEl && searchInputEl.value) {
+      searchInputEl.value = '';
+      applyFilterAndSort();
+      targetIdx = filteredAudios.findIndex(a => a.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+    }
+    if (targetIdx === -1) return;
+
+    const target = filteredAudios[targetIdx];
+    if (select) {
+      selectedPaths.add(target.fullPath);
+      updateSelectionUI();
+    }
+    const cardEl = galleryGridEl.querySelector(`.audio-card[data-path="${CSS.escape(target.fullPath)}"]`);
+    if (cardEl) {
+      cardEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      try {
+        cardEl.focus();
+      } catch (_) {}
+    }
+    showToast(
+      I18nModule.t(select ? 'toast_locate_success' : 'toast_reveal_in_gallery', { file: target.fileName }),
+      'success'
+    );
+  }
+
   // 尋道進度條設置
   function setupProgressBar() {
     let isDragging = false;
@@ -962,6 +1024,10 @@
         return;
       }
       e.preventDefault();
+      // 在底部播放列上按滑鼠右鍵 -> 退出播放列（與圖片／影片檢視器右鍵退出手感一致）
+      if (dockedPlayerBarEl.style.display !== 'none' && e.target.closest && e.target.closest('#dockedPlayerBar')) {
+        exitDockedPlayer();
+      }
     });
   }
 
@@ -1114,7 +1180,10 @@
     nextBtnEl.addEventListener('click', playNext);
     if (autoNextBtnEl) autoNextBtnEl.addEventListener('click', toggleAutoNext);
     loopBtnEl.addEventListener('click', toggleLoop);
-    closePlayerBtnEl.addEventListener('click', closeDockedPlayer);
+    closePlayerBtnEl.addEventListener('click', exitDockedPlayer);
+    if (expandGalleryBtnEl) {
+      expandGalleryBtnEl.addEventListener('click', () => expandToFolderGallery(false));
+    }
 
     // 倍速下拉
     speedBtnEl.addEventListener('click', (e) => {
@@ -1321,10 +1390,20 @@
           if (vscode) vscode.postMessage({ type: 'refresh' });
           break;
         case 'Escape':
-          if (selectedPaths.size > 0) {
+          // 檔案分頁（底部播放列即放大檢視）優先退出播放列；畫廊分頁則優先取消選取（與圖片/影片檢視器一致）
+          if (isCustomEditor && dockedPlayerBarEl.style.display !== 'none') {
+            exitDockedPlayer();
+          } else if (selectedPaths.size > 0) {
             clearSelection();
           } else if (dockedPlayerBarEl.style.display !== 'none') {
-            closeDockedPlayer();
+            exitDockedPlayer();
+          }
+          break;
+        case 'KeyG':
+          // 展開為資料夾畫廊（僅檔案分頁有效）
+          if (!e.ctrlKey && !e.altKey && !e.metaKey && isCustomEditor) {
+            e.preventDefault();
+            expandToFolderGallery(false);
           }
           break;
       }
@@ -1398,6 +1477,14 @@
 
           applyFilterAndSort();
 
+          if (typeof msg.isCustomEditor === 'boolean') {
+            isCustomEditor = msg.isCustomEditor;
+          }
+          // 「展開為資料夾畫廊」僅在檔案分頁（自訂編輯器）中有意義
+          if (expandGalleryBtnEl) {
+            expandGalleryBtnEl.style.display = isCustomEditor ? '' : 'none';
+          }
+
           // 若直接在某個音訊檔案上按右鍵或雙擊開啟 -> 一律直接播放音訊
           if (msg.targetFilePath) {
             const normTarget = msg.targetFilePath.replace(/\\/g, '/').toLowerCase();
@@ -1416,6 +1503,17 @@
                 cardEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
               }
             }
+          }
+
+          // 由檔案分頁「展開為資料夾畫廊」轉入：於畫廊中定位（可選取）該音訊
+          if (msg.revealFilePath) {
+            revealInGalleryByPath(msg.revealFilePath, msg.selectFilePath === msg.revealFilePath);
+          }
+          break;
+
+        case 'revealInGallery':
+          if (msg.filePath) {
+            revealInGalleryByPath(msg.filePath, !!msg.select);
           }
           break;
 
@@ -1440,6 +1538,21 @@
             if (newIdx !== -1) {
               currentIndex = newIdx;
               playerMetaEl.textContent = `${(filteredAudios[currentIndex].ext || 'AUDIO').toUpperCase()} • ${filteredAudios[currentIndex].sizeFormatted} • ${currentIndex + 1} / ${filteredAudios.length}`;
+            } else if (isCustomEditor) {
+              // 檔案分頁所播放的音訊已被刪除：直接關閉該分頁，避免殘留指向不存在檔案的分頁
+              if (vscode) {
+                vscode.postMessage({ type: 'closeCustomEditor' });
+              }
+            } else {
+              // 正在播放的音訊被刪除：若仍有剩餘音訊則改播下一首（或最後一首），若無則關閉播放列
+              if (filteredAudios.length > 0) {
+                const targetIdx = Math.max(0, Math.min(currentIndex, filteredAudios.length - 1));
+                // 重設 currentIndex，避免 playTrack 的「同曲切換暫停／同曲續播」分支誤判而停留在已刪除的音訊上
+                currentIndex = -1;
+                playTrack(targetIdx);
+              } else {
+                closeDockedPlayer();
+              }
             }
           }
           updatePlayingCardState();

@@ -49,13 +49,14 @@
   let isRecursive = false;
   let showThumbs = true;
   let isCustomEditor = false;
-  let hasExpandedToGallery = false;
   let lastOpenVideoTime = 0;
   let cleanupRestoreSound = null;
   let isAutoplayMutedFallback = false;
 
   // 播放器狀態
   let currentIndex = -1;
+  // 最近一次以放大檢視開啟的影片絕對路徑（供「展開為資料夾畫廊」定位使用）
+  let lastTargetVideoPath = null;
   let isSeeking = false;
   let justDraggedProgress = false;
   let seekCooldownTimer = null;
@@ -1414,6 +1415,54 @@
     }
   }
 
+  /**
+   * 退出放大檢視（關閉播放器）
+   * - 檔案分頁 (自訂編輯器)：轉為「資料夾名」畫廊分頁並定位該影片，直接檢視父層資料夾的全部檔案，
+   *   同時避免檔名分頁殘留（之後由檔案總管雙擊同一檔案仍可重新開啟播放）
+   * - 資料夾畫廊分頁：僅關閉播放器並留在畫廊（維持既有瀏覽體驗）
+   */
+  function exitPlayer() {
+    if (isCustomEditor) {
+      expandToFolderGallery(false);
+      return;
+    }
+    closePlayer();
+  }
+
+  /**
+   * 在畫廊中定位指定影片卡片（可選取），不開啟播放器
+   * @param {string} filePath
+   * @param {boolean} select
+   */
+  function revealInGalleryByPath(filePath, select = false) {
+    if (!filePath) return;
+    const normTarget = filePath.replace(/\\/g, '/').toLowerCase();
+    let targetIdx = filteredVideos.findIndex(v => v.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+    if (targetIdx === -1 && allVideos.length > 0 && searchInputEl && searchInputEl.value) {
+      searchInputEl.value = '';
+      applyFilterAndSort();
+      targetIdx = filteredVideos.findIndex(v => v.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+    }
+    if (targetIdx === -1) return;
+
+    const target = filteredVideos[targetIdx];
+    if (select) {
+      selectedPaths.add(target.fullPath);
+      updateSelectionUI();
+    }
+    const cardEl = galleryGridEl.querySelector(`.video-card[data-path="${CSS.escape(target.fullPath)}"]`);
+    if (cardEl) {
+      cardEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      try {
+        cardEl.focus();
+      } catch (_) {}
+    }
+    showToast(
+      I18nModule.t(select ? 'toast_locate_success' : 'toast_reveal_in_gallery', { file: target.fileName }),
+      'success'
+    );
+  }
+
   function prevVideo() {
     if (currentIndex > 0) {
       openPlayer(currentIndex - 1);
@@ -1880,22 +1929,28 @@
     });
   }
 
-  // 展開為資料夾畫廊
-  function expandToGallery() {
-    hasExpandedToGallery = true;
-    showToast(I18nModule.t('toast_expanded_gallery'), 'info');
+  // 展開為資料夾畫廊：檔案分頁轉換為資料夾畫廊分頁，並於畫廊中定位（可選取）目前影片
+  function expandToFolderGallery(selectFile = false) {
+    const targetPath = lastTargetVideoPath
+      || (currentIndex >= 0 && currentIndex < filteredVideos.length ? filteredVideos[currentIndex].fullPath : null);
     closePlayer();
+    if (!isCustomEditor || !vscode) return;
+    vscode.postMessage({ type: 'expandToFolderGallery', filePath: targetPath, selectFile: !!selectFile });
   }
 
   if (expandGalleryBtnEl) {
-    expandGalleryBtnEl.addEventListener('click', expandToGallery);
+    expandGalleryBtnEl.addEventListener('click', () => expandToFolderGallery(false));
   }
 
   // 在畫廊中選取當前播放影片並關閉
   selectAndCloseBtnEl.addEventListener('click', () => {
-    hasExpandedToGallery = true;
     if (currentIndex >= 0 && currentIndex < filteredVideos.length) {
       const cur = filteredVideos[currentIndex];
+      // 檔案分頁：轉為資料夾畫廊分頁並選取該影片，避免選取狀態隨分頁關閉而無從檢視
+      if (isCustomEditor) {
+        expandToFolderGallery(true);
+        return;
+      }
       closePlayer();
       selectedPaths.add(cur.fullPath);
       updateSelectionUI();
@@ -1981,7 +2036,7 @@
   playerModalEl.addEventListener('pointermove', handlePointerMove);
 
   // 18. 關閉按鈕與右鍵退出 (符合「圖片檢視器右鍵退出」體驗)
-  playerCloseBtnEl.addEventListener('click', closePlayer);
+  playerCloseBtnEl.addEventListener('click', exitPlayer);
 
   // 全域右鍵阻斷與播放器右鍵退出核心
   document.addEventListener('contextmenu', (e) => {
@@ -1997,7 +2052,7 @@
 
     // 若在播放器視窗內點擊滑鼠右鍵 -> 關閉播放器（如同 Esc）
     if (playerModalEl.classList.contains('active')) {
-      closePlayer();
+      exitPlayer();
     }
   });
 
@@ -2285,7 +2340,7 @@
       const hasModifier = e.ctrlKey || e.metaKey || e.altKey;
 
       if (e.key === 'Escape') {
-        closePlayer();
+        exitPlayer();
         e.preventDefault();
       } else if (!hasModifier && (e.key === ' ' || e.code === 'Space')) {
         togglePlayPause();
@@ -2338,7 +2393,9 @@
         toggleLoop();
         e.preventDefault();
       } else if (!hasModifier && (e.key === 'g' || e.key === 'G')) {
-        expandToGallery();
+        if (isCustomEditor) {
+          expandToFolderGallery(false);
+        }
         e.preventDefault();
       } else if (!hasModifier && (e.key === 's' || e.key === 'S' || e.key === 'Enter')) {
         selectAndCloseBtnEl.click();
@@ -2524,9 +2581,10 @@
 
         if (typeof message.isCustomEditor === 'boolean') {
           isCustomEditor = message.isCustomEditor;
-          if (!isCustomEditor && expandGalleryBtnEl) {
-            expandGalleryBtnEl.style.display = 'none';
-          }
+        }
+        // 「展開為資料夾畫廊」僅在檔案分頁（自訂編輯器）中有意義
+        if (expandGalleryBtnEl) {
+          expandGalleryBtnEl.style.display = isCustomEditor ? '' : 'none';
         }
 
         folderNameEl.textContent = folderNameStr;
@@ -2561,6 +2619,17 @@
             }
           }
         }
+
+        // 由檔案分頁「展開為資料夾畫廊」轉入：於畫廊中定位（可選取）該影片
+        if (message.revealFilePath) {
+          revealInGalleryByPath(message.revealFilePath, message.selectFilePath === message.revealFilePath);
+        }
+        break;
+
+      case 'revealInGallery':
+        if (message.filePath) {
+          revealInGalleryByPath(message.filePath, !!message.select);
+        }
         break;
 
       case 'updateVideos': {
@@ -2586,6 +2655,11 @@
             playerIndexBadgeEl.textContent = `${currentIndex + 1} / ${filteredVideos.length}`;
             prevBtnEl.disabled = currentIndex <= 0;
             nextBtnEl.disabled = currentIndex >= filteredVideos.length - 1;
+          } else if (isCustomEditor) {
+            // 檔案分頁所播放的影片已被刪除：直接關閉該分頁，避免殘留指向不存在檔案的分頁
+            if (vscode) {
+              vscode.postMessage({ type: 'closeCustomEditor' });
+            }
           } else {
             // 正在檢視的影片被刪除：若仍有剩餘影片則平滑顯示下一部（或最後一部），若無影片則退出播放器
             if (filteredVideos.length > 0) {
@@ -2609,7 +2683,6 @@
 
       case 'openTargetVideo':
         if (message.filePath) {
-          hasExpandedToGallery = false;
           const normTarget = message.filePath.replace(/\\/g, '/').toLowerCase();
           let targetIdx = filteredVideos.findIndex(v => v.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
           if (targetIdx === -1 && allVideos && allVideos.length > 0) {

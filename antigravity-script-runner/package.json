@@ -2,7 +2,7 @@
 	"name": "antigravity-script-runner",
 	"displayName": "腳本右鍵執行工具 (Script Runner)",
 	"description": "在 Cursor、Antigravity IDE 與 VS Code 檔案總管與編輯器為 .bat、.cmd、.ps1、.py 腳本提供右鍵與右上角 ▶ 按鈕執行功能（在內建 PowerShell 終端機安全執行），並提供圖片、聲音、影片多媒體檢視器",
-	"version": "1.6.2",
+	"version": "1.7.1",
 	"publisher": "antigravity-toolkit",
 	"engines": {
 		"vscode": "^1.80.0"
@@ -11,6 +11,9 @@
 		"Other"
 	],
 	"main": "./extension.js",
+	"scripts": {
+		"test": "node tests/run-all.js"
+	},
 	"activationEvents": [],
 	"contributes": {
 		"customEditors": [

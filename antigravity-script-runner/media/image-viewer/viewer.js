@@ -42,11 +42,12 @@
   let folderNameStr = '';
   let isRecursive = false;
   let isCustomEditor = false;
-  let hasExpandedToGallery = false;
   let lastOpenImageTime = 0;
 
   // 檢視器狀態
   let currentIndex = -1;
+  // 最近一次以放大檢視開啟的圖片絕對路徑（供「展開為資料夾畫廊」定位使用）
+  let lastTargetImagePath = null;
   let scale = 1;
   let panX = 0;
   let panY = 0;
@@ -269,6 +270,7 @@
   const selectAndCloseBtnEl = document.getElementById('selectAndCloseBtn');
   const lightboxCopyPathBtnEl = document.getElementById('lightboxCopyPathBtn');
   const lightboxDeleteBtnEl = document.getElementById('lightboxDeleteBtn');
+  const expandGalleryBtnEl = document.getElementById('expandGalleryBtn');
   const toastContainerEl = document.getElementById('toastContainer');
 
   // 4. Toast 通知系統 (畫面中上方醒目輕量提示)
@@ -749,6 +751,66 @@
     }
   }
 
+  /**
+   * 退出放大檢視
+   * - 檔案分頁 (自訂編輯器)：轉為「資料夾名」畫廊分頁並定位該圖，直接檢視父層資料夾的全部檔案，
+   *   同時避免檔名分頁殘留（之後由檔案總管雙擊同一檔案仍可重新放大開啟）
+   * - 資料夾畫廊分頁：僅關閉浮層並留在畫廊（維持既有瀏覽體驗）
+   */
+  function exitLightbox() {
+    if (isCustomEditor) {
+      expandToFolderGallery(false);
+      return;
+    }
+    closeLightbox();
+  }
+
+  /**
+   * 展開為資料夾畫廊：將檔案分頁轉換為資料夾畫廊分頁，並於畫廊中定位（可選取）目前圖片
+   * @param {boolean} selectFile 是否在畫廊中選取該圖片
+   */
+  function expandToFolderGallery(selectFile = false) {
+    const targetPath = lastTargetImagePath
+      || (currentIndex >= 0 && currentIndex < filteredImages.length ? filteredImages[currentIndex].fullPath : null);
+    closeLightbox();
+    if (!isCustomEditor || !vscode) return;
+    vscode.postMessage({ type: 'expandToFolderGallery', filePath: targetPath, selectFile: !!selectFile });
+  }
+
+  /**
+   * 在畫廊中定位指定圖片卡片（可選取），不開啟大圖檢視
+   * @param {string} filePath
+   * @param {boolean} select
+   */
+  function revealInGalleryByPath(filePath, select = false) {
+    if (!filePath) return;
+    const normTarget = filePath.replace(/\\/g, '/').toLowerCase();
+    let targetIdx = filteredImages.findIndex(img => img.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+    if (targetIdx === -1 && allImages.length > 0 && searchInputEl && searchInputEl.value) {
+      searchInputEl.value = '';
+      applyFilterAndSort();
+      targetIdx = filteredImages.findIndex(img => img.fullPath.replace(/\\/g, '/').toLowerCase() === normTarget);
+    }
+    if (targetIdx === -1) return;
+
+    const target = filteredImages[targetIdx];
+    if (select) {
+      selectedPaths.add(target.fullPath);
+      updateSelectionUI();
+    }
+    const cardEl = galleryGridEl.querySelector(`.image-card[data-path="${CSS.escape(target.fullPath)}"]`);
+    if (cardEl) {
+      cardEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      try {
+        cardEl.focus();
+      } catch (_) {}
+    }
+    showToast(
+      I18nModule.t(select ? 'toast_selected_in_gallery' : 'toast_reveal_in_gallery', { name: target.fileName }),
+      'success'
+    );
+  }
+
   function prevImage() {
     if (currentIndex > 0) {
       openLightbox(currentIndex - 1);
@@ -1060,7 +1122,7 @@
     }
     e.preventDefault();
     if (lightboxModalEl.classList.contains('active')) {
-      closeLightbox();
+      exitLightbox();
     }
   });
 
@@ -1306,11 +1368,11 @@
   });
 
   // 檢視器按鈕與滑鼠事件（點擊關閉按鈕或在檢視器內按滑鼠右鍵均可退出，如同 Esc）
-  lightboxCloseBtnEl.addEventListener('click', closeLightbox);
+  lightboxCloseBtnEl.addEventListener('click', exitLightbox);
   lightboxModalEl.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    closeLightbox();
+    exitLightbox();
   });
 
   prevBtnEl.addEventListener('click', prevImage);
@@ -1341,9 +1403,19 @@
   zoomFitBtnEl.addEventListener('click', () => fitToScreen(true));
   zoomActualBtnEl.addEventListener('click', () => zoomActual(true));
 
+  // 展開為資料夾畫廊（僅檔案分頁顯示）
+  if (expandGalleryBtnEl) {
+    expandGalleryBtnEl.addEventListener('click', () => expandToFolderGallery(false));
+  }
+
   selectAndCloseBtnEl.addEventListener('click', () => {
     if (currentIndex >= 0 && currentIndex < filteredImages.length) {
       const cur = filteredImages[currentIndex];
+      // 檔案分頁：轉為資料夾畫廊分頁並選取該圖片，避免選取狀態隨分頁關閉而無從檢視
+      if (isCustomEditor) {
+        expandToFolderGallery(true);
+        return;
+      }
       closeLightbox();
       selectedPaths.add(cur.fullPath);
       updateSelectionUI();
@@ -1394,7 +1466,7 @@
       const hasModifier = e.ctrlKey || e.metaKey || e.altKey;
 
       if (e.key === 'Escape') {
-        closeLightbox();
+        exitLightbox();
         e.preventDefault();
       } else if (!hasModifier && e.key === 'ArrowLeft') {
         prevImage();
@@ -1410,6 +1482,11 @@
         e.preventDefault();
       } else if (!hasModifier && e.key === '0') {
         fitToScreen(true);
+        e.preventDefault();
+      } else if (!hasModifier && (e.key === 'g' || e.key === 'G')) {
+        if (isCustomEditor) {
+          expandToFolderGallery(false);
+        }
         e.preventDefault();
       } else if (!hasModifier && (e.key === 's' || e.key === 'S' || e.key === 'Enter')) {
         selectAndCloseBtnEl.click();
@@ -1497,6 +1574,10 @@
         if (typeof message.isCustomEditor === 'boolean') {
           isCustomEditor = message.isCustomEditor;
         }
+        // 「展開為資料夾畫廊」僅在檔案分頁（自訂編輯器）中有意義
+        if (expandGalleryBtnEl) {
+          expandGalleryBtnEl.style.display = isCustomEditor ? '' : 'none';
+        }
 
         // 清理不存在於當前清單中的選取路徑
         selectedPaths.forEach(p => {
@@ -1524,11 +1605,21 @@
             }
           }
         }
+
+        // 由檔案分頁「展開為資料夾畫廊」轉入：於畫廊中定位（可選取）該圖片
+        if (message.revealFilePath) {
+          revealInGalleryByPath(message.revealFilePath, message.selectFilePath === message.revealFilePath);
+        }
+        break;
+
+      case 'revealInGallery':
+        if (message.filePath) {
+          revealInGalleryByPath(message.filePath, !!message.select);
+        }
         break;
 
       case 'openTargetImage':
         if (message.filePath) {
-          hasExpandedToGallery = false;
           openTargetImageByPath(message.filePath);
         }
         break;
@@ -1555,6 +1646,11 @@
           if (newIdx !== -1) {
             currentIndex = newIdx;
             lightboxIndexBadgeEl.textContent = `${currentIndex + 1} / ${filteredImages.length}`;
+          } else if (isCustomEditor) {
+            // 檔案分頁所檢視的圖片已被刪除：直接關閉該分頁，避免殘留指向不存在檔案的分頁
+            if (vscode) {
+              vscode.postMessage({ type: 'closeCustomEditor' });
+            }
           } else {
             // 正在檢視的圖片被刪除：若仍有剩餘圖片則平滑顯示下一張（或最後一張），若無圖片則退出檢視器
             if (filteredImages.length > 0) {

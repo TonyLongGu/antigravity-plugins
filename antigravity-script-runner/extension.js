@@ -610,8 +610,9 @@ class ImageViewerPanel {
    * @param {vscode.Uri} extensionUri
    * @param {vscode.Uri} folderUri
    * @param {string|null} initialImagePath
+   * @param {{ filePath: string, select: boolean }|null} galleryReveal 由檔案分頁「展開為資料夾畫廊」轉入時，需在畫廊中定位（可選取）的圖片
    */
-  static async createOrShow(extensionUri, folderUri, initialImagePath = null) {
+  static async createOrShow(extensionUri, folderUri, initialImagePath = null, galleryReveal = null) {
     const folderPath = folderUri.fsPath;
     for (const existing of ImageViewerPanel.currentPanels) {
       if (!existing.isCustomEditor && isSamePath(existing.folderPath, folderPath) && existing.panel) {
@@ -632,6 +633,9 @@ class ImageViewerPanel {
             } catch (_) {}
           }, 60);
         }
+        if (galleryReveal && galleryReveal.filePath) {
+          existing.revealInGallery(galleryReveal.filePath, !!galleryReveal.select);
+        }
         return existing;
       }
     }
@@ -651,10 +655,10 @@ class ImageViewerPanel {
       }
     );
 
-    return new ImageViewerPanel(panel, extensionUri, folderUri, initialImagePath);
+    return new ImageViewerPanel(panel, extensionUri, folderUri, initialImagePath, false, galleryReveal);
   }
 
-  constructor(panel, extensionUri, folderUri, initialImagePath = null, isCustomEditor = false) {
+  constructor(panel, extensionUri, folderUri, initialImagePath = null, isCustomEditor = false, galleryReveal = null) {
     this.panel = panel;
     this.extensionUri = extensionUri;
     this.folderUri = folderUri;
@@ -662,6 +666,9 @@ class ImageViewerPanel {
     this.folderName = path.basename(this.folderPath);
     this.initialImagePath = initialImagePath;
     this.isCustomEditor = !!isCustomEditor;
+    // 由檔案分頁轉入畫廊時，待首次資料載入後才需定位（可選取）的圖片
+    this._pendingGalleryReveal = galleryReveal && galleryReveal.filePath ? galleryReveal : null;
+    this._hasSentInitData = false;
     this.isRecursive = false;
     this._disposables = [];
     this._isDisposed = false;
@@ -711,6 +718,21 @@ class ImageViewerPanel {
     return this._readyHandshake.waitUntilReady(timeoutMs);
   }
 
+  /**
+   * 於畫廊中定位（可選取）指定圖片，不開啟大圖檢視
+   * 若面板尚未送出首次資料，改為於 initData 一併帶出，避免訊息順序錯亂
+   * @param {string} filePath
+   * @param {boolean} select
+   */
+  revealInGallery(filePath, select = false) {
+    if (!filePath || this._isDisposed) return;
+    if (this._hasSentInitData && this.panel) {
+      this.panel.webview.postMessage({ type: 'revealInGallery', filePath, select: !!select });
+      return;
+    }
+    this._pendingGalleryReveal = { filePath, select: !!select };
+  }
+
   async _handleMessage(msg) {
     switch (msg.type) {
       case 'ready':
@@ -718,8 +740,18 @@ class ImageViewerPanel {
         await this._sendImages(false);
         break;
       case 'closeCustomEditor':
+        // 僅自訂編輯器（檔案分頁）可自我關閉，避免資料夾畫廊分頁被誤關
+        if (this.isCustomEditor) this.dispose();
+        break;
+      case 'expandToFolderGallery': {
+        if (!this.isCustomEditor) break;
+        const revealPath = typeof msg.filePath === 'string' && msg.filePath ? msg.filePath : null;
+        const galleryReveal = revealPath ? { filePath: revealPath, select: !!msg.selectFile } : null;
+        // 先建立或喚醒資料夾畫廊分頁（畫面無空窗），再關閉目前的自訂編輯器分頁
+        await ImageViewerPanel.createOrShow(this.extensionUri, this.folderUri, null, galleryReveal);
         this.dispose();
         break;
+      }
       case 'refresh':
         await this._sendImages(true);
         break;
@@ -848,6 +880,7 @@ class ImageViewerPanel {
         const savedThumbSize = ImageViewerPanel.globalState
           ? ImageViewerPanel.globalState.get('antigravity.imageViewer.thumbSize', null)
           : null;
+        const pendingReveal = this._pendingGalleryReveal;
         this.panel.webview.postMessage({
           type: 'initData',
           folderPath: this.folderPath,
@@ -856,8 +889,12 @@ class ImageViewerPanel {
           recursive: this.isRecursive,
           thumbSize: savedThumbSize,
           targetFilePath: this.initialImagePath,
-          isCustomEditor: this.isCustomEditor
+          isCustomEditor: this.isCustomEditor,
+          revealFilePath: pendingReveal ? pendingReveal.filePath : null,
+          selectFilePath: pendingReveal && pendingReveal.select ? pendingReveal.filePath : null
         });
+        this._pendingGalleryReveal = null;
+        this._hasSentInitData = true;
         this.initialImagePath = null;
       }
     } catch (err) {
@@ -916,8 +953,9 @@ class VideoViewerPanel {
    * @param {vscode.Uri} extensionUri
    * @param {vscode.Uri} folderUri
    * @param {string|null} initialVideoPath
+   * @param {{ filePath: string, select: boolean }|null} galleryReveal 由檔案分頁「展開為資料夾畫廊」轉入時，需在畫廊中定位（可選取）的影片
    */
-  static async createOrShow(extensionUri, folderUri, initialVideoPath = null) {
+  static async createOrShow(extensionUri, folderUri, initialVideoPath = null, galleryReveal = null) {
     const folderPath = folderUri.fsPath;
     for (const existing of VideoViewerPanel.currentPanels) {
       if (!existing.isCustomEditor && isSamePath(existing.folderPath, folderPath) && existing.panel) {
@@ -938,6 +976,9 @@ class VideoViewerPanel {
             } catch (_) {}
           }, 60);
         }
+        if (galleryReveal && galleryReveal.filePath) {
+          existing.revealInGallery(galleryReveal.filePath, !!galleryReveal.select);
+        }
         return existing;
       }
     }
@@ -957,10 +998,10 @@ class VideoViewerPanel {
       }
     );
 
-    return new VideoViewerPanel(panel, extensionUri, folderUri, initialVideoPath);
+    return new VideoViewerPanel(panel, extensionUri, folderUri, initialVideoPath, false, galleryReveal);
   }
 
-  constructor(panel, extensionUri, folderUri, initialVideoPath = null, isCustomEditor = false) {
+  constructor(panel, extensionUri, folderUri, initialVideoPath = null, isCustomEditor = false, galleryReveal = null) {
     this.panel = panel;
     this.extensionUri = extensionUri;
     this.folderUri = folderUri;
@@ -968,6 +1009,9 @@ class VideoViewerPanel {
     this.folderName = path.basename(this.folderPath);
     this.initialVideoPath = initialVideoPath;
     this.isCustomEditor = !!isCustomEditor;
+    // 由檔案分頁轉入畫廊時，待首次資料載入後才需定位（可選取）的影片
+    this._pendingGalleryReveal = galleryReveal && galleryReveal.filePath ? galleryReveal : null;
+    this._hasSentInitData = false;
     this.isRecursive = false;
     this._disposables = [];
     this._isDisposed = false;
@@ -1022,6 +1066,21 @@ class VideoViewerPanel {
     return this._readyHandshake.waitUntilReady(timeoutMs);
   }
 
+  /**
+   * 於畫廊中定位（可選取）指定影片，不開啟播放器
+   * 若面板尚未送出首次資料，改為於 initData 一併帶出，避免訊息順序錯亂
+   * @param {string} filePath
+   * @param {boolean} select
+   */
+  revealInGallery(filePath, select = false) {
+    if (!filePath || this._isDisposed) return;
+    if (this._hasSentInitData && this.panel) {
+      this.panel.webview.postMessage({ type: 'revealInGallery', filePath, select: !!select });
+      return;
+    }
+    this._pendingGalleryReveal = { filePath, select: !!select };
+  }
+
   async _handleMessage(msg) {
     switch (msg.type) {
       case 'ready':
@@ -1029,8 +1088,18 @@ class VideoViewerPanel {
         await this._sendVideos(false);
         break;
       case 'closeCustomEditor':
+        // 僅自訂編輯器（檔案分頁）可自我關閉，避免資料夾畫廊分頁被誤關
+        if (this.isCustomEditor) this.dispose();
+        break;
+      case 'expandToFolderGallery': {
+        if (!this.isCustomEditor) break;
+        const revealPath = typeof msg.filePath === 'string' && msg.filePath ? msg.filePath : null;
+        const galleryReveal = revealPath ? { filePath: revealPath, select: !!msg.selectFile } : null;
+        // 先建立或喚醒資料夾畫廊分頁（畫面無空窗），再關閉目前的自訂編輯器分頁
+        await VideoViewerPanel.createOrShow(this.extensionUri, this.folderUri, null, galleryReveal);
         this.dispose();
         break;
+      }
       case 'refresh':
         await this._sendVideos(true);
         break;
@@ -1206,6 +1275,7 @@ class VideoViewerPanel {
         const savedLoop = VideoViewerPanel.globalState
           ? VideoViewerPanel.globalState.get('antigravity.videoViewer.loop', false)
           : false;
+        const pendingReveal = this._pendingGalleryReveal;
         this.panel.webview.postMessage({
           type: 'initData',
           folderPath: this.folderPath,
@@ -1220,8 +1290,12 @@ class VideoViewerPanel {
           autoNext: savedAutoNext,
           loop: savedLoop,
           targetFilePath: this.initialVideoPath,
-          isCustomEditor: this.isCustomEditor
+          isCustomEditor: this.isCustomEditor,
+          revealFilePath: pendingReveal ? pendingReveal.filePath : null,
+          selectFilePath: pendingReveal && pendingReveal.select ? pendingReveal.filePath : null
         });
+        this._pendingGalleryReveal = null;
+        this._hasSentInitData = true;
         this.initialVideoPath = null;
       }
     } catch (err) {
@@ -1280,8 +1354,9 @@ class AudioViewerPanel {
    * @param {vscode.Uri} extensionUri
    * @param {vscode.Uri} folderUri
    * @param {string|null} initialAudioPath
+   * @param {{ filePath: string, select: boolean }|null} galleryReveal 由檔案分頁「展開為資料夾畫廊」轉入時，需在畫廊中定位（可選取）的音訊
    */
-  static async createOrShow(extensionUri, folderUri, initialAudioPath = null) {
+  static async createOrShow(extensionUri, folderUri, initialAudioPath = null, galleryReveal = null) {
     const folderPath = folderUri.fsPath;
     for (const existing of AudioViewerPanel.currentPanels) {
       if (!existing.isCustomEditor && isSamePath(existing.folderPath, folderPath) && existing.panel) {
@@ -1302,6 +1377,9 @@ class AudioViewerPanel {
             } catch (_) {}
           }, 60);
         }
+        if (galleryReveal && galleryReveal.filePath) {
+          existing.revealInGallery(galleryReveal.filePath, !!galleryReveal.select);
+        }
         return existing;
       }
     }
@@ -1321,10 +1399,10 @@ class AudioViewerPanel {
       }
     );
 
-    return new AudioViewerPanel(panel, extensionUri, folderUri, initialAudioPath);
+    return new AudioViewerPanel(panel, extensionUri, folderUri, initialAudioPath, false, galleryReveal);
   }
 
-  constructor(panel, extensionUri, folderUri, initialAudioPath = null, isCustomEditor = false) {
+  constructor(panel, extensionUri, folderUri, initialAudioPath = null, isCustomEditor = false, galleryReveal = null) {
     this.panel = panel;
     this.extensionUri = extensionUri;
     this.folderUri = folderUri;
@@ -1332,6 +1410,9 @@ class AudioViewerPanel {
     this.folderName = path.basename(this.folderPath);
     this.initialAudioPath = initialAudioPath;
     this.isCustomEditor = !!isCustomEditor;
+    // 由檔案分頁轉入畫廊時，待首次資料載入後才需定位（可選取）的音訊
+    this._pendingGalleryReveal = galleryReveal && galleryReveal.filePath ? galleryReveal : null;
+    this._hasSentInitData = false;
     this.isRecursive = false;
     this._disposables = [];
     this._isDisposed = false;
@@ -1386,6 +1467,21 @@ class AudioViewerPanel {
     return this._readyHandshake.waitUntilReady(timeoutMs);
   }
 
+  /**
+   * 於畫廊中定位（可選取）指定音訊，不自動播放
+   * 若面板尚未送出首次資料，改為於 initData 一併帶出，避免訊息順序錯亂
+   * @param {string} filePath
+   * @param {boolean} select
+   */
+  revealInGallery(filePath, select = false) {
+    if (!filePath || this._isDisposed) return;
+    if (this._hasSentInitData && this.panel) {
+      this.panel.webview.postMessage({ type: 'revealInGallery', filePath, select: !!select });
+      return;
+    }
+    this._pendingGalleryReveal = { filePath, select: !!select };
+  }
+
   async _handleMessage(msg) {
     switch (msg.type) {
       case 'ready':
@@ -1393,8 +1489,18 @@ class AudioViewerPanel {
         await this._sendAudios(false);
         break;
       case 'closeCustomEditor':
+        // 僅自訂編輯器（檔案分頁）可自我關閉，避免資料夾畫廊分頁被誤關
+        if (this.isCustomEditor) this.dispose();
+        break;
+      case 'expandToFolderGallery': {
+        if (!this.isCustomEditor) break;
+        const revealPath = typeof msg.filePath === 'string' && msg.filePath ? msg.filePath : null;
+        const galleryReveal = revealPath ? { filePath: revealPath, select: !!msg.selectFile } : null;
+        // 先建立或喚醒資料夾畫廊分頁（畫面無空窗），再關閉目前的自訂編輯器分頁
+        await AudioViewerPanel.createOrShow(this.extensionUri, this.folderUri, null, galleryReveal);
         this.dispose();
         break;
+      }
       case 'refresh':
         await this._sendAudios(true);
         break;
@@ -1562,6 +1668,7 @@ class AudioViewerPanel {
         const savedLoop = AudioViewerPanel.globalState
           ? AudioViewerPanel.globalState.get('antigravity.audioViewer.loop', false)
           : false;
+        const pendingReveal = this._pendingGalleryReveal;
         this.panel.webview.postMessage({
           type: 'initData',
           folderPath: this.folderPath,
@@ -1575,8 +1682,12 @@ class AudioViewerPanel {
           autoNext: savedAutoNext,
           loop: savedLoop,
           targetFilePath: this.initialAudioPath,
-          isCustomEditor: this.isCustomEditor
+          isCustomEditor: this.isCustomEditor,
+          revealFilePath: pendingReveal ? pendingReveal.filePath : null,
+          selectFilePath: pendingReveal && pendingReveal.select ? pendingReveal.filePath : null
         });
+        this._pendingGalleryReveal = null;
+        this._hasSentInitData = true;
         this.initialAudioPath = null;
       }
     } catch (err) {
