@@ -1,8 +1,8 @@
 {
 	"name": "antigravity-mcp-manager",
 	"displayName": "MCP 管理儀表板",
-	"description": "Antigravity IDE / Cursor / VS Code 相容的 MCP 儀表板：Antigravity 支援原生開關；Cursor 與 VS Code 提供清單、連線探測與備註（開關請用各 IDE 原生 UI）",
-	"version": "1.9.0",
+	"description": "Antigravity IDE / Cursor / VS Code 相容的 MCP 儀表板：Antigravity 提供左側面板與原生開關；Cursor 與 VS Code 只顯示底部狀態列",
+	"version": "1.9.1",
 	"publisher": "antigravity-toolkit",
 	"engines": {
 		"vscode": "^1.80.0"
@@ -38,7 +38,8 @@
 				{
 					"id": "mcp-manager-container",
 					"title": "MCP 伺服器管理",
-					"icon": "media/icons/mcp-icon.svg"
+					"icon": "media/icons/mcp-icon.svg",
+					"when": "mcpManager.showSidebar"
 				}
 			]
 		},
@@ -48,7 +49,8 @@
 					"type": "webview",
 					"id": "antigravity.mcpManagerView",
 					"name": "MCP 控制台",
-					"icon": "media/icons/mcp-icon.svg"
+					"icon": "media/icons/mcp-icon.svg",
+					"when": "mcpManager.showSidebar"
 				}
 			]
 		},
@@ -78,6 +80,20 @@
 			}
 		],
 		"menus": {
+			"commandPalette": [
+				{
+					"command": "antigravity.mcp.focusView",
+					"when": "mcpManager.showSidebar"
+				},
+				{
+					"command": "antigravity.mcp.openInEditor",
+					"when": "mcpManager.showSidebar && !mcpManager.isEnglish"
+				},
+				{
+					"command": "antigravity.mcp.openInEditor.en",
+					"when": "mcpManager.showSidebar && mcpManager.isEnglish"
+				}
+			],
 			"view/title": [
 				{
 					"command": "antigravity.mcp.openInEditor",

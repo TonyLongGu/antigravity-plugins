@@ -77,7 +77,7 @@ $sourceDir = $PSScriptRoot
 $pkgJsonPath = Join-Path $sourceDir "package.json"
 $extPublisher = "antigravity-toolkit"
 $extName = "antigravity-mcp-manager"
-$extVersion = "1.9.0"
+$extVersion = "1.9.1"
 $displayName = $extName
 
 if (Test-Path -LiteralPath $pkgJsonPath) {

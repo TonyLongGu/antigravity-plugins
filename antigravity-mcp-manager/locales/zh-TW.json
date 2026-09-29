@@ -33,6 +33,7 @@
   "err_index_missing": "找不到 index.html",
   "status_tooltip_title": "【{env} MCP 儀表板】",
   "status_tooltip_enabled": "已啟用的 MCP 工具:",
+  "status_tooltip_enabled_now": "目前啟用的 MCP 工具：",
   "status_tooltip_none": "(目前無啟用的 MCP 工具)",
   "status_tooltip_click": "點擊展開側邊欄",
   "status_tooltip_ws_off": "（此工作區停用）",

@@ -1,6 +1,6 @@
 # MCP 管理儀表板
 
-Antigravity IDE / Cursor / Visual Studio Code 相容的側邊欄擴充套件：列出 MCP 伺服器、連線探測、獨立備註。Antigravity 支援原生開關；Cursor 與 VS Code 為檢視模式。
+Antigravity 提供完整儀表板（清單、連線探測、備註與原生開關），並常駐左側活動列。Cursor 與 VS Code 只在底部狀態列顯示 `MCP: 啟用數/總數`，不開啟左側活動列，也不在編輯器分頁打開儀表板。
 
 ---
 
@@ -10,9 +10,9 @@ Antigravity IDE / Cursor / Visual Studio Code 相容的側邊欄擴充套件：�
 2. **VS Code 檢視模式**：讀取 `<User>/mcp.json`、工作區 `.vscode/mcp.json` 與工作區根 `.mcp.json`，並從 `state.vscdb` 的 `mcp.enablement` 顯示真實啟停狀態（含工作區覆寫）。開關請用 **VS Code 原生 UI**。
 3. **Cursor 檢視模式**：讀取 `~/.cursor/mcp.json`，並從 Cursor 的 Customize 停用清單顯示側邊高光與啟用數。開關仍請用 **Customize**。
 4. **外部 Sidecar 註解分離**：Antigravity 用 `~/.gemini/config/antigravity_mcp_notes.json`；Cursor 用 `~/.cursor/mcp_notes.json`；VS Code 用 `<User>/mcp_notes.json`。
-5. **無縫嵌入 IDE 側邊欄**：常駐左側活動列，點擊專屬圖示即可操作。
-6. **狀態列即時指示**：顯示 `MCP: 啟用數/總數`；檢視宿主另可懸停看已啟用清單。
-7. **兩向熱重載**：修改 MCP 設定檔，或在 **VS Code 原生 UI**（Copilot 設定 / 擴充檢視 / 命令選擇區）切換開關時，側邊欄皆會自動更新。
+5. **Antigravity 左側活動列**：可在此面板直接開關 MCP。
+6. **狀態列即時指示**：三種環境都顯示 `MCP: 啟用數/總數`。Cursor 與 VS Code 只有這條狀態列，不開啟左側活動列，也不在編輯器分頁打開儀表板。
+7. **兩向熱重載**：修改 MCP 設定檔，或在 **VS Code 原生 UI** 切換開關時，狀態列會自動更新。Antigravity 已開啟的儀表板也會一起更新。
 
 ---
 
@@ -21,7 +21,7 @@ Antigravity IDE / Cursor / Visual Studio Code 相容的側邊欄擴充套件：�
 1. 雙擊 [`install-extension.bat`](./install-extension.bat)（或執行 [`install-extension.ps1`](./install-extension.ps1)）。
    - 可安裝至 **Antigravity IDE**、**Cursor** 與 **Visual Studio Code**。
 2. 在目標 IDE 按 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>，執行 `Developer: Reload Window`。
-3. 左側活動列出現 **「MCP 伺服器管理」** 即可使用。
+3. Antigravity 左側活動列出現 **「MCP 伺服器管理」**；Cursor 與 VS Code 只在右下狀態列顯示 **MCP 啟用數**。
 
 ---
 
@@ -51,7 +51,7 @@ VS Code Copilot 的 MCP 啟停狀態**不在** `mcp.json`，而是存放於 VS C
 
 ### 與 VS Code 原生 UI 的即時連動
 
-當你在 VS Code 原生 UI（Copilot 設定、擴充檢視的 MCP SERVERS、`MCP: List Servers`）切換開關時，面板會在約 1.5 秒內反映（視窗重新聚焦時立即校正）。
+當你在 VS Code 原生 UI（Copilot 設定、擴充檢視的 MCP SERVERS、`MCP: List Servers`）切換開關時，底部狀態列會在約 1.5 秒內反映（視窗重新聚焦時立即校正）。Cursor 與 VS Code 不開啟本套件的儀表板分頁或左側活動列。
 
 實作採「變更簽章輪詢」：每輪僅對狀態檔做 `stat` 比對，**唯有真的變動才重新解析 SQLite**，因此不會造成無謂耗用。
 
@@ -63,7 +63,7 @@ VS Code Copilot 的 MCP 啟停狀態**不在** `mcp.json`，而是存放於 VS C
 | 命令選擇區 | `MCP: List Servers` → 選伺服器 → Enable / Disable |
 | Copilot 設定 | 於 Copilot 的 MCP 設定中個別開關 |
 
-啟停狀態是**可重載的**，切換後 VS Code 自身會立即生效，面板也會自動跟上。
+啟停狀態是**可重載的**，切換後 VS Code 自身會立即生效，底部狀態列也會自動跟上。
 
 ### 為何不提供寫入
 
@@ -72,7 +72,7 @@ VS Code Copilot 的 MCP 啟停狀態**不在** `mcp.json`，而是存放於 VS C
 1. **必須重載視窗才生效**：`mcp.enablement` 於視窗載入時即讀入記憶體，寫入後需 `Developer: Reload Window`；且重載前若於 VS Code 內再切換開關，會被整份舊資料覆寫。
 2. **屬未公開的內部機制**：格式若於日後版本變動，將無聲失效。
 
-改為檢視模式後，開關一律由 VS Code 原生 UI 負責（官方支援、立即生效、無重載問題），面板專注於原生 UI 較弱的部分：**一眼看見真實啟停狀態**、**工作區覆寫標示**、**連線探測**與**用途備註**。
+改為檢視模式後，開關一律由 VS Code 原生 UI 負責。Cursor 與 VS Code 只以底部狀態列顯示啟用數，不提供儀表板介面。
 
 ---
 

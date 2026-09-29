@@ -16,6 +16,15 @@ class McpDetectorService {
   }
 
   /**
+   * Windows 上 PowerShell 5.1 與部分編輯器會寫入 UTF-8 BOM。
+   * Node 的 JSON.parse 不接受 BOM，會整份設定被當成空清單。
+   */
+  static parseJsonText(content) {
+    const text = typeof content === 'string' ? content.replace(/^\uFEFF/, '') : content;
+    return JSON.parse(text);
+  }
+
+  /**
    * 掃描本機已安裝的 MCP Servers 與工具清單
    */
   static async scanMcpServers(workspaceFolders = []) {
@@ -67,7 +76,7 @@ class McpDetectorService {
         if (fs.existsSync(configPath)) {
           try {
             const content = await fsPromises.readFile(configPath, 'utf-8');
-            const parsed = JSON.parse(content);
+            const parsed = this.parseJsonText(content);
             const mcpServers = parsed.mcpServers || {};
             const serverKeys = Object.keys(mcpServers).sort((a, b) => this.naturalCompare(a, b));
 
@@ -167,7 +176,7 @@ class McpDetectorService {
 
     try {
       const content = await fsPromises.readFile(configPath, 'utf-8');
-      const parsed = JSON.parse(content);
+      const parsed = this.parseJsonText(content);
       const mcpServers = parsed.servers || parsed.mcpServers || {};
       const serverKeys = Object.keys(mcpServers).sort((a, b) => this.naturalCompare(a, b));
 
@@ -218,7 +227,7 @@ class McpDetectorService {
         let toolDescription = '';
         try {
           const content = await fsPromises.readFile(filePath, 'utf-8');
-          const parsed = JSON.parse(content);
+          const parsed = this.parseJsonText(content);
           toolDescription = parsed.description || parsed.name || '';
         } catch (e) {}
 

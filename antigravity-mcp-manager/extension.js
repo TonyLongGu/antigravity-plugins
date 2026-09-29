@@ -64,9 +64,12 @@ class MCPManagerViewProvider {
 
   /**
    * 在編輯器分頁中開啟 MCP 管理儀表板 (向右分割 ViewColumn.Beside 並自動鎖定群組)
+   * Cursor / VS Code 不提供此介面。
    * @param {vscode.ViewColumn} [column=vscode.ViewColumn.Beside]
    */
   async openInEditor(column = vscode.ViewColumn.Beside) {
+    if (McpConfigService.isViewOnly) return;
+
     if (this._panel) {
       this._panel.reveal(column);
       this._lockEditorGroup();
@@ -281,16 +284,10 @@ class MCPManagerViewProvider {
           this._statusBarItem.text = `$(plug) MCP: ${stats.enabled}/${stats.total}`;
 
           const listedServers = Object.keys(servers).filter((name) => servers[name].disabled !== true);
-
           const tooltipLines = [];
           tooltipLines.push(I18n.t('status_tooltip_title', { env: globalData.envName }));
-          if (viewOnly) {
-            // 唯讀提示：與面板橫幅使用同一組語系鍵，確保兩處文字一致
-            const hintKey = McpConfigService.isVsCode ? 'view_only_hint_vscode' : 'view_only_hint';
-            tooltipLines.push(I18n.t(hintKey));
-          }
           if (listedServers.length > 0) {
-            tooltipLines.push(I18n.t('status_tooltip_enabled'));
+            tooltipLines.push(I18n.t(viewOnly ? 'status_tooltip_enabled_now' : 'status_tooltip_enabled'));
             listedServers.forEach((name) => {
               const override = servers[name].workspaceOverride;
               const mark = override === 'off'
@@ -303,8 +300,9 @@ class MCPManagerViewProvider {
           } else {
             tooltipLines.push(I18n.t('status_tooltip_none'));
           }
-
-          tooltipLines.push(I18n.t('status_tooltip_click'));
+          if (!viewOnly) {
+            tooltipLines.push(I18n.t('status_tooltip_click'));
+          }
 
           this._statusBarItem.tooltip = tooltipLines.join('\n');
           this._statusBarItem.show();
@@ -420,23 +418,32 @@ class MCPManagerViewProvider {
  */
 async function activate(context) {
   McpConfigService.init(context);
+  // Cursor / VS Code 不能在此面板改開關，左側活動列不顯示；
+  // 未設定時 when 為假，活動列預設隱藏，避免這兩個環境先閃出圖示。
+  const showSidebar = !McpConfigService.isViewOnly;
   const syncLocaleContext = () => {
     vscode.commands.executeCommand('setContext', 'mcpManager.isEnglish', resolveLocale() === 'en');
+    vscode.commands.executeCommand('setContext', 'mcpManager.showSidebar', showSidebar);
   };
   syncLocaleContext();
 
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 40);
-  statusBarItem.command = 'antigravity.mcp.focusView';
+  // Cursor / VS Code 的狀態列只顯示數字，點擊不開啟任何介面。
+  if (showSidebar) {
+    statusBarItem.command = 'antigravity.mcp.focusView';
+  }
   statusBarItem.text = `$(plug) ${I18n.t('status_loading')}`;
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
   const provider = new MCPManagerViewProvider(context.extensionUri, statusBarItem);
-  context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider('antigravity.mcpManagerView', provider, {
-      webviewOptions: { retainContextWhenHidden: true },
-    })
-  );
+  if (showSidebar) {
+    context.subscriptions.push(
+      vscode.window.registerWebviewViewProvider('antigravity.mcpManagerView', provider, {
+        webviewOptions: { retainContextWhenHidden: true },
+      })
+    );
+  }
 
   // 初始化載入狀態
   await provider.refreshWebviewData();
@@ -450,9 +457,12 @@ async function activate(context) {
     vscode.commands.registerCommand('antigravity.mcp.openInEditor.en', openInEditorHandler),
     vscode.commands.registerCommand('antigravity.mcp.refresh', async () => {
       await provider.refreshWebviewData(true, 0, true);
-      provider.pushToast(I18n.t('toast_refreshed'), 'info');
+      if (!McpConfigService.isViewOnly) {
+        provider.pushToast(I18n.t('toast_refreshed'), 'info');
+      }
     }),
     vscode.commands.registerCommand('antigravity.mcp.focusView', async () => {
+      if (McpConfigService.isViewOnly) return;
       await vscode.commands.executeCommand('antigravity.mcpManagerView.focus');
     })
   );

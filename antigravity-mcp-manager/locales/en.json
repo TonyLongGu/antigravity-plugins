@@ -33,6 +33,7 @@
   "err_index_missing": "index.html not found",
   "status_tooltip_title": "[{env} MCP Dashboard]",
   "status_tooltip_enabled": "Enabled MCP tools:",
+  "status_tooltip_enabled_now": "Currently enabled MCP tools:",
   "status_tooltip_none": "(No MCP tools enabled)",
   "status_tooltip_click": "Click to open the sidebar",
   "status_tooltip_ws_off": " (disabled in this workspace)",
