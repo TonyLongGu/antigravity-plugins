@@ -2,7 +2,7 @@
 
 Antigravity 提供完整儀表板（清單、連線探測、備註與原生開關），並常駐左側活動列。Cursor 與 VS Code 只在底部狀態列顯示 `MCP: 啟用數/總數`，不開啟左側活動列，也不在編輯器分頁打開儀表板。
 
-三種宿主只要偵測到本機已安裝 **Cline**，狀態列就會同時並列 Cline 的 MCP 統計（`… · Cline 啟用數/總數`），懸停視窗另列兩端伺服器清單。Cline 一律為**純檢視**：本套件在服務層就沒有寫入 Cline 設定的能力，開關請用 Cline 自身的 MCP 面板。
+三種宿主只在**目前這個 IDE 已安裝且啟用 Cline** 時，狀態列才會並列 Cline 的 MCP 統計（`… · Cline 啟用數/總數`），懸停視窗另列兩端伺服器清單。沒安裝、或曾經安裝但已停用時，狀態列只顯示本 IDE 的 MCP，不出現 Cline。殘留的 `cline_mcp_settings.json` 不會被當成已安裝。Cline 一律為**純檢視**：本套件在服務層就沒有寫入 Cline 設定的能力，開關請用 Cline 自身的 MCP 面板。
 
 ---
 
@@ -13,7 +13,7 @@ Antigravity 提供完整儀表板（清單、連線探測、備註與原生開�
 3. **Cursor 檢視模式**：讀取 `~/.cursor/mcp.json`，並從 Cursor 的 Customize 停用清單顯示側邊高光與啟用數。開關仍請用 **Customize**。
 4. **外部 Sidecar 註解分離**：Antigravity 用 `~/.gemini/config/antigravity_mcp_notes.json`；Cursor 用 `~/.cursor/mcp_notes.json`；VS Code 用 `<User>/mcp_notes.json`。
 5. **Antigravity 左側活動列**：可在此面板直接開關 MCP。
-6. **狀態列即時指示**：三種環境都顯示 `MCP: 啟用數/總數`；偵測到 Cline 時並列 `· Cline 啟用數/總數`，可用「切換狀態列顯示方式」決定只顯示本 IDE、只顯示 Cline 或兩者。Cursor 與 VS Code 只有這條狀態列，不開啟左側活動列，也不在編輯器分頁打開儀表板。
+6. **狀態列即時指示**：三種環境都顯示 `MCP: 啟用數/總數`；目前 IDE 已啟用 Cline 時才並列 `· Cline 啟用數/總數`（未安裝或已停用則不顯示），可用「切換狀態列顯示方式」決定只顯示本 IDE、只顯示 Cline 或兩者。Cursor 與 VS Code 只有這條狀態列，不開啟左側活動列，也不在編輯器分頁打開儀表板。
 7. **Cline 純檢視（API 層保證）**：狀態列快捷選單提供「檢視 Cline MCP 伺服器狀態」，可看工具清單、啟停情形與開啟 `cline_mcp_settings.json`。Cline 服務只有讀取與統計能力，**不含任何寫入 API**，因此不論宿主、顯示範圍或批次操作都不會改動 Cline 的設定檔。
 8. **兩向熱重載**：修改 MCP 設定檔（含 Cline 的 `cline_mcp_settings.json`），或在 **VS Code 原生 UI** 切換開關時，狀態列會自動更新。Antigravity 已開啟的儀表板也會一起更新。
 
@@ -24,13 +24,13 @@ Antigravity 提供完整儀表板（清單、連線探測、備註與原生開�
 1. 雙擊 [`install-extension.bat`](./install-extension.bat)（或執行 [`install-extension.ps1`](./install-extension.ps1)）。
    - 可安裝至 **Antigravity IDE**、**Cursor** 與 **Visual Studio Code**。
 2. 在目標 IDE 按 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>，執行 `Developer: Reload Window`。
-3. Antigravity 左側活動列出現 **「MCP 伺服器管理」**；Cursor 與 VS Code 只在右下狀態列顯示 **MCP 啟用數**（已安裝 Cline 時並列 Cline 統計與「檢視 Cline MCP」捷徑）。
+3. Antigravity 左側活動列出現 **「MCP 伺服器管理」**；Cursor 與 VS Code 只在右下狀態列顯示 **MCP 啟用數**（目前 IDE 已啟用 Cline 時才並列 Cline 統計與「檢視 Cline MCP」捷徑）。
 
 ---
 
 ## Cline 整合（三種宿主共用，純檢視）
 
-只要本機偵測到 Cline 延伸模組（`saoudrizwan.claude-dev`）或其設定檔，狀態列、懸停視窗與快捷選單就會一併呈現 Cline 的 MCP 資訊：
+只有目前這個 IDE 的延伸模組宿主看得到已啟用的 Cline（`saoudrizwan.claude-dev`）時，狀態列、懸停視窗與快捷選單才會呈現 Cline 的 MCP 資訊。未安裝或已停用時這些位置都不出現 Cline：
 
 | 位置 | 內容 |
 | --- | --- |

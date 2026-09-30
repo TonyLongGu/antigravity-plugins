@@ -29,22 +29,16 @@ class ClineMcpService {
   }
 
   /**
-   * 檢查當前 IDE 是否安裝 Cline (Claude Dev) 延伸模組
+   * 目前這個 IDE 是否已安裝且啟用 Cline（saoudrizwan.claude-dev）。
+   * vscode.extensions 只列出啟用中的延伸模組：未安裝與已停用都會得到 undefined。
+   * 殘留的 cline_mcp_settings.json 不算已安裝，否則卸載或停用後狀態列仍會顯示 Cline。
    */
   static isInstalled() {
-    // 1. 優先檢查 VS Code 延伸模組註冊表
     try {
-      const ext = vscode.extensions?.getExtension('saoudrizwan.claude-dev');
-      if (ext) return true;
-    } catch (_) {}
-
-    // 2. 備援檢查：檢查 Cline 設定檔是否存在
-    const configPath = this.getConfigPath();
-    if (configPath && fs.existsSync(configPath)) {
-      return true;
+      return !!vscode.extensions?.getExtension('saoudrizwan.claude-dev');
+    } catch (_) {
+      return false;
     }
-
-    return false;
   }
 
   /**
