@@ -1,7 +1,7 @@
 {
 	"name": "antigravity-mcp-manager",
 	"displayName": "MCP 管理儀表板",
-	"description": "Antigravity IDE / Cursor / VS Code 相容的 MCP 儀表板：Antigravity 提供左側面板與原生開關；Cursor 與 VS Code 只顯示底部狀態列",
+	"description": "Antigravity IDE / Cursor / VS Code 相容的 MCP 儀表板：Antigravity 提供左側面板與原生開關；Cursor 與 VS Code 只顯示底部狀態列；三者皆會並列顯示 Cline MCP 統計（Cline 恆為純檢視，本套件不含寫入 API）",
 	"version": "1.9.1",
 	"publisher": "antigravity-toolkit",
 	"engines": {
@@ -15,24 +15,46 @@
 		"onStartupFinished"
 	],
 	"contributes": {
-		"configuration": {
-			"title": "Antigravity",
-			"properties": {
-				"antigravity.locale": {
-					"type": "string",
-					"default": "zh-TW",
-					"enum": [
-						"zh-TW",
-						"en"
-					],
-					"enumDescriptions": [
-						"繁體中文 (Traditional Chinese)",
-						"English"
-					],
-					"description": "Antigravity 外掛全域介面語言 (Global Interface Language for Antigravity Plugins)"
+		"configuration": [
+			{
+				"title": "Antigravity",
+				"properties": {
+					"antigravity.locale": {
+						"type": "string",
+						"default": "zh-TW",
+						"enum": [
+							"zh-TW",
+							"en"
+						],
+						"enumDescriptions": [
+							"繁體中文 (Traditional Chinese)",
+							"English"
+						],
+						"description": "Antigravity 外掛全域介面語言 (Global Interface Language for Antigravity Plugins)"
+					}
+				}
+			},
+			{
+				"title": "MCP 管理儀表板",
+				"properties": {
+					"antigravity.mcp.displayMode": {
+						"type": "string",
+						"default": "both",
+						"enum": [
+							"both",
+							"antigravity",
+							"cline"
+						],
+						"enumDescriptions": [
+							"兩者皆顯示（此 IDE 的 MCP 與 Cline 狀態統計）",
+							"僅顯示此 IDE 的 MCP 狀態",
+							"僅顯示 Cline MCP 狀態"
+						],
+						"description": "狀態列上的 MCP 顯示方式（唯一來源，只影響顯示、不影響寫入範圍）。選項值 antigravity 代表目前這個 IDE 自己的 MCP。"
+					}
 				}
 			}
-		},
+		],
 		"viewsContainers": {
 			"activitybar": [
 				{
@@ -55,6 +77,24 @@
 			]
 		},
 		"commands": [
+			{
+				"command": "antigravity.mcp.openQuickMenu",
+				"title": "開啟 MCP 快捷選單",
+				"category": "MCP",
+				"icon": "$(menu)"
+			},
+			{
+				"command": "antigravity.mcp.toggleDisplayMode",
+				"title": "切換狀態列顯示方式",
+				"category": "MCP",
+				"icon": "$(symbol-enum)"
+			},
+			{
+				"command": "antigravity.mcp.viewClineMcp",
+				"title": "檢視 Cline MCP 狀態",
+				"category": "MCP",
+				"icon": "$(eye)"
+			},
 			{
 				"command": "antigravity.mcp.openInEditor",
 				"title": "在編輯器分頁開啟",

@@ -38,24 +38,6 @@ class SystemService {
   }
 
   /**
-   * 在編輯器開啟檔案並在檔案總管 (Explorer) 中定位
-   */
-  static async revealProjectFile(targetPath) {
-    if (!targetPath || !(await this._exists(targetPath))) {
-      vscode.window.showWarningMessage(
-        I18n.t('msg_file_not_found', { path: targetPath || I18n.t('msg_path_unspecified') })
-      );
-      return;
-    }
-    try {
-      const uri = await this._showInEditor(targetPath);
-      await vscode.commands.executeCommand('revealInExplorer', uri);
-    } catch (e) {
-      vscode.window.showErrorMessage(I18n.t('msg_file_open_failed', { msg: e.message }));
-    }
-  }
-
-  /**
    * 在編輯器開啟檔案，不把全文同步進 Extension Host。
    * openTextDocument 會要求把檔案登記成可同步模型。
    * 工作區外的 ~/.cursor/mcp.json 過不了這關，Cursor 丟出

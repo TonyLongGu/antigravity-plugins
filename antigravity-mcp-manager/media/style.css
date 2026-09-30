@@ -527,6 +527,12 @@ details[open] > summary .chevron {
   border: 1px solid rgba(208, 161, 255, 0.3);
 }
 
+.src-cline {
+  background: rgba(249, 115, 22, 0.16);
+  color: #fdba74;
+  border: 1px solid rgba(249, 115, 22, 0.35);
+}
+
 .src-override-on {
   background: var(--accent-green-soft);
   color: #34d399;
@@ -741,36 +747,6 @@ details.server-card[open] > summary .server-chevron {
   transform: rotate(90deg);
 }
 
-/* 狀態圓點 */
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--text-dim);
-  flex-shrink: 0;
-}
-
-.status-dot.enabled {
-  background: #14b8a6;
-  box-shadow: 0 0 5px rgba(20, 184, 166, 0.5);
-}
-
-.status-dot.error {
-  background: var(--accent-red);
-  box-shadow: 0 0 5px rgba(244, 63, 94, 0.5);
-}
-
-.status-dot.testing {
-  background: var(--accent-amber);
-  box-shadow: 0 0 5px rgba(245, 158, 11, 0.6);
-  animation: pulse-dot 1s infinite alternate;
-}
-
-@keyframes pulse-dot {
-  from { opacity: 0.4; }
-  to { opacity: 1; }
-}
-
 .server-title-wrap {
   display: flex;
   align-items: center;
@@ -796,27 +772,6 @@ details.server-card:not(.disabled) .server-name {
 
 details.server-card.disabled .server-name {
   color: #b0b8c4; /* 未啟用時稍微亮一點，清晰易讀 */
-}
-
-/* Runtime & Type 標籤 */
-.tag {
-  font-size: 10px;
-  padding: 1px 5px;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-mono);
-  line-height: 1.2;
-}
-
-.tag-runtime {
-  background: rgba(168, 85, 247, 0.16);
-  color: #debeff;
-  border: 1px solid rgba(208, 161, 255, 0.3);
-}
-
-.tag-type {
-  background: rgba(12, 182, 212, 0.16);
-  color: #65e0f0;
-  border: 1px solid rgba(103, 232, 249, 0.3);
 }
 
 .server-controls-right {
@@ -948,12 +903,6 @@ details.server-card.disabled .server-name {
 .action-btn:hover {
   background: rgba(255, 255, 255, 0.15);
   color: #ffffff;
-}
-
-.action-btn.btn-copy-cmd:hover {
-  color: var(--accent-cyan);
-  border-color: rgba(78, 201, 176, 0.4);
-  background: rgba(78, 201, 176, 0.12);
 }
 
 .action-btn.btn-edit-desc:hover {
@@ -1166,41 +1115,6 @@ input:checked + .slider:before {
 
 .btn:active {
   transform: scale(0.98);
-}
-
-.btn-block {
-  width: 100%;
-}
-
-.btn-primary {
-  background: var(--btn-primary-bg);
-  color: var(--btn-primary-text);
-  font-weight: 600;
-}
-
-.btn-primary:hover {
-  background: #22d3ee;
-}
-
-.btn-secondary {
-  background: var(--btn-secondary-bg);
-  color: var(--btn-secondary-text);
-  border-color: var(--border-color);
-}
-
-.btn-secondary:hover {
-  background: var(--btn-secondary-hover);
-  border-color: var(--border-hover);
-}
-
-.btn-danger {
-  background: var(--btn-danger-bg);
-  color: var(--btn-danger-text);
-  border-color: var(--btn-danger-border);
-}
-
-.btn-danger:hover {
-  background: rgba(244, 63, 94, 0.25);
 }
 
 .btn-action-sm {

@@ -54,6 +54,12 @@
    */
   function buildServerBadgesHtml(server, isVscode) {
     const override = server.workspaceOverride || 'inherit';
+    let typeBadge = '';
+    if (server.sourceType === 'cline') {
+      typeBadge = `<span class="src-badge src-cline" title="Cline MCP">${escapeHtml(I18nModule.t('badge_source_cline'))}</span>`;
+    }
+    // Antigravity 標籤不顯示：側邊欄已確定只管理 Antigravity 伺服器，標籤無資訊量
+
     // 工作區層有兩種來源位置，徽章標題需分別說明
     const isWorkspaceRoot = server.source === 'workspaceRoot';
     const isWorkspace = server.source === 'workspace' || isWorkspaceRoot;
@@ -64,7 +70,7 @@
       isVscode && override !== 'inherit'
         ? `<span class="src-badge ${override === 'off' ? 'src-override-off' : 'src-override-on'}" title="${escapeHtml(I18nModule.t('badge_override_title'))}">${escapeHtml(I18nModule.t(workspaceStateLabelKey(override)))}</span>`
         : '';
-    return sourceBadge + overrideBadge;
+    return typeBadge + sourceBadge + overrideBadge;
   }
 
   /**
@@ -304,31 +310,6 @@
       // 重新渲染伺服器卡片中的多國語言文字
       GlobalConfigModule.render();
     }
-  };
-
-  // ============================================================================
-  // 3. 伺服器標籤與屬性解析輔助工具
-  // ============================================================================
-  const ServerTagHelper = {
-    getServerTags(serverConfig) {
-      const tags = [];
-      if (!serverConfig) return tags;
-
-      if (serverConfig.command) {
-        const cmd = serverConfig.command.toLowerCase();
-        if (cmd.includes('node')) tags.push({ label: 'Node', class: 'tag-runtime' });
-        else if (cmd.includes('python')) tags.push({ label: 'Python', class: 'tag-runtime' });
-        else if (cmd.includes('uv')) tags.push({ label: 'UV', class: 'tag-runtime' });
-        else if (cmd.includes('npx')) tags.push({ label: 'NPX', class: 'tag-runtime' });
-        else tags.push({ label: 'CLI', class: 'tag-runtime' });
-
-        tags.push({ label: 'Stdio', class: 'tag-type' });
-      } else if (serverConfig.serverUrl) {
-        tags.push({ label: 'Remote', class: 'tag-runtime' });
-        tags.push({ label: 'SSE/HTTP', class: 'tag-type' });
-      }
-      return tags;
-    },
   };
 
   // ============================================================================
@@ -612,7 +593,7 @@
       const currentShape = filteredKeys
         .map((k) => {
           const s = servers[k] || {};
-          return `${k}|${s.source || 'user'}|${s.workspaceOverride || 'inherit'}`;
+          return `${k}|${s.source || 'user'}|${s.sourceType || 'antigravity'}|${s.workspaceOverride || 'inherit'}`;
         })
         .join(',');
       const shapeChanged = this._lastShape !== undefined && this._lastShape !== currentShape;
@@ -842,7 +823,7 @@
             <div class="server-info-left">
               <span class="server-chevron">${Icons.chevronRight}</span>
               <div class="server-title-wrap">
-                <span class="server-name">${escapeHtml(key)}</span>
+                <span class="server-name">${escapeHtml(server.rawName || key)}</span>
                 <span class="server-badges">${badgesHtml}</span>
               </div>
             </div>
@@ -917,7 +898,9 @@
 
             vscode.postMessage({
               type: 'toggleGlobalServer',
-              name: key,
+              name: server.rawName || key,
+              displayKey: key,
+              sourceType: server.sourceType || 'antigravity',
               disabled: shouldDisable,
             });
           });
@@ -987,7 +970,9 @@
             exitEditMode();
             vscode.postMessage({
               type: 'updateServerDescription',
-              name: key,
+              name: server.rawName || key,
+              displayKey: key,
+              sourceType: server.sourceType || 'antigravity',
               description: newDesc,
             });
           });

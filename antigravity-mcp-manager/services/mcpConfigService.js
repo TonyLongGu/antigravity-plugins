@@ -20,6 +20,7 @@ const path = require('node:path');
 const os = require('node:os');
 const CursorEnablementService = require('./cursorEnablementService');
 const VscodeEnablementService = require('./vscodeEnablementService');
+const ClineMcpService = require('./clineMcpService');
 const I18n = require('./i18nService');
 
 // 訊息一律取自 locales/*.json，確保與面板語言一致
@@ -29,6 +30,15 @@ class McpConfigService {
   static init(context) {
     CursorEnablementService.init(context);
     VscodeEnablementService.init(context);
+    ClineMcpService.init(context);
+  }
+
+  static get isClineInstalled() {
+    return ClineMcpService.isInstalled();
+  }
+
+  static get clineConfigPath() {
+    return ClineMcpService.getConfigPath();
   }
 
   static get appName() {
@@ -92,11 +102,70 @@ class McpConfigService {
     }
   }
 
+  /**
+   * 狀態列顯示範圍（單一真相來源：VS Code 設定 antigravity.mcp.displayMode）
+   * 舊版另有 globalState('antigravity.mcp.displaySource') 作為第二份真相，
+   * 造成「設定 UI 改了設定、懸停視窗卻顯示舊值」的不一致，故一律以本 getter 為準。
+   */
+  static get displayMode() {
+    try {
+      const mode = vscode?.workspace?.getConfiguration('antigravity.mcp')?.get('displayMode');
+      if (mode === 'antigravity' || mode === 'cline' || mode === 'both') return mode;
+    } catch (_) {}
+    return 'both';
+  }
+
+  /** 寫入狀態列顯示範圍（全專案唯一的寫入點） */
+  static async setDisplayMode(mode) {
+    if (!['antigravity', 'cline', 'both'].includes(mode)) return false;
+    await vscode.workspace
+      .getConfiguration('antigravity.mcp')
+      .update('displayMode', mode, vscode.ConfigurationTarget.Global);
+    return true;
+  }
+
+  /**
+   * 一次性遷移：舊版把顯示範圍存在 globalState。
+   * 若使用者尚未在設定中明確指定，則沿用舊值寫回設定，避免升級後被重設為預設；
+   * 遷移後即清除舊鍵，確保之後只有一份真相。
+   */
+  static async migrateLegacyDisplayMode(context) {
+    try {
+      const legacy = context?.globalState?.get('antigravity.mcp.displaySource');
+      if (!legacy) return;
+      const cfg = vscode.workspace.getConfiguration('antigravity.mcp');
+      const inspect = typeof cfg.inspect === 'function' ? cfg.inspect('displayMode') : null;
+      const explicitlySet = !!(inspect && (inspect.globalValue !== undefined || inspect.workspaceValue !== undefined));
+      if (!explicitlySet && ['antigravity', 'cline', 'both'].includes(legacy)) {
+        await this.setDisplayMode(legacy);
+      }
+      await context.globalState.update('antigravity.mcp.displaySource', undefined);
+    } catch (_) {}
+  }
+
   static get envName() {
     if (this.hostKind === 'antigravity') return 'Antigravity IDE';
     if (this.hostKind === 'cursor') return 'Cursor';
     if (this.hostKind === 'vscode') return 'VS Code Copilot';
     return I18n.t('host_unsupported');
+  }
+
+  /**
+   * 此 IDE 原生 MCP 的顯示名稱。
+   * 內部來源鍵仍是 antigravity（設定檔與 globalState 的既有值），
+   * 畫面上必須依宿主顯示，避免在 Cursor / VS Code 寫成 Antigravity。
+   */
+  static get nativeSourceName() {
+    if (this.hostKind === 'cursor') return 'Cursor';
+    if (this.hostKind === 'vscode') return 'VS Code';
+    return 'Antigravity';
+  }
+
+  /** 狀態列與 Cline 並排時的短標。Antigravity 維持 AG，避免狀態列過長。 */
+  static get nativeSourceShort() {
+    if (this.hostKind === 'cursor') return 'Cursor';
+    if (this.hostKind === 'vscode') return 'VS Code';
+    return 'AG';
   }
 
   static get globalConfigPath() {
@@ -225,6 +294,34 @@ class McpConfigService {
     return { total: serverKeys.length, enabled, disabled };
   }
 
+  /**
+   * 讀取 Cline 延伸模組的 MCP 摘要（純檢視）
+   * Antigravity / Cursor / VS Code 三個宿主共用：狀態列、懸停視窗與快捷選單依此並列顯示 Cline 統計。
+   * Cline 一律唯讀（開關由 Cline 自身的 UI 管理），故此處只讀不寫。
+   */
+  static async readClineSummary() {
+    const isClineInstalled = ClineMcpService.isInstalled();
+    if (!isClineInstalled) {
+      return {
+        isClineInstalled: false,
+        clineServers: {},
+        clineStats: { total: 0, enabled: 0, disabled: 0 },
+        clineConfigPath: '',
+        clineEnabledNames: [],
+      };
+    }
+
+    const clineData = await ClineMcpService.getServers();
+    const clineServers = clineData.servers || {};
+    return {
+      isClineInstalled: true,
+      clineServers,
+      clineStats: clineData.stats || { total: 0, enabled: 0, disabled: 0 },
+      clineConfigPath: clineData.path || '',
+      clineEnabledNames: Object.keys(clineServers).filter((name) => clineServers[name].disabled !== true),
+    };
+  }
+
   static emptyUnsupportedData() {
     return {
       path: '',
@@ -235,20 +332,25 @@ class McpConfigService {
       viewOnly: false,
       envName: this.envName,
       unsupported: true,
-      unsupportedMessage: UNSUPPORTED_HOST_MESSAGE,
+      unsupportedMessage: I18n.t('err_unsupported_host'),
       config: { mcpServers: {} },
       stats: { total: 0, enabled: 0, disabled: 0, viewOnly: false },
     };
   }
 
-  static async getGlobalData() {
+  static async getGlobalData(displaySource = 'both') {
     const hostKind = this.hostKind;
     if (hostKind === 'unsupported') {
       return this.emptyUnsupportedData();
     }
     if (hostKind === 'vscode') {
-      return await this.getVscodeData();
+      return await this.getVscodeData(displaySource);
     }
+
+    // Cline 摘要（純檢視）：與 VS Code 分支共用同一份讀取邏輯，避免兩處各寫一份而再度不同步
+    const { isClineInstalled, clineServers, clineStats, clineConfigPath, clineEnabledNames } =
+      await this.readClineSummary();
+    const effectiveDisplaySource = isClineInstalled ? displaySource : 'antigravity';
 
     const viewOnly = this.isViewOnly;
     const configPath = this.globalConfigPath;
@@ -257,7 +359,7 @@ class McpConfigService {
     const notes = await this.getNotes();
     const servers = rawConfig[this.serversKey] || {};
     const disabledNames = viewOnly ? await CursorEnablementService.getDisabledServerNames() : null;
-    const normalizedServers = {};
+    const agServers = {};
 
     for (const [name, server] of Object.entries(servers)) {
       const note = notes[name] || {};
@@ -265,9 +367,11 @@ class McpConfigService {
       const disabled = viewOnly
         ? disabledNames.has(name)
         : server.disabled === true;
-      normalizedServers[name] = {
+      agServers[name] = {
         ...server,
         name,
+        rawName: name,
+        sourceType: 'antigravity',
         serverUrl: server.serverUrl || server.url,
         description: desc,
         disabled,
@@ -276,6 +380,19 @@ class McpConfigService {
         scope: 'global',
       };
     }
+    const agStats = this.calculateStats(agServers);
+
+    const combinedStats = {
+      total: agStats.total + clineStats.total,
+      enabled: agStats.enabled + clineStats.enabled,
+      disabled: agStats.disabled + clineStats.disabled,
+    };
+
+    // 側邊欄面板遵循規範：Cline 不需要側邊開關 MCP 工具，側邊欄專注管理 Antigravity
+    const displayServers = agServers;
+    const displayStats = agStats;
+
+    const agEnabledNames = Object.keys(agServers).filter((k) => agServers[k].disabled !== true);
 
     return {
       path: configPath,
@@ -285,11 +402,20 @@ class McpConfigService {
       isCursor: hostKind === 'cursor',
       viewOnly,
       envName: this.envName,
+      isClineInstalled,
+      clineConfigPath,
+      displaySource: effectiveDisplaySource,
+      agStats,
+      clineStats,
+      combinedStats,
+      agEnabledNames,
+      clineEnabledNames,
+      clineServers,
       config: {
         ...rawConfig,
-        mcpServers: normalizedServers,
+        mcpServers: displayServers,
       },
-      stats: this.calculateStats(normalizedServers),
+      stats: displayStats,
     };
   }
 
@@ -372,7 +498,7 @@ class McpConfigService {
     };
   }
 
-  static async getVscodeData() {
+  static async getVscodeData(displaySource = 'both') {
     const configPath = this.globalConfigPath;
     const notesPath = this.notesFilePath;
     const rawConfig = await this.safeReadJson(configPath, { servers: {} }, { throwOnError: true });
@@ -407,6 +533,12 @@ class McpConfigService {
 
     if (!fs.existsSync(configPath)) createdConfig = true;
 
+    // 本 IDE（VS Code）自身的統計；與 Antigravity 分支同名同義，供狀態列與懸停視窗共用
+    const agStats = this.calculateStats(normalizedServers);
+    // Cline 僅檢視：與 Antigravity / Cursor 一致地並列顯示，開關仍由 Cline 自身 UI 管理
+    const { isClineInstalled, clineServers, clineStats, clineConfigPath, clineEnabledNames } =
+      await this.readClineSummary();
+
     return {
       path: configPath,
       notesPath,
@@ -422,15 +554,38 @@ class McpConfigService {
       viewOnly: this.isViewOnly,
       envName: this.envName,
       configMissing: createdConfig,
+      isClineInstalled,
+      clineConfigPath,
+      displaySource: isClineInstalled ? displaySource : 'antigravity',
+      agStats,
+      clineStats,
+      combinedStats: {
+        total: agStats.total + clineStats.total,
+        enabled: agStats.enabled + clineStats.enabled,
+        disabled: agStats.disabled + clineStats.disabled,
+      },
+      agEnabledNames: Object.keys(normalizedServers).filter((name) => normalizedServers[name].disabled !== true),
+      clineEnabledNames,
+      clineServers,
       config: {
         ...rawConfig,
         mcpServers: normalizedServers,
       },
-      stats: this.calculateStats(normalizedServers),
+      stats: agStats,
     };
   }
 
-  static async toggleServer(serverName, disabled) {
+  /**
+   * 切換本 IDE 的單一伺服器開關
+   * Cline 不在此服務的寫入範圍：本套件對 Cline 恆為純檢視（開關由 Cline 自身 MCP 面板管理），
+   * 故這裡不提供 sourceType='cline' 的直通與自動轉發，避免唯讀宿主（Cursor / VS Code）
+   * 或任何未來入口意外改寫 Cline 的 cline_mcp_settings.json。
+   */
+  static async toggleServer(serverName, disabled, sourceType = 'antigravity') {
+    if (sourceType === 'cline') {
+      throw new Error(I18n.t('err_cline_view_only'));
+    }
+
     this.assertWritableToggles();
 
     const configPath = this.globalConfigPath;
@@ -447,9 +602,14 @@ class McpConfigService {
     }
 
     await this.safeSaveJson(configPath, rawConfig);
-    return { changes: [{ name: serverName, disabled: !!disabled }] };
+    return { changes: [{ name: serverName, disabled: !!disabled, sourceType: 'antigravity' }] };
   }
 
+  /**
+   * 更新伺服器用途說明
+   * 說明一律寫入本套件自有的 sidecar 檔（不污染官方 schema 的 mcp.json）。
+   * Cline 為純檢視，不提供寫入；其既有 sidecar 內容仍會被讀取並顯示。
+   */
   static async updateServerDescription(serverName, description) {
     this.assertSupportedHost();
     const notes = await this.getNotes();
@@ -487,11 +647,18 @@ class McpConfigService {
     }
   }
 
+  /**
+   * 批次切換本 IDE 的伺服器開關
+   * 顯示範圍（本 IDE / Cline / 兩者）只影響「顯示」，不影響寫入範圍：
+   * Cline 恆為純檢視，故批次一律只作用於本 IDE 的設定檔，並受唯讀守門約束。
+   */
   static async batchToggle(action) {
-    this.assertWritableToggles();
     const isEnable = action === 'enableAll' || action === 'enable_all';
     const isDisable = action === 'disableAll' || action === 'disable_all';
     const isInvert = action === 'invert';
+
+    // 唯讀宿主（Cursor / VS Code）不寫入任何設定檔，回傳空變更清單而非拋錯
+    if (this.isViewOnly) return { changes: [] };
 
     const configPath = this.globalConfigPath;
     const rawConfig = await this.safeReadJson(configPath, { mcpServers: {} }, { throwOnError: true });
@@ -510,11 +677,13 @@ class McpConfigService {
         }
       }
     }
+
     await this.safeSaveJson(configPath, rawConfig);
     return {
       changes: Object.keys(servers).map((name) => ({
         name,
         disabled: isEnable ? false : isDisable ? true : servers[name].disabled === true,
+        sourceType: 'antigravity',
       })),
     };
   }

@@ -33,13 +33,16 @@ async function persistGlobalLocale(locale) {
  * 側邊欄 WebviewViewProvider 實作
  */
 class MCPManagerViewProvider {
-  constructor(extensionUri, statusBarItem) {
+  constructor(extensionUri, statusBarItem, context) {
     this._extensionUri = extensionUri;
     this._statusBarItem = statusBarItem;
+    this._context = context;
     this._view = undefined;
     this._panel = undefined;
     this._refreshDebounceTimer = null;
     this._lastFingerprint = '';
+    // 顯示範圍不再由 provider 持有：一律讀 McpConfigService.displayMode（單一真相來源），
+    // 使用者在設定 UI 變更時由 onDidChangeConfiguration 觸發刷新。
   }
 
   async resolveWebviewView(webviewView, _context, _token) {
@@ -122,14 +125,6 @@ class MCPManagerViewProvider {
   }
 
   /**
-   * 寫入 mcp_config.json 後稍候，讓 Antigravity 檔案監看跟上
-   */
-  async _syncLiveMcp(changes) {
-    if (!Array.isArray(changes) || changes.length === 0) return;
-    await new Promise((resolve) => setTimeout(resolve, 180));
-  }
-
-  /**
    * 統一訊息分發處理器
    */
   async _handleMessage(message, senderWebview) {
@@ -150,12 +145,11 @@ class MCPManagerViewProvider {
       }
 
       case 'toggleGlobalServer': {
-        const { name, disabled } = message;
+        const { name, disabled, sourceType } = message;
         try {
-          const result = await McpConfigService.toggleServer(name, disabled);
+          await McpConfigService.toggleServer(name, disabled, sourceType);
           await this.refreshWebviewData();
           this.pushToast(I18n.t(disabled ? 'toast_toggled_off' : 'toast_toggled_on', { name }), disabled ? 'warning' : 'success');
-          await this._syncLiveMcp((result && result.changes) || [{ name, disabled: !!disabled }]);
         } catch (err) {
           this.pushToast(I18n.t('toast_toggle_failed', { msg: err.message }), 'danger');
           await this.refreshWebviewData();
@@ -178,14 +172,13 @@ class MCPManagerViewProvider {
       case 'batchToggleGlobal': {
         const { action } = message;
         try {
-          const result = await McpConfigService.batchToggle(action);
+          await McpConfigService.batchToggle(action);
           await this.refreshWebviewData(true); // 立即推播最新資料，繞過 120ms 防抖
           const isEnable = action === 'enableAll' || action === 'enable_all';
           const isDisable = action === 'disableAll' || action === 'disable_all';
           const actionText = I18n.t(isEnable ? 'action_enable_all' : isDisable ? 'action_disable_all' : 'action_invert');
           this.pushToast(I18n.t('toast_batch_done', { env: McpConfigService.envName, action: actionText }), 'success');
           vscode.window.setStatusBarMessage(I18n.t('status_batch_done', { env: McpConfigService.envName }), 5000);
-          await this._syncLiveMcp((result && result.changes) || []);
         } catch (err) {
           this.pushToast(I18n.t('toast_batch_failed', { msg: err.message }), 'danger');
           await this.refreshWebviewData(true);
@@ -196,7 +189,7 @@ class MCPManagerViewProvider {
       case 'testServer': {
         const { name } = message;
         try {
-          const globalData = await McpConfigService.getGlobalData();
+          const globalData = await McpConfigService.getGlobalData(McpConfigService.displayMode);
           const serverConfig = globalData.config.mcpServers && globalData.config.mcpServers[name];
 
           if (!serverConfig) {
@@ -212,6 +205,13 @@ class MCPManagerViewProvider {
           if (this._view) this._view.webview.postMessage(responseMsg);
           if (this._panel) this._panel.webview.postMessage(responseMsg);
         }
+        break;
+      }
+
+      case 'setDisplaySource': {
+        const { source } = message;
+        await McpConfigService.setDisplayMode(source);
+        await this.refreshWebviewData(true, 0, true);
         break;
       }
 
@@ -255,12 +255,20 @@ class MCPManagerViewProvider {
 
     const doRefresh = async () => {
       try {
-        const globalData = await McpConfigService.getGlobalData();
+        const globalData = await McpConfigService.getGlobalData(McpConfigService.displayMode);
         const servers = (globalData.config && globalData.config.mcpServers) || {};
+        const clineServers = globalData.clineServers || {};
         const fingerprint = JSON.stringify({
           path: globalData.path,
           viewOnly: globalData.viewOnly === true,
+          displaySource: McpConfigService.displayMode,
           stats: globalData.stats || { total: 0, enabled: 0, disabled: 0 },
+          // Cline 為獨立的設定檔來源，且 Cline 端開關不受本套件控制，
+          // 故其統計與清單必須納入指紋，否則只改 Cline 設定時狀態列不會更新。
+          clineStats: globalData.clineStats || { total: 0, enabled: 0, disabled: 0 },
+          clineServers: Object.keys(clineServers)
+            .sort()
+            .map((name) => [name, clineServers[name].disabled === true]),
           servers: Object.keys(servers)
             .sort()
             .map((name) => [
@@ -278,33 +286,92 @@ class MCPManagerViewProvider {
 
         // 更新 IDE 底部 Status Bar
         if (this._statusBarItem) {
-          const viewOnly = globalData.viewOnly === true;
+          const isCline = globalData.isClineInstalled;
           const stats = globalData.stats || { total: 0, enabled: 0, disabled: 0 };
+          const agStats = globalData.agStats || stats;
+          const clineStats = globalData.clineStats || { total: 0, enabled: 0, disabled: 0 };
 
-          this._statusBarItem.text = `$(plug) MCP: ${stats.enabled}/${stats.total}`;
+          // 狀態列簡潔文字（顯示範圍一律取自 McpConfigService.displayMode，單一真相來源）
+          const currentMode = McpConfigService.displayMode;
 
-          const listedServers = Object.keys(servers).filter((name) => servers[name].disabled !== true);
-          const tooltipLines = [];
-          tooltipLines.push(I18n.t('status_tooltip_title', { env: globalData.envName }));
-          if (listedServers.length > 0) {
-            tooltipLines.push(I18n.t(viewOnly ? 'status_tooltip_enabled_now' : 'status_tooltip_enabled'));
-            listedServers.forEach((name) => {
-              const override = servers[name].workspaceOverride;
-              const mark = override === 'off'
-                ? I18n.t('status_tooltip_ws_off')
-                : override === 'on'
-                  ? I18n.t('status_tooltip_ws_on')
-                  : '';
-              tooltipLines.push(`• ${name}${mark}`);
-            });
+          const nativeName = McpConfigService.nativeSourceName;
+          if (isCline) {
+            if (currentMode === 'antigravity') {
+              this._statusBarItem.text = `$(plug) MCP: ${agStats.enabled}/${agStats.total}`;
+            } else if (currentMode === 'cline') {
+              this._statusBarItem.text = `$(plug) MCP (Cline): ${clineStats.enabled}/${clineStats.total}`;
+            } else {
+              const nativeShort = McpConfigService.nativeSourceShort;
+              this._statusBarItem.text = `$(plug) MCP: ${nativeShort} ${agStats.enabled}/${agStats.total} · Cline ${clineStats.enabled}/${clineStats.total}`;
+            }
           } else {
-            tooltipLines.push(I18n.t('status_tooltip_none'));
-          }
-          if (!viewOnly) {
-            tooltipLines.push(I18n.t('status_tooltip_click'));
+            this._statusBarItem.text = `$(plug) MCP: ${stats.enabled}/${stats.total}`;
           }
 
-          this._statusBarItem.tooltip = tooltipLines.join('\n');
+          // 懸停視窗 (MarkdownString，支援 Codicons 與 Rich Markdown)
+          const tooltip = new vscode.MarkdownString('', true);
+          tooltip.isTrusted = true;
+          tooltip.supportThemeIcons = true;
+
+          if (isCline) {
+            tooltip.appendMarkdown(`### $(plug) ${I18n.t('tooltip_mcp_dashboard')}\n\n`);
+
+            // 1. Antigravity 啟用狀態
+            const agIcon = agStats.enabled > 0 ? '$(pass-filled)' : '$(circle-slash)';
+            tooltip.appendMarkdown(`**${I18n.t('tooltip_antigravity_mcp', { name: nativeName })}** ${agIcon} \`${agStats.enabled} / ${agStats.total}\`\n\n`);
+            const agEnabled = globalData.agEnabledNames || [];
+            if (agEnabled.length > 0) {
+              agEnabled.forEach((name) => tooltip.appendMarkdown(`• \`${name}\`\n`));
+              if (agStats.disabled > 0) {
+                tooltip.appendMarkdown(`\n*(其餘 ${agStats.disabled} 個已停用)*\n`);
+              }
+            } else {
+              tooltip.appendMarkdown(`*${I18n.t('status_tooltip_none')}*\n`);
+            }
+
+            tooltip.appendMarkdown(`\n---\n\n`);
+
+            // 2. Cline 啟用狀態
+            const clineIcon = clineStats.enabled > 0 ? '$(pass-filled)' : '$(circle-slash)';
+            tooltip.appendMarkdown(`**${I18n.t('tooltip_cline_mcp')}** ${clineIcon} \`${clineStats.enabled} / ${clineStats.total}\`\n\n`);
+            const clineEnabled = globalData.clineEnabledNames || [];
+            if (clineEnabled.length > 0) {
+              clineEnabled.forEach((name) => tooltip.appendMarkdown(`• \`${name}\`\n`));
+              if (clineStats.disabled > 0) {
+                tooltip.appendMarkdown(`\n*(其餘 ${clineStats.disabled} 個已停用)*\n`);
+              }
+            } else {
+              tooltip.appendMarkdown(`*${I18n.t('status_tooltip_none')}*\n`);
+            }
+
+            tooltip.appendMarkdown(`\n---\n\n`);
+
+            const modeNames = {
+              antigravity: I18n.t('menu_mode_antigravity', { name: nativeName }),
+              cline: I18n.t('menu_mode_cline'),
+              both: I18n.t('menu_mode_both'),
+            };
+            const currentModeText = modeNames[McpConfigService.displayMode] || modeNames.both;
+            tooltip.appendMarkdown(`$(filter) ${I18n.t('tooltip_current_display')}: **${currentModeText}**\n\n`);
+            tooltip.appendMarkdown(`$(info) ${I18n.t('tooltip_click_hint')}`);
+          } else {
+            tooltip.appendMarkdown(`### $(plug) ${I18n.t('status_tooltip_title', { env: globalData.envName })}\n\n`);
+            const agIcon = stats.enabled > 0 ? '$(pass-filled)' : '$(circle-slash)';
+            tooltip.appendMarkdown(`**${I18n.t('tooltip_antigravity_mcp', { name: nativeName })}** ${agIcon} \`${stats.enabled} / ${stats.total}\`\n\n`);
+            const agEnabled = globalData.agEnabledNames || [];
+            if (agEnabled.length > 0) {
+              agEnabled.forEach((name) => tooltip.appendMarkdown(`• \`${name}\`\n`));
+              if (stats.disabled > 0) {
+                tooltip.appendMarkdown(`\n*(其餘 ${stats.disabled} 個已停用)*\n`);
+              }
+            } else {
+              tooltip.appendMarkdown(`*${I18n.t('status_tooltip_none')}*\n`);
+            }
+            tooltip.appendMarkdown(`\n---\n\n`);
+            tooltip.appendMarkdown(`$(info) ${I18n.t('tooltip_click_hint')}`);
+          }
+
+          this._statusBarItem.tooltip = tooltip;
           this._statusBarItem.show();
         }
 
@@ -392,10 +459,11 @@ class MCPManagerViewProvider {
 
     const currentLocale = resolveLocale();
 
+    // 僅注入前端實際消費的欄位：app.js 以 hostKind / viewOnly / isCursor 決定外觀；
+    // isVsCode / isClineInstalled / displaySource 皆未被消費，故不再注入。
     const initData = {
       locales,
       initialLocale: currentLocale,
-      isVsCode: McpConfigService.isVsCode,
       hostKind: McpConfigService.hostKind,
       envName: McpConfigService.envName,
       viewOnly: McpConfigService.isViewOnly,
@@ -418,6 +486,8 @@ class MCPManagerViewProvider {
  */
 async function activate(context) {
   McpConfigService.init(context);
+  // 舊版顯示範圍存於 globalState，開機時一次性遷移進設定，貫徹單一真相來源
+  await McpConfigService.migrateLegacyDisplayMode(context);
   // Cursor / VS Code 不能在此面板改開關，左側活動列不顯示；
   // 未設定時 when 為假，活動列預設隱藏，避免這兩個環境先閃出圖示。
   const showSidebar = !McpConfigService.isViewOnly;
@@ -428,15 +498,13 @@ async function activate(context) {
   syncLocaleContext();
 
   const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 40);
-  // Cursor / VS Code 的狀態列只顯示數字，點擊不開啟任何介面。
-  if (showSidebar) {
-    statusBarItem.command = 'antigravity.mcp.focusView';
-  }
+  // 點擊下方工具列彈出選擇視窗 (不直接開啟側邊欄)
+  statusBarItem.command = 'antigravity.mcp.openQuickMenu';
   statusBarItem.text = `$(plug) ${I18n.t('status_loading')}`;
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
 
-  const provider = new MCPManagerViewProvider(context.extensionUri, statusBarItem);
+  const provider = new MCPManagerViewProvider(context.extensionUri, statusBarItem, context);
   if (showSidebar) {
     context.subscriptions.push(
       vscode.window.registerWebviewViewProvider('antigravity.mcpManagerView', provider, {
@@ -453,6 +521,15 @@ async function activate(context) {
     await provider.openInEditor();
   };
   context.subscriptions.push(
+    vscode.commands.registerCommand('antigravity.mcp.openQuickMenu', async () => {
+      await showQuickMenu(provider);
+    }),
+    vscode.commands.registerCommand('antigravity.mcp.toggleDisplayMode', async () => {
+      await promptChangeDisplayMode(provider);
+    }),
+    vscode.commands.registerCommand('antigravity.mcp.viewClineMcp', async () => {
+      await showClineMcpViewer();
+    }),
     vscode.commands.registerCommand('antigravity.mcp.openInEditor', openInEditorHandler),
     vscode.commands.registerCommand('antigravity.mcp.openInEditor.en', openInEditorHandler),
     vscode.commands.registerCommand('antigravity.mcp.refresh', async () => {
@@ -481,6 +558,22 @@ async function activate(context) {
       configWatcher.onDidDelete(() => provider.refreshWebviewData());
       context.subscriptions.push(configWatcher);
     } catch (e) {}
+
+    // Cline MCP 設定檔監聽
+    if (McpConfigService.isClineInstalled && McpConfigService.clineConfigPath) {
+      try {
+        const clinePath = McpConfigService.clineConfigPath;
+        const clineDir = path.dirname(clinePath);
+        const clineName = path.basename(clinePath);
+        const clineWatcher = vscode.workspace.createFileSystemWatcher(
+          new vscode.RelativePattern(vscode.Uri.file(clineDir), clineName)
+        );
+        clineWatcher.onDidChange(() => provider.refreshWebviewData());
+        clineWatcher.onDidCreate(() => provider.refreshWebviewData());
+        clineWatcher.onDidDelete(() => provider.refreshWebviewData());
+        context.subscriptions.push(clineWatcher);
+      } catch (e) {}
+    }
   }
 
   if (McpConfigService.isCursor) {
@@ -527,6 +620,9 @@ async function activate(context) {
   // 監聽全域語言變動設定 (支援跨外掛即時聯動廣播)
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('antigravity.mcp.displayMode')) {
+        provider.refreshWebviewData(true, 0, true);
+      }
       if (e.affectsConfiguration('antigravity.locale') || e.affectsConfiguration('scriptRunner.locale')) {
         syncLocaleContext();
         provider.broadcastLocale(resolveLocale());
@@ -536,6 +632,314 @@ async function activate(context) {
       }
     })
   );
+}
+
+/**
+ * 彈出 MCP 快捷選擇視窗 (QuickPick)
+ * 參考 aiQuota (antigravity-quota-status) 之互動典範：
+ * 1. 頂層精簡清晰：重新整理、檢視 Cline MCP（純檢視）、切換顯示方式（子彈窗）、面板開啟、設定檔開啟、Antigravity 批次控制
+ * 2. 側邊欄專屬 Antigravity，Cline 僅在下方工具列純檢視
+ */
+async function showQuickMenu(provider) {
+  try {
+    const globalData = await McpConfigService.getGlobalData();
+    const isCline = globalData.isClineInstalled;
+    const items = [];
+
+    // 1. 重新載入
+    items.push({
+      label: `$(refresh) ${I18n.t('menu_refresh')}`,
+      description: I18n.t('menu_refresh_desc'),
+      action: 'refresh',
+    });
+
+    // 2. 若安裝了 Cline，提供專屬的「檢視 Cline MCP」與「切換狀態列顯示方式」
+    if (isCline) {
+      const clineStats = globalData.clineStats || { enabled: 0, total: 0 };
+      items.push({
+        label: `$(eye) ${I18n.t('menu_view_cline')}`,
+        description: `(${clineStats.enabled}/${clineStats.total})`,
+        detail: I18n.t('menu_view_cline_desc'),
+        action: 'viewCline',
+      });
+
+      const currentMode = McpConfigService.displayMode;
+      const nativeName = McpConfigService.nativeSourceName;
+      const modeLabels = {
+        both: I18n.t('mode_both_label'),
+        antigravity: I18n.t('mode_antigravity_label', { name: nativeName }),
+        cline: I18n.t('mode_cline_label'),
+      };
+
+      items.push({
+        label: `$(symbol-enum) ${I18n.t('menu_toggle_display_mode')}`,
+        description: `[${modeLabels[currentMode] || currentMode}]`,
+        detail: I18n.t('menu_toggle_display_mode_desc', { name: nativeName }),
+        action: 'toggleDisplayMode',
+      });
+    }
+
+    // 3. 儀表板面板
+    items.push({
+      label: I18n.t('quickmenu_group_actions'),
+      kind: vscode.QuickPickItemKind.Separator,
+    });
+
+    const showSidebar = !McpConfigService.isViewOnly;
+    if (showSidebar) {
+      items.push({
+        label: `$(layout-sidebar-left) ${I18n.t('menu_open_sidebar')}`,
+        description: I18n.t('menu_open_sidebar_desc'),
+        action: 'openSidebar',
+      });
+    }
+
+    if (!McpConfigService.isViewOnly) {
+      items.push({
+        label: `$(split-horizontal) ${I18n.t('menu_open_in_editor')}`,
+        description: I18n.t('menu_open_in_editor_desc'),
+        action: 'openInEditor',
+      });
+    }
+
+    // 4. 設定檔開啟
+    items.push({
+      label: I18n.t('quickmenu_group_configs'),
+      kind: vscode.QuickPickItemKind.Separator,
+    });
+
+    items.push({
+      label: `$(file-code) ${I18n.t('menu_open_antigravity_config', { name: McpConfigService.nativeSourceName })}`,
+      description: McpConfigService.globalConfigPath,
+      action: 'openConfig',
+      path: McpConfigService.globalConfigPath,
+    });
+
+    if (isCline && globalData.clineConfigPath) {
+      items.push({
+        label: `$(file-code) ${I18n.t('menu_open_cline_config')}`,
+        description: globalData.clineConfigPath,
+        action: 'openConfig',
+        path: globalData.clineConfigPath,
+      });
+    }
+
+    // 5. Antigravity 批次控制
+    if (!McpConfigService.isViewOnly) {
+      items.push({
+        label: I18n.t('quickmenu_group_batch'),
+        kind: vscode.QuickPickItemKind.Separator,
+      });
+
+      items.push({
+        label: `$(pass) ${I18n.t('btn_enable_all')}`,
+        description: I18n.t('menu_batch_enable_desc'),
+        action: 'batch',
+        batchAction: 'enable_all',
+      });
+
+      items.push({
+        label: `$(circle-slash) ${I18n.t('btn_disable_all')}`,
+        description: I18n.t('menu_batch_disable_desc'),
+        action: 'batch',
+        batchAction: 'disable_all',
+      });
+    }
+
+    const selected = await vscode.window.showQuickPick(items, {
+      placeHolder: I18n.t('quickmenu_placeholder'),
+      matchOnDescription: true,
+      matchOnDetail: true,
+    });
+
+    if (!selected) return;
+
+    switch (selected.action) {
+      case 'refresh': {
+        await provider.refreshWebviewData(true, 0, true);
+        provider.pushToast(I18n.t('toast_refreshed'), 'info');
+        break;
+      }
+      case 'viewCline': {
+        await showClineMcpViewer();
+        break;
+      }
+      case 'toggleDisplayMode': {
+        await promptChangeDisplayMode(provider);
+        break;
+      }
+      case 'openSidebar': {
+        await vscode.commands.executeCommand('antigravity.mcpManagerView.focus');
+        break;
+      }
+      case 'openInEditor': {
+        await provider.openInEditor();
+        break;
+      }
+      case 'openConfig': {
+        await SystemService.openConfigFile(selected.path);
+        break;
+      }
+      case 'batch': {
+        try {
+          await McpConfigService.batchToggle(selected.batchAction);
+          await provider.refreshWebviewData(true, 0, true);
+          const isEnable = selected.batchAction === 'enable_all';
+          const actionText = I18n.t(isEnable ? 'action_enable_all' : 'action_disable_all');
+          provider.pushToast(I18n.t('toast_batch_done', { env: McpConfigService.envName, action: actionText }), 'success');
+        } catch (err) {
+          provider.pushToast(I18n.t('toast_batch_failed', { msg: err.message }), 'danger');
+        }
+        break;
+      }
+    }
+  } catch (err) {
+    vscode.window.showErrorMessage(`[MCP QuickMenu] ${err.message}`);
+  }
+}
+
+/**
+ * 切換狀態列顯示方式彈窗 (參考 antigravity-quota-status 之 promptChangeDisplayMode 規範)
+ */
+async function promptChangeDisplayMode(provider) {
+  const current = McpConfigService.displayMode;
+
+  const globalData = await McpConfigService.getGlobalData();
+  const agStats = globalData.agStats || { enabled: 0, total: 0 };
+  const clineStats = globalData.clineStats || { enabled: 0, total: 0 };
+
+  const name = McpConfigService.nativeSourceName;
+  const modes = [
+    {
+      label: I18n.t('mode_both_label'),
+      description: I18n.t('mode_both_desc', { name }),
+      detail: `${name}: ${agStats.enabled}/${agStats.total} · Cline: ${clineStats.enabled}/${clineStats.total}`,
+      value: 'both',
+      picked: current === 'both',
+    },
+    {
+      label: I18n.t('mode_antigravity_label', { name }),
+      description: I18n.t('mode_antigravity_desc', { name }),
+      detail: `${name}: ${agStats.enabled}/${agStats.total}`,
+      value: 'antigravity',
+      picked: current === 'antigravity',
+    },
+    {
+      label: I18n.t('mode_cline_label'),
+      description: I18n.t('mode_cline_desc'),
+      detail: `Cline: ${clineStats.enabled}/${clineStats.total}`,
+      value: 'cline',
+      picked: current === 'cline',
+    },
+  ];
+
+  const selected = await vscode.window.showQuickPick(modes, {
+    placeHolder: I18n.t('mode_placeholder'),
+    matchOnDescription: true,
+    matchOnDetail: true,
+  });
+
+  if (selected) {
+    await McpConfigService.setDisplayMode(selected.value);
+    await provider.refreshWebviewData(true, 0, true);
+    vscode.window.setStatusBarMessage(
+      I18n.t('status_mode_updated', { mode: selected.label }),
+      3000
+    );
+  }
+}
+
+/**
+ * 下方工具列專屬：檢視 Cline MCP 工具清單與狀態 (純檢視，不提供側邊開關)
+ */
+async function showClineMcpViewer() {
+  try {
+    const clineData = await ClineMcpService.getServers();
+    const servers = clineData.servers || {};
+    const configPath = clineData.path || '';
+    const serverKeys = Object.keys(servers);
+
+    if (serverKeys.length === 0) {
+      vscode.window.showInformationMessage(
+        I18n.t('empty_no_config', { path: configPath || 'cline_mcp_settings.json' })
+      );
+      return;
+    }
+
+    const items = [
+      {
+        label: `$(file-code) ${I18n.t('cline_viewer_open_config')}`,
+        description: configPath,
+        detail: I18n.t('cline_viewer_open_config_desc'),
+        action: 'openConfig',
+        path: configPath,
+      },
+      {
+        label: I18n.t('cline_viewer_title'),
+        kind: vscode.QuickPickItemKind.Separator,
+      },
+    ];
+
+    // 已啟用的排在前面，停用的排在後面
+    const sortedKeys = serverKeys.sort((a, b) => {
+      const aOn = servers[a].disabled !== true;
+      const bOn = servers[b].disabled !== true;
+      if (aOn !== bOn) return aOn ? -1 : 1;
+      return a.localeCompare(b);
+    });
+
+    for (const key of sortedKeys) {
+      const s = servers[key];
+      const isEnabled = s.disabled !== true;
+      const icon = isEnabled ? '$(pass-filled)' : '$(circle-slash)';
+      const statusText = I18n.t(isEnabled ? 'cline_status_enabled' : 'cline_status_disabled');
+      const targetDetail = s.serverUrl || s.url || (s.command ? `${s.command} ${(s.args || []).join(' ')}` : (s.type || ''));
+
+      items.push({
+        label: `${icon} ${key}`,
+        description: `[${statusText}] ${s.description || ''}`,
+        detail: targetDetail,
+        action: 'viewDetail',
+        server: s,
+      });
+    }
+
+    const selected = await vscode.window.showQuickPick(items, {
+      placeHolder: I18n.t('cline_viewer_placeholder'),
+      matchOnDescription: true,
+      matchOnDetail: true,
+    });
+
+    if (!selected) return;
+
+    if (selected.action === 'openConfig') {
+      await SystemService.openConfigFile(selected.path);
+    } else if (selected.action === 'viewDetail') {
+      const s = selected.server;
+      const isEnabled = s.disabled !== true;
+      const statusText = I18n.t(isEnabled ? 'cline_status_enabled' : 'cline_status_disabled');
+      const lines = [
+        `【Cline MCP: ${s.name}】`,
+        `狀態: ${statusText}`,
+        s.type ? `類型: ${s.type}` : '',
+        s.url || s.serverUrl ? `URL: ${s.url || s.serverUrl}` : '',
+        s.command ? `命令: ${s.command} ${(s.args || []).join(' ')}` : '',
+        s.env ? `環境變數: ${Object.keys(s.env).join(', ')}` : '',
+        s.description ? `說明: ${s.description}` : '',
+      ].filter(Boolean).join('\n');
+
+      const choice = await vscode.window.showInformationMessage(
+        lines,
+        { modal: true },
+        I18n.t('cline_viewer_open_config')
+      );
+      if (choice === I18n.t('cline_viewer_open_config')) {
+        await SystemService.openConfigFile(configPath);
+      }
+    }
+  } catch (err) {
+    vscode.window.showErrorMessage(`[Cline MCP Viewer] ${err.message}`);
+  }
 }
 
 function deactivate() {}
