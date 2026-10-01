@@ -4,8 +4,7 @@
   "btn_expand_all_title": "展開全部卡片",
   "btn_test_all_title": "一鍵測試所有 MCP 連線狀態",
   "btn_refresh_title": "重新整理",
-  "btn_lang_toggle_title": "Switch to English",
-  "btn_lang_indicator": "EN",
+  "btn_lang_indicator": "繁",
   "card_global_title": "全域配置",
   "btn_open_global_config": "開啟設定檔",
   "btn_open_global_config_title": "在編輯器開啟全域 mcp_config.json",
@@ -132,5 +131,6 @@
   "cline_viewer_open_config_desc": "在編輯器中開啟真實 cline_mcp_settings.json",
   "cline_status_enabled": "啟用中",
   "cline_status_disabled": "已停用",
-  "err_cline_view_only": "Cline 的 MCP 開關請在 Cline 自身的 MCP 面板操作；本套件對 Cline 僅提供檢視"
+  "err_cline_view_only": "Cline 的 MCP 開關請在 Cline 自身的 MCP 面板操作；本套件對 Cline 僅提供檢視",
+  "btn_lang_menu_title": "選擇介面語言"
 }

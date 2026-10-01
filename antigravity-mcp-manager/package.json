@@ -24,10 +24,12 @@
 						"default": "zh-TW",
 						"enum": [
 							"zh-TW",
+							"zh-CN",
 							"en"
 						],
 						"enumDescriptions": [
 							"繁體中文 (Traditional Chinese)",
+							"简体中文 (Simplified Chinese)",
 							"English"
 						],
 						"description": "Antigravity 外掛全域介面語言 (Global Interface Language for Antigravity Plugins)"

@@ -1,6 +1,6 @@
 /**
  * 內容區圖片檢視器 - 多國語言字典 (locales.js)
- * 支援：zh-TW (繁體中文), en (English)
+ * 支援：zh-TW (繁體中文), zh-CN (简体中文), en (English)
  * 規範：僅限於工具介面 (UI Chrome) 翻譯，不干擾檔案名稱與實際路徑
  */
 (function (root) {
@@ -28,8 +28,8 @@
       btn_refresh: '重新整理',
       btn_refresh_title: '重新掃描資料夾 (F5)',
       btn_reveal_folder_title: '在系統檔案總管中開啟此資料夾',
-      btn_lang_toggle_title: 'Switch to English',
-      btn_lang_indicator: 'EN',
+      btn_lang_menu_title: '選擇介面語言',
+      btn_lang_indicator: '繁',
 
       // 空狀態
       empty_folder_title: '此資料夾內沒有支援的圖片檔案',
@@ -84,7 +84,77 @@
       toast_rotate_saving: '正在儲存 {count} 張圖片（已略過 {skipped} 個不支援旋轉之檔案）',
       toast_rotate_not_supported: '所選的檔案均不支援物理旋轉（如 SVG 向量或 GIF 動態圖）',
       toast_rotate_failed: '旋轉未能完成',
-      toast_lang_switched: '已切換為繁體中文介面'
+      toast_lang_switched: '已切換為繁體中文'
+    },
+    'zh-CN': {
+      folder_path_title: '文件夹路径',
+      loading: '加载中...',
+      img_count_badge: '{count} 张图片',
+      filter_count_badge: '已筛选: {count}',
+      search_placeholder: '搜索档名...',
+      search_clear_title: '清除搜索',
+      sort_select_title: '排序依据',
+      sort_name_asc: '档名 (A - Z)',
+      sort_name_desc: '档名 (Z - A)',
+      sort_size_desc: '大小 (大到小)',
+      sort_size_asc: '大小 (小到大)',
+      sort_date_desc: '时间 (新到旧)',
+      sort_date_asc: '时间 (旧到新)',
+      slider_size_label: '尺寸',
+      slider_size_title: '调整缩图尺寸 (110px - 360px，支持 Ctrl + 鼠标滚轮)',
+      btn_recursive: '子文件夹',
+      btn_recursive_title_on: '目前：包含子文件夹（点击切换为仅当前文件夹）',
+      btn_recursive_title_off: '目前：仅当前文件夹（点击切换为搜索子文件夹）',
+      btn_refresh: '刷新',
+      btn_refresh_title: '重新扫描文件夹 (F5)',
+      btn_reveal_folder_title: '在系统文件资源管理器中开启此文件夹',
+      btn_lang_menu_title: '选择界面语言',
+      btn_lang_indicator: '简',
+      empty_folder_title: '此文件夹内没有支持的图片文件',
+      empty_folder_desc: '支持格式：PNG, JPG, WebP, GIF, SVG, BMP, ICO, AVIF, TIFF 等。您可以尝试开启子文件夹搜索或按刷新。',
+      empty_filter_title: '找不到符合关键字的图片',
+      empty_filter_desc: '搜索条件「{query}」未匹配到任何图片，请尝试其他关键字。',
+      card_select_title: '选取图片 (Shift+点选加选)',
+      card_locate_ide_title: '跳转到文件资源管理器',
+      card_reveal_title: '在系统文件资源管理器显示',
+      card_copy_path_title: '复制路径',
+      card_path_prefix: '路径: ',
+      batch_selected_count: '已选取 {count} 张',
+      batch_copy_paths: '复制路径',
+      batch_copy_paths_title: '复制选取图片的绝对路径列表（每行一个路径，适合贴到 AI 对话）',
+      batch_rotate_cw: '顺时针 90°',
+      batch_rotate_cw_title: '顺时针旋转 90 度 (覆盖实体文件)',
+      batch_rotate_ccw: '逆时针 90°',
+      batch_rotate_ccw_title: '逆时针旋转 90 度 (覆盖实体文件)',
+      batch_delete: '删除',
+      batch_delete_title: '将选取文件移至系统回收站',
+      batch_clear_title: '取消所有选取 (Esc)',
+      lightbox_zoom_out_title: '缩小 (滚轮向下 / -)',
+      lightbox_zoom_in_title: '放大 (滚轮向上 / +)',
+      lightbox_zoom_fit_title: '最适窗口大小 (双击鼠标)',
+      lightbox_zoom_actual_title: '1:1 原始解析度',
+      lightbox_select_close_title: '关闭查看器并在画廊中选取此图片 (S / Enter)',
+      lightbox_copy_path_title: '复制图片完整路径',
+      lightbox_delete_title: '删除此图片 (Delete)',
+      lightbox_close_title: '关闭查看器并回到文件夹画廊 (Esc / 右键)',
+      lightbox_expand_gallery_title: '展开为文件夹画廊 (G)',
+      lightbox_prev_title: '上一张 (← 键)',
+      lightbox_next_title: '下一张 (→ 键)',
+      lightbox_first_image: '已是第一张图片',
+      lightbox_last_image: '已是最后一张图片',
+      lightbox_meta_loading: '加载中... • {size}',
+      lightbox_meta_dim: '{width} × {height} px • {size}',
+      toast_path_copied: '路径已复制',
+      toast_batch_copied: '已复制 {count} 个文件路径',
+      toast_selected_in_gallery: '已在画廊中选取：{name}',
+      toast_reveal_in_gallery: '已在文件夹画廊中定位：{name}',
+      toast_refresh_done: '已刷新（共 {count} 张图片）',
+      toast_rotating_prep: '正在准备旋转 {count} 张图片...',
+      toast_rotating_progress: '正在旋转图片 ({current}/{total})：{name}',
+      toast_rotate_saving: '正在保存 {count} 张图片（已略过 {skipped} 个不支持旋转之文件）',
+      toast_rotate_not_supported: '所选的文件均不支持物理旋转（如 SVG 向量或 GIF 动态图）',
+      toast_rotate_failed: '旋转未能完成',
+      toast_lang_switched: '已切换为简体中文',
     },
     'en': {
       // 工具列頂部
@@ -109,8 +179,8 @@
       btn_refresh: 'Refresh',
       btn_refresh_title: 'Rescan folder (F5)',
       btn_reveal_folder_title: 'Reveal this folder in System File Explorer',
-      btn_lang_toggle_title: '切換至繁體中文',
-      btn_lang_indicator: '中',
+      btn_lang_menu_title: 'Choose interface language',
+      btn_lang_indicator: 'EN',
 
       // 空狀態
       empty_folder_title: 'No supported image files found in this folder',
@@ -165,7 +235,7 @@
       toast_rotate_saving: 'Saving {count} images (skipped {skipped} unsupported files)',
       toast_rotate_not_supported: 'Selected files do not support physical rotation (e.g. SVG or GIF)',
       toast_rotate_failed: 'Rotation could not be completed',
-      toast_lang_switched: 'Switched to English interface'
+      toast_lang_switched: 'Switched to English'
     }
   };
 

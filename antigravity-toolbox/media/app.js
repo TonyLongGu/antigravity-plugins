@@ -58,6 +58,7 @@
   // ============================================================================
   const I18nModule = {
     currentLang: 'zh-TW',
+    supported: ['zh-TW', 'zh-CN', 'en'],
     uiFlavor: (typeof window !== 'undefined' && window.INITIAL_ENV && window.INITIAL_ENV.uiFlavor) || '',
 
     init() {
@@ -67,9 +68,9 @@
         saved = localStorage.getItem('antigravity_locale');
       } catch (e) {}
 
-      if (initial === 'zh-TW' || initial === 'en') {
+      if (this.supported.includes(initial)) {
         this.currentLang = initial;
-      } else if (saved === 'zh-TW' || saved === 'en') {
+      } else if (this.supported.includes(saved)) {
         this.currentLang = saved;
       } else {
         this.currentLang = 'zh-TW';
@@ -78,13 +79,56 @@
       this.applyLanguage(this.currentLang, false);
 
       const btnLang = document.getElementById('btn-lang-toggle');
+      const menu = document.getElementById('lang-menu');
       if (btnLang) {
         btnLang.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          this.toggle();
+          if (menu && !menu.hidden) this.closeMenu();
+          else this.openMenu();
         });
       }
+      if (menu) {
+        menu.addEventListener('click', (e) => {
+          const item = e.target.closest('.lang-menu-item');
+          if (!item) return;
+          e.preventDefault();
+          e.stopPropagation();
+          this.setLanguage(item.getAttribute('data-lang'));
+        });
+      }
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.lang-menu-wrap')) this.closeMenu();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') this.closeMenu();
+      });
+    },
+
+    openMenu() {
+      const menu = document.getElementById('lang-menu');
+      const btn = document.getElementById('btn-lang-toggle');
+      if (!menu) return;
+      menu.hidden = false;
+      btn?.classList.add('is-open');
+      btn?.setAttribute('aria-expanded', 'true');
+    },
+
+    closeMenu() {
+      const menu = document.getElementById('lang-menu');
+      const btn = document.getElementById('btn-lang-toggle');
+      if (!menu || menu.hidden) return;
+      menu.hidden = true;
+      btn?.classList.remove('is-open');
+      btn?.setAttribute('aria-expanded', 'false');
+    },
+
+    setLanguage(lang) {
+      this.closeMenu();
+      if (!this.supported.includes(lang) || lang === this.currentLang) return;
+      this.applyLanguage(lang, true);
+      vscode.postMessage({ type: 'setGlobalLocale', locale: lang });
+      ToastModule.show(this.t('toast_lang_switched'), 'info', 1800);
     },
 
     t(key, params = {}) {
@@ -102,17 +146,6 @@
       return text;
     },
 
-    toggle() {
-      const next = this.currentLang === 'zh-TW' ? 'en' : 'zh-TW';
-      this.applyLanguage(next, true);
-      vscode.postMessage({ type: 'setGlobalLocale', locale: next });
-      ToastModule.show(
-        next === 'en' ? 'Switched to English' : '已切換為繁體中文',
-        'info',
-        1800
-      );
-    },
-
     applyLanguage(lang, save = true) {
       this.currentLang = lang;
       if (save) {
@@ -121,7 +154,7 @@
         } catch (e) {}
       }
 
-      document.documentElement.lang = lang === 'zh-TW' ? 'zh-Hant' : 'en';
+      document.documentElement.lang = lang === 'zh-CN' ? 'zh-Hans' : (lang === 'en' ? 'en' : 'zh-Hant');
 
       const langIndicator = document.getElementById('lang-indicator');
       const btnLang = document.getElementById('btn-lang-toggle');
@@ -129,8 +162,13 @@
         langIndicator.textContent = this.t('btn_lang_indicator');
       }
       if (btnLang) {
-        btnLang.title = this.t('btn_lang_toggle_title');
+        btnLang.title = this.t('btn_lang_menu_title');
       }
+      document.querySelectorAll('.lang-menu-item').forEach((el) => {
+        const active = el.getAttribute('data-lang') === lang;
+        el.classList.toggle('is-active', active);
+        el.setAttribute('aria-checked', active ? 'true' : 'false');
+      });
 
       // 遍歷靜態 data-i18n
       document.querySelectorAll('[data-i18n]').forEach((el) => {
@@ -192,13 +230,14 @@
     show(message, type = 'info', duration = 2200) {
       if (!this.container) return;
       let displayMsg = message;
-      if (I18nModule && I18nModule.currentLang === 'en' && window.LOCALES) {
+      const lang = I18nModule && I18nModule.currentLang;
+      if (lang && lang !== 'zh-TW' && window.LOCALES) {
         const zh = window.LOCALES['zh-TW'];
-        const en = window.LOCALES['en'];
-        if (zh && en) {
+        const target = window.LOCALES[lang];
+        if (zh && target) {
           for (const k of Object.keys(zh)) {
-            if (zh[k] === message && en[k]) {
-              displayMsg = en[k];
+            if (zh[k] === message && target[k]) {
+              displayMsg = target[k];
               break;
             }
           }
@@ -1519,7 +1558,7 @@
             ToastModule.show(payload.message, payload.status || 'info');
             break;
           case 'localeChanged':
-            if (event.data.locale && event.data.locale !== I18nModule.currentLang) {
+            if (I18nModule.supported.includes(event.data.locale) && event.data.locale !== I18nModule.currentLang) {
               I18nModule.applyLanguage(event.data.locale, true);
             }
             break;

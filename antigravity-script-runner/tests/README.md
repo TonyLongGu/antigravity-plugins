@@ -37,7 +37,7 @@ node tests/locales.check.js    # 只跑語系檢查
 ## 3. 三支腳本各驗什麼
 
 ### `locales.check.js`
-- zh-TW / en 鍵集合完全對稱（無缺漏、無多餘）、無空字串值。
+- zh-TW / zh-CN / en 鍵集合完全對稱（無缺漏、無多餘）、無空字串值。
 - `viewer.js` 與 `index.html` 實際引用的 i18n 鍵（`t('key')`、`data-i18n*`）在兩個語系都存在。
 - 防的是：新增按鈕卻忘記加翻譯、改了鍵名沒同步。
 

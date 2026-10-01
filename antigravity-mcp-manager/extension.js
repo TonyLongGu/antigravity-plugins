@@ -27,6 +27,15 @@ async function persistGlobalLocale(locale) {
   try {
     await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
   } catch (_) {}
+  try {
+    await vscode.workspace.getConfiguration('scriptRunner').update('locale', locale, vscode.ConfigurationTarget.Global);
+  } catch (_) {}
+  try {
+    const quotaLocale = vscode.workspace.getConfiguration('aiQuota').get('locale');
+    if (quotaLocale && quotaLocale !== 'auto') {
+      await vscode.workspace.getConfiguration('aiQuota').update('locale', locale, vscode.ConfigurationTarget.Global);
+    }
+  } catch (_) {}
 }
 
 /**
@@ -446,9 +455,13 @@ class MCPManagerViewProvider {
     const locales = {};
     try {
       const zhPath = path.join(this._extensionUri.fsPath, 'locales', 'zh-TW.json');
+      const cnPath = path.join(this._extensionUri.fsPath, 'locales', 'zh-CN.json');
       const enPath = path.join(this._extensionUri.fsPath, 'locales', 'en.json');
       if (fs.existsSync(zhPath)) {
         locales['zh-TW'] = JSON.parse(await fsPromises.readFile(zhPath, 'utf-8'));
+      }
+      if (fs.existsSync(cnPath)) {
+        locales['zh-CN'] = JSON.parse(await fsPromises.readFile(cnPath, 'utf-8'));
       }
       if (fs.existsSync(enPath)) {
         locales['en'] = JSON.parse(await fsPromises.readFile(enPath, 'utf-8'));

@@ -134,7 +134,7 @@ function activate(context) {
         setupTimer();
         updateStatusBar(false);
       }
-      if (e.affectsConfiguration('antigravity.locale')) {
+      if (e.affectsConfiguration('antigravity.locale') || e.affectsConfiguration('scriptRunner.locale')) {
         updateStatusBar(false);
       }
     })
@@ -277,7 +277,8 @@ function applyBackground(config) {
 
 function appendFooter(md) {
   md.appendMarkdown(`---\n`);
-  const updatedTime = new Date().toLocaleTimeString(i18n.getLocale() === 'en' ? 'en-US' : 'zh-TW', { hour12: false });
+  const timeLocale = i18n.getLocale() === 'en' ? 'en-US' : i18n.getLocale();
+  const updatedTime = new Date().toLocaleTimeString(timeLocale, { hour12: false });
   md.appendMarkdown(i18n.t('tooltip_last_updated', { time: updatedTime }));
   md.appendMarkdown(i18n.t('tooltip_click_menu'));
 }
@@ -523,6 +524,11 @@ async function showActionMenu() {
       label: i18n.t('menu_interval_label'),
       description: i18n.t('menu_interval_desc'),
       action: 'setInterval'
+    },
+    {
+      label: i18n.t('menu_lang_label'),
+      description: i18n.t('menu_lang_desc'),
+      action: 'setLanguage'
     }
   );
 
@@ -552,7 +558,41 @@ async function showActionMenu() {
     case 'setInterval':
       await promptSetRefreshInterval();
       break;
+    case 'setLanguage':
+      await promptSetLanguage();
+      break;
   }
+}
+
+const SUPPORTED_LOCALES = ['zh-TW', 'zh-CN', 'en'];
+
+async function persistSharedLocale(locale) {
+  if (!SUPPORTED_LOCALES.includes(locale)) return;
+  await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
+  try {
+    await vscode.workspace.getConfiguration('scriptRunner').update('locale', locale, vscode.ConfigurationTarget.Global);
+  } catch (_) {}
+  try {
+    const quotaLocale = vscode.workspace.getConfiguration('aiQuota').get('locale');
+    if (quotaLocale && quotaLocale !== 'auto') {
+      await vscode.workspace.getConfiguration('aiQuota').update('locale', locale, vscode.ConfigurationTarget.Global);
+    }
+  } catch (_) {}
+}
+
+async function promptSetLanguage() {
+  const current = i18n.getLocale();
+  const items = [
+    { label: `${current === 'zh-TW' ? '$(check) ' : ''}繁體中文`, lang: 'zh-TW' },
+    { label: `${current === 'zh-CN' ? '$(check) ' : ''}简体中文`, lang: 'zh-CN' },
+    { label: `${current === 'en' ? '$(check) ' : ''}English`, lang: 'en' }
+  ];
+  const selected = await vscode.window.showQuickPick(items, {
+    placeHolder: i18n.t('lang_placeholder')
+  });
+  if (!selected || selected.lang === current) return;
+  await persistSharedLocale(selected.lang);
+  vscode.window.setStatusBarMessage(i18n.t('lang_updated'), 2500);
 }
 
 /**

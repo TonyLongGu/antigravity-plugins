@@ -87,10 +87,16 @@
           </svg>
         </button>
 
-        <!-- 語言切換按鈕 -->
-        <button id="btn-lang-toggle" class="btn-icon btn-lang" data-i18n-title="btn_lang_toggle_title" title="Switch to English">
-          <span id="lang-indicator">EN</span>
-        </button>
+        <div class="lang-menu-wrap">
+          <button id="btn-lang-toggle" class="btn-icon btn-lang" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="lang-menu" data-i18n-title="btn_lang_menu_title" title="選擇介面語言">
+            <span id="lang-indicator">繁</span>
+          </button>
+          <div id="lang-menu" class="lang-menu" role="menu" hidden>
+            <button type="button" class="lang-menu-item" role="menuitemradio" data-lang="zh-TW" aria-checked="true">繁體中文</button>
+            <button type="button" class="lang-menu-item" role="menuitemradio" data-lang="zh-CN" aria-checked="false">简体中文</button>
+            <button type="button" class="lang-menu-item" role="menuitemradio" data-lang="en" aria-checked="false">English</button>
+          </div>
+        </div>
       </div>
     </header>
 

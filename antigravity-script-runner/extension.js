@@ -92,11 +92,19 @@ function resolveLocale() {
  * 寫入全域語系：Cursor / VS Code 使用 scriptRunner.locale，並相容寫入 antigravity.locale 供舊套件聯動
  * @param {string} locale
  */
+const SUPPORTED_LOCALES = ['zh-TW', 'zh-CN', 'en'];
+
 async function persistGlobalLocale(locale) {
-  if (locale !== 'zh-TW' && locale !== 'en') return;
+  if (!SUPPORTED_LOCALES.includes(locale)) return;
   await vscode.workspace.getConfiguration('scriptRunner').update('locale', locale, vscode.ConfigurationTarget.Global);
   try {
     await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
+  } catch (_) {}
+  try {
+    const quotaLocale = vscode.workspace.getConfiguration('aiQuota').get('locale');
+    if (quotaLocale && quotaLocale !== 'auto') {
+      await vscode.workspace.getConfiguration('aiQuota').update('locale', locale, vscode.ConfigurationTarget.Global);
+    }
   } catch (_) {}
 }
 
@@ -212,7 +220,9 @@ class MediaCustomEditorProvider {
 function activate(context) {
   const i18n = new I18n(context.extensionUri);
   const syncLocaleContext = () => {
-    vscode.commands.executeCommand('setContext', 'scriptRunner.isEnglish', i18n.getLocale() === 'en');
+    const locale = i18n.getLocale();
+    vscode.commands.executeCommand('setContext', 'scriptRunner.isEnglish', locale === 'en');
+    vscode.commands.executeCommand('setContext', 'scriptRunner.isSimplified', locale === 'zh-CN');
   };
   syncLocaleContext();
 
@@ -470,20 +480,28 @@ function activate(context) {
     ),
     vscode.commands.registerCommand('scriptRunner.viewFolderImages', viewFolderImagesHandler),
     vscode.commands.registerCommand('scriptRunner.viewFolderImages.en', viewFolderImagesHandler),
+    vscode.commands.registerCommand('scriptRunner.viewFolderImages.cn', viewFolderImagesHandler),
     vscode.commands.registerCommand('scriptRunner.viewFolderAudios', viewFolderAudiosHandler),
     vscode.commands.registerCommand('scriptRunner.viewFolderAudios.en', viewFolderAudiosHandler),
+    vscode.commands.registerCommand('scriptRunner.viewFolderAudios.cn', viewFolderAudiosHandler),
     vscode.commands.registerCommand('scriptRunner.viewFolderVideos', viewFolderVideosHandler),
     vscode.commands.registerCommand('scriptRunner.viewFolderVideos.en', viewFolderVideosHandler),
+    vscode.commands.registerCommand('scriptRunner.viewFolderVideos.cn', viewFolderVideosHandler),
     vscode.commands.registerCommand('scriptRunner.runPy', runPyHandler),
     vscode.commands.registerCommand('scriptRunner.runPy.en', runPyHandler),
+    vscode.commands.registerCommand('scriptRunner.runPy.cn', runPyHandler),
     vscode.commands.registerCommand('scriptRunner.runBat', runBatHandler),
     vscode.commands.registerCommand('scriptRunner.runBat.en', runBatHandler),
+    vscode.commands.registerCommand('scriptRunner.runBat.cn', runBatHandler),
     vscode.commands.registerCommand('scriptRunner.runBatAdmin', runBatAdminHandler),
     vscode.commands.registerCommand('scriptRunner.runBatAdmin.en', runBatAdminHandler),
+    vscode.commands.registerCommand('scriptRunner.runBatAdmin.cn', runBatAdminHandler),
     vscode.commands.registerCommand('scriptRunner.runPs1', runPs1Handler),
     vscode.commands.registerCommand('scriptRunner.runPs1.en', runPs1Handler),
+    vscode.commands.registerCommand('scriptRunner.runPs1.cn', runPs1Handler),
     vscode.commands.registerCommand('scriptRunner.runPs1Admin', runPs1AdminHandler),
     vscode.commands.registerCommand('scriptRunner.runPs1Admin.en', runPs1AdminHandler),
+    vscode.commands.registerCommand('scriptRunner.runPs1Admin.cn', runPs1AdminHandler),
     // 監聽全域語言變動 (跨外掛即時聯動廣播)
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('scriptRunner.locale') || e.affectsConfiguration('antigravity.locale')) {
@@ -842,7 +860,7 @@ class ImageViewerPanel {
         break;
       case 'setGlobalLocale': {
         const { locale } = msg.payload || msg;
-        if (locale === 'zh-TW' || locale === 'en') {
+        if (SUPPORTED_LOCALES.includes(locale)) {
           try {
             await persistGlobalLocale(locale);
           } catch (err) {
@@ -1219,7 +1237,7 @@ class VideoViewerPanel {
         break;
       case 'setGlobalLocale': {
         const { locale } = msg.payload || msg;
-        if (locale === 'zh-TW' || locale === 'en') {
+        if (SUPPORTED_LOCALES.includes(locale)) {
           try {
             await persistGlobalLocale(locale);
           } catch (err) {
@@ -1615,7 +1633,7 @@ class AudioViewerPanel {
         break;
       case 'setGlobalLocale': {
         const { locale } = msg.payload || msg;
-        if (locale === 'zh-TW' || locale === 'en') {
+        if (SUPPORTED_LOCALES.includes(locale)) {
           try {
             await persistGlobalLocale(locale);
           } catch (err) {

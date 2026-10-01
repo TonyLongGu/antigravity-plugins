@@ -43,5 +43,7 @@
   "cmd_run_ps1_admin": "執行 PowerShell 腳本 (系統管理員)",
   "cmd_run_py": "執行 Python 腳本",
   "msg_plugin_script_runner_required": "請先安裝並啟用「腳本右鍵執行工具 (Script Runner)」擴充套件！",
-  "msg_plugin_toolbox_required": "請先安裝並啟用「Antigravity 控制中心 (Toolbox)」擴充套件！"
+  "msg_plugin_toolbox_required": "請先安裝並啟用「Antigravity 控制中心 (Toolbox)」擴充套件！",
+  "lang_placeholder": "選擇介面語言",
+  "lang_updated": "已切換介面語言"
 }

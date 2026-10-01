@@ -72,5 +72,9 @@
   "resets_in_minutes": "Resets in {minutes}m",
   "resets_soon": "Resetting soon",
   "connecting": "Connecting...",
-  "checking": "Checking..."
+  "checking": "Checking...",
+  "menu_lang_label": "Interface Language",
+  "menu_lang_desc": "繁體中文、简体中文、English",
+  "lang_placeholder": "Choose interface language",
+  "lang_updated": "Interface language updated"
 }

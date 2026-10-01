@@ -9,6 +9,22 @@ const scriptService = require('./services/scriptService');
 const brainService = require('./services/brainService');
 const skillSyncService = require('./services/skillSyncService');
 
+const SUPPORTED_LOCALES = ['zh-TW', 'zh-CN', 'en'];
+
+async function persistSharedLocale(locale) {
+  if (!SUPPORTED_LOCALES.includes(locale)) return;
+  await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
+  try {
+    await vscode.workspace.getConfiguration('scriptRunner').update('locale', locale, vscode.ConfigurationTarget.Global);
+  } catch (_) {}
+  try {
+    const quotaLocale = vscode.workspace.getConfiguration('aiQuota').get('locale');
+    if (quotaLocale && quotaLocale !== 'auto') {
+      await vscode.workspace.getConfiguration('aiQuota').update('locale', locale, vscode.ConfigurationTarget.Global);
+    }
+  } catch (_) {}
+}
+
 /**
  * 側邊欄 Webview View Provider (主控制器與訊息轉發層)
  */
@@ -219,7 +235,7 @@ class ToolboxViewProvider {
       case 'setGlobalLocale': {
         const { locale } = msg;
         try {
-          await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
+          await persistSharedLocale(locale);
         } catch (err) {
           console.error('Failed to update global locale in toolbox:', err);
         }
@@ -418,9 +434,12 @@ function activate(context) {
     50
   );
   const updateToolboxStatusBar = () => {
-    const isEn = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW') === 'en';
+    const locale = vscode.workspace.getConfiguration('antigravity').get('locale', 'zh-TW');
+    const isEn = locale === 'en';
     statusBar.text = isEn ? `$(symbol-property) Control Center` : `$(symbol-property) 控制中心`;
-    statusBar.tooltip = isEn ? 'Click to open Antigravity Control Center' : '點擊開啟 Antigravity 控制中心側邊欄';
+    statusBar.tooltip = isEn
+      ? 'Click to open Antigravity Control Center'
+      : (locale === 'zh-CN' ? '点击打开 Antigravity 控制中心侧边栏' : '點擊開啟 Antigravity 控制中心側邊欄');
   };
   updateToolboxStatusBar();
   statusBar.command = 'workbench.view.extension.antigravity-toolbox-container';

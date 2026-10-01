@@ -128,6 +128,7 @@
   // ============================================================================
   const I18nModule = {
     currentLang: 'zh-TW',
+    supported: ['zh-TW', 'zh-CN', 'en'],
 
     init() {
       const initial = (typeof window !== 'undefined' && window.INITIAL_LOCALE) || null;
@@ -136,43 +137,79 @@
         saved = localStorage.getItem('antigravity_locale');
       } catch (e) {}
 
-      if (initial && (initial === 'zh-TW' || initial === 'en')) {
+      if (this.supported.includes(initial)) {
         this.applyLanguage(initial, false);
-      } else if (saved && (saved === 'zh-TW' || saved === 'en')) {
+      } else if (this.supported.includes(saved)) {
         this.applyLanguage(saved, false);
       } else {
         this.applyLanguage('zh-TW', false);
       }
+
+      const menu = document.getElementById('lang-menu');
+      if (btnLangToggleEl) {
+        btnLangToggleEl.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (menu && !menu.hidden) this.closeMenu();
+          else this.openMenu();
+        });
+      }
+      if (menu) {
+        menu.addEventListener('click', (e) => {
+          const item = e.target.closest('.lang-menu-item');
+          if (!item) return;
+          e.preventDefault();
+          e.stopPropagation();
+          this.setLanguage(item.getAttribute('data-lang'));
+        });
+      }
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.lang-menu-wrap')) this.closeMenu();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') this.closeMenu();
+      });
+    },
+
+    openMenu() {
+      const menu = document.getElementById('lang-menu');
+      if (!menu) return;
+      menu.hidden = false;
+      btnLangToggleEl?.classList.add('is-open');
+      btnLangToggleEl?.setAttribute('aria-expanded', 'true');
+    },
+
+    closeMenu() {
+      const menu = document.getElementById('lang-menu');
+      if (!menu || menu.hidden) return;
+      menu.hidden = true;
+      btnLangToggleEl?.classList.remove('is-open');
+      btnLangToggleEl?.setAttribute('aria-expanded', 'false');
     },
 
     applyLanguage(lang, save = true) {
-      if (lang !== 'zh-TW' && lang !== 'en') return;
+      if (!this.supported.includes(lang)) return;
       this.currentLang = lang;
       if (save) {
         try {
           localStorage.setItem('antigravity_locale', lang);
         } catch (e) {}
       }
-      document.documentElement.lang = lang === 'zh-TW' ? 'zh-TW' : 'en';
+      document.documentElement.lang = lang;
       this.applyTranslations();
     },
 
     setLanguage(lang) {
+      this.closeMenu();
+      if (!this.supported.includes(lang) || lang === this.currentLang) return;
       this.applyLanguage(lang, true);
-    },
-
-    toggleLanguage() {
-      const next = this.currentLang === 'zh-TW' ? 'en' : 'zh-TW';
-      this.applyLanguage(next, true);
-
       if (vscode) {
         vscode.postMessage({
           type: 'setGlobalLocale',
-          locale: next,
-          payload: { locale: next }
+          locale: lang,
+          payload: { locale: lang }
         });
       }
-
       showToast(this.t('toast_lang_switched'), 'info');
     },
 
@@ -206,8 +243,13 @@
         langIndicatorEl.textContent = this.t('btn_lang_indicator');
       }
       if (btnLangToggleEl) {
-        btnLangToggleEl.title = this.t('btn_lang_toggle_title');
+        btnLangToggleEl.title = this.t('btn_lang_menu_title');
       }
+      document.querySelectorAll('.lang-menu-item').forEach((el) => {
+        const active = el.getAttribute('data-lang') === this.currentLang;
+        el.classList.toggle('is-active', active);
+        el.setAttribute('aria-checked', active ? 'true' : 'false');
+      });
 
       updateCountBadges();
       updateBatchBar();
@@ -1086,9 +1128,6 @@
       if (vscode) vscode.postMessage({ type: 'revealFolder' });
     });
 
-    btnLangToggleEl.addEventListener('click', () => {
-      I18nModule.toggleLanguage();
-    });
 
     // 畫廊卡片單點即播 (核心：直接單擊播放，無需彈窗)
     galleryGridEl.addEventListener('click', (e) => {
@@ -1581,7 +1620,7 @@
           break;
 
         case 'localeChanged':
-          if (msg.locale && (msg.locale === 'zh-TW' || msg.locale === 'en')) {
+          if (I18nModule.supported.includes(msg.locale) && msg.locale !== I18nModule.currentLang) {
             I18nModule.applyLanguage(msg.locale, true);
           }
           break;

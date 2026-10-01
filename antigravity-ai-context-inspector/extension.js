@@ -9,6 +9,22 @@ const CursorTranscriptService = require('./services/cursorTranscriptService');
 const VsCodeChatSessionService = require('./services/vscodeChatSessionService');
 const McpDetectorService = require('./services/mcpDetectorService');
 
+const SUPPORTED_LOCALES = ['zh-TW', 'zh-CN', 'en'];
+
+async function persistSharedLocale(locale) {
+  if (!SUPPORTED_LOCALES.includes(locale)) return;
+  await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
+  try {
+    await vscode.workspace.getConfiguration('scriptRunner').update('locale', locale, vscode.ConfigurationTarget.Global);
+  } catch (_) {}
+  try {
+    const quotaLocale = vscode.workspace.getConfiguration('aiQuota').get('locale');
+    if (quotaLocale && quotaLocale !== 'auto') {
+      await vscode.workspace.getConfiguration('aiQuota').update('locale', locale, vscode.ConfigurationTarget.Global);
+    }
+  } catch (_) {}
+}
+
 class AiContextViewProvider {
   constructor(extensionUri, context = null) {
     this._extensionUri = extensionUri;
@@ -251,7 +267,7 @@ class AiContextViewProvider {
       case 'setGlobalLocale': {
         const { locale } = msg.payload || msg;
         try {
-          await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
+          await persistSharedLocale(locale);
         } catch (err) {
           console.error('Failed to update global locale in context inspector:', err);
         }

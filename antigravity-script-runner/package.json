@@ -14,7 +14,9 @@
 	"scripts": {
 		"test": "node tests/run-all.js"
 	},
-	"activationEvents": [],
+	"activationEvents": [
+		"onStartupFinished"
+	],
 	"contributes": {
 		"customEditors": [
 			{
@@ -65,7 +67,13 @@
 					"type": "string",
 					"enum": [
 						"zh-TW",
+						"zh-CN",
 						"en"
+					],
+					"enumDescriptions": [
+						"繁體中文 (Traditional Chinese)",
+						"简体中文 (Simplified Chinese)",
+						"English"
 					],
 					"description": "擴充套件介面語系。未設定時自動跟隨 IDE 顯示語言（並相容 antigravity.locale）"
 				}
@@ -167,6 +175,54 @@
 				"title": "Run Batch File (Admin)",
 				"category": "Script Runner",
 				"icon": "$(shield)"
+			},
+			{
+				"command": "scriptRunner.viewFolderImages.cn",
+				"title": "查看图片",
+				"category": "图片查看",
+				"icon": "$(file-media)"
+			},
+			{
+				"command": "scriptRunner.viewFolderAudios.cn",
+				"title": "查看声音",
+				"category": "声音查看",
+				"icon": "$(unmute)"
+			},
+			{
+				"command": "scriptRunner.viewFolderVideos.cn",
+				"title": "查看影片",
+				"category": "影片查看",
+				"icon": "$(device-camera-video)"
+			},
+			{
+				"command": "scriptRunner.runPy.cn",
+				"title": "执行 Python 脚本",
+				"category": "脚本执行",
+				"icon": "$(play)"
+			},
+			{
+				"command": "scriptRunner.runPs1.cn",
+				"title": "执行 PowerShell 脚本",
+				"category": "脚本执行",
+				"icon": "$(play)"
+			},
+			{
+				"command": "scriptRunner.runPs1Admin.cn",
+				"title": "执行 PowerShell 脚本 (系统管理员)",
+				"category": "脚本执行",
+				"icon": "$(shield)"
+			},
+			{
+				"command": "scriptRunner.runBat.cn",
+				"title": "执行批次档",
+				"category": "脚本执行",
+				"icon": "$(play)"
+			},
+			{
+				"command": "scriptRunner.runBatAdmin.cn",
+				"title": "执行批次档 (系统管理员)",
+				"category": "脚本执行",
+				"icon": "$(shield)"
 			}
 		],
 		"menus": {
@@ -174,7 +230,7 @@
 				{
 					"command": "scriptRunner.runPy",
 					"group": "navigation@1",
-					"when": "(editorLangId == python || resourceExtname == .py) && !scriptRunner.isEnglish"
+					"when": "(editorLangId == python || resourceExtname == .py) && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runPy.en",
@@ -182,9 +238,14 @@
 					"when": "(editorLangId == python || resourceExtname == .py) && scriptRunner.isEnglish"
 				},
 				{
+					"command": "scriptRunner.runPy.cn",
+					"group": "navigation@1",
+					"when": "(editorLangId == python || resourceExtname == .py) && scriptRunner.isSimplified"
+				},
+				{
 					"command": "scriptRunner.runPs1",
 					"group": "navigation@2",
-					"when": "(editorLangId == powershell || resourceExtname == .ps1) && !scriptRunner.isEnglish"
+					"when": "(editorLangId == powershell || resourceExtname == .ps1) && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runPs1.en",
@@ -192,21 +253,31 @@
 					"when": "(editorLangId == powershell || resourceExtname == .ps1) && scriptRunner.isEnglish"
 				},
 				{
+					"command": "scriptRunner.runPs1.cn",
+					"group": "navigation@2",
+					"when": "(editorLangId == powershell || resourceExtname == .ps1) && scriptRunner.isSimplified"
+				},
+				{
 					"command": "scriptRunner.runBat",
 					"group": "navigation@3",
-					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish"
+					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runBat.en",
 					"group": "navigation@3",
 					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isEnglish"
+				},
+				{
+					"command": "scriptRunner.runBat.cn",
+					"group": "navigation@3",
+					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isSimplified"
 				}
 			],
 			"explorer/context": [
 				{
 					"command": "scriptRunner.viewFolderImages",
 					"group": "z_script_runner@1",
-					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(png|jpe?g|webp|gif|svg|bmp|ico|avif|tiff?|jfif)$/i) && !scriptRunner.isEnglish"
+					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(png|jpe?g|webp|gif|svg|bmp|ico|avif|tiff?|jfif)$/i) && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.viewFolderImages.en",
@@ -214,9 +285,14 @@
 					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(png|jpe?g|webp|gif|svg|bmp|ico|avif|tiff?|jfif)$/i) && scriptRunner.isEnglish"
 				},
 				{
+					"command": "scriptRunner.viewFolderImages.cn",
+					"group": "z_script_runner@1",
+					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(png|jpe?g|webp|gif|svg|bmp|ico|avif|tiff?|jfif)$/i) && scriptRunner.isSimplified"
+				},
+				{
 					"command": "scriptRunner.viewFolderAudios",
 					"group": "z_script_runner@2",
-					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(mp3|wav|ogg|flac|aac|m4a|wma|aiff?|opus|weba)$/i) && !scriptRunner.isEnglish"
+					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(mp3|wav|ogg|flac|aac|m4a|wma|aiff?|opus|weba)$/i) && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.viewFolderAudios.en",
@@ -224,9 +300,14 @@
 					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(mp3|wav|ogg|flac|aac|m4a|wma|aiff?|opus|weba)$/i) && scriptRunner.isEnglish"
 				},
 				{
+					"command": "scriptRunner.viewFolderAudios.cn",
+					"group": "z_script_runner@2",
+					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(mp3|wav|ogg|flac|aac|m4a|wma|aiff?|opus|weba)$/i) && scriptRunner.isSimplified"
+				},
+				{
 					"command": "scriptRunner.viewFolderVideos",
 					"group": "z_script_runner@3",
-					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(mp4|webm|mkv|mov|avi|wmv|flv|m4v|ts|ogv)$/i) && !scriptRunner.isEnglish"
+					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(mp4|webm|mkv|mov|avi|wmv|flv|m4v|ts|ogv)$/i) && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.viewFolderVideos.en",
@@ -234,9 +315,14 @@
 					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(mp4|webm|mkv|mov|avi|wmv|flv|m4v|ts|ogv)$/i) && scriptRunner.isEnglish"
 				},
 				{
+					"command": "scriptRunner.viewFolderVideos.cn",
+					"group": "z_script_runner@3",
+					"when": "(explorerResourceIsFolder || resourceExtname =~ /\\.(mp4|webm|mkv|mov|avi|wmv|flv|m4v|ts|ogv)$/i) && scriptRunner.isSimplified"
+				},
+				{
 					"command": "scriptRunner.runPy",
 					"group": "z_script_runner@10",
-					"when": "resourceExtname == .py && !scriptRunner.isEnglish"
+					"when": "resourceExtname == .py && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runPy.en",
@@ -244,9 +330,14 @@
 					"when": "resourceExtname == .py && scriptRunner.isEnglish"
 				},
 				{
+					"command": "scriptRunner.runPy.cn",
+					"group": "z_script_runner@10",
+					"when": "resourceExtname == .py && scriptRunner.isSimplified"
+				},
+				{
 					"command": "scriptRunner.runPs1",
 					"group": "z_script_runner@11",
-					"when": "resourceExtname == .ps1 && !scriptRunner.isEnglish"
+					"when": "resourceExtname == .ps1 && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runPs1.en",
@@ -254,9 +345,14 @@
 					"when": "resourceExtname == .ps1 && scriptRunner.isEnglish"
 				},
 				{
+					"command": "scriptRunner.runPs1.cn",
+					"group": "z_script_runner@11",
+					"when": "resourceExtname == .ps1 && scriptRunner.isSimplified"
+				},
+				{
 					"command": "scriptRunner.runPs1Admin",
 					"group": "z_script_runner@12",
-					"when": "resourceExtname == .ps1 && !scriptRunner.isEnglish"
+					"when": "resourceExtname == .ps1 && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runPs1Admin.en",
@@ -264,9 +360,14 @@
 					"when": "resourceExtname == .ps1 && scriptRunner.isEnglish"
 				},
 				{
+					"command": "scriptRunner.runPs1Admin.cn",
+					"group": "z_script_runner@12",
+					"when": "resourceExtname == .ps1 && scriptRunner.isSimplified"
+				},
+				{
 					"command": "scriptRunner.runBat",
 					"group": "z_script_runner@13",
-					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish"
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runBat.en",
@@ -274,21 +375,31 @@
 					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isEnglish"
 				},
 				{
+					"command": "scriptRunner.runBat.cn",
+					"group": "z_script_runner@13",
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isSimplified"
+				},
+				{
 					"command": "scriptRunner.runBatAdmin",
 					"group": "z_script_runner@14",
-					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish"
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runBatAdmin.en",
 					"group": "z_script_runner@14",
 					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isEnglish"
+				},
+				{
+					"command": "scriptRunner.runBatAdmin.cn",
+					"group": "z_script_runner@14",
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isSimplified"
 				}
 			],
 			"editor/context": [
 				{
 					"command": "scriptRunner.runPy",
 					"group": "z_script_runner@1",
-					"when": "(editorLangId == python || resourceExtname == .py) && !scriptRunner.isEnglish"
+					"when": "(editorLangId == python || resourceExtname == .py) && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runPy.en",
@@ -296,9 +407,14 @@
 					"when": "(editorLangId == python || resourceExtname == .py) && scriptRunner.isEnglish"
 				},
 				{
+					"command": "scriptRunner.runPy.cn",
+					"group": "z_script_runner@1",
+					"when": "(editorLangId == python || resourceExtname == .py) && scriptRunner.isSimplified"
+				},
+				{
 					"command": "scriptRunner.runPs1",
 					"group": "z_script_runner@2",
-					"when": "(editorLangId == powershell || resourceExtname == .ps1) && !scriptRunner.isEnglish"
+					"when": "(editorLangId == powershell || resourceExtname == .ps1) && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runPs1.en",
@@ -306,9 +422,14 @@
 					"when": "(editorLangId == powershell || resourceExtname == .ps1) && scriptRunner.isEnglish"
 				},
 				{
+					"command": "scriptRunner.runPs1.cn",
+					"group": "z_script_runner@2",
+					"when": "(editorLangId == powershell || resourceExtname == .ps1) && scriptRunner.isSimplified"
+				},
+				{
 					"command": "scriptRunner.runPs1Admin",
 					"group": "z_script_runner@3",
-					"when": "(editorLangId == powershell || resourceExtname == .ps1) && !scriptRunner.isEnglish"
+					"when": "(editorLangId == powershell || resourceExtname == .ps1) && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runPs1Admin.en",
@@ -316,9 +437,14 @@
 					"when": "(editorLangId == powershell || resourceExtname == .ps1) && scriptRunner.isEnglish"
 				},
 				{
+					"command": "scriptRunner.runPs1Admin.cn",
+					"group": "z_script_runner@3",
+					"when": "(editorLangId == powershell || resourceExtname == .ps1) && scriptRunner.isSimplified"
+				},
+				{
 					"command": "scriptRunner.runBat",
 					"group": "z_script_runner@4",
-					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish"
+					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runBat.en",
@@ -326,21 +452,31 @@
 					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isEnglish"
 				},
 				{
+					"command": "scriptRunner.runBat.cn",
+					"group": "z_script_runner@4",
+					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isSimplified"
+				},
+				{
 					"command": "scriptRunner.runBatAdmin",
 					"group": "z_script_runner@5",
-					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish"
+					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runBatAdmin.en",
 					"group": "z_script_runner@5",
 					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isEnglish"
+				},
+				{
+					"command": "scriptRunner.runBatAdmin.cn",
+					"group": "z_script_runner@5",
+					"when": "(editorLangId == bat || resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isSimplified"
 				}
 			],
 			"editor/title/context": [
 				{
 					"command": "scriptRunner.runPy",
 					"group": "z_script_runner@1",
-					"when": "resourceExtname == .py && !scriptRunner.isEnglish"
+					"when": "resourceExtname == .py && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runPy.en",
@@ -348,9 +484,14 @@
 					"when": "resourceExtname == .py && scriptRunner.isEnglish"
 				},
 				{
+					"command": "scriptRunner.runPy.cn",
+					"group": "z_script_runner@1",
+					"when": "resourceExtname == .py && scriptRunner.isSimplified"
+				},
+				{
 					"command": "scriptRunner.runPs1",
 					"group": "z_script_runner@2",
-					"when": "resourceExtname == .ps1 && !scriptRunner.isEnglish"
+					"when": "resourceExtname == .ps1 && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runPs1.en",
@@ -358,9 +499,14 @@
 					"when": "resourceExtname == .ps1 && scriptRunner.isEnglish"
 				},
 				{
+					"command": "scriptRunner.runPs1.cn",
+					"group": "z_script_runner@2",
+					"when": "resourceExtname == .ps1 && scriptRunner.isSimplified"
+				},
+				{
 					"command": "scriptRunner.runPs1Admin",
 					"group": "z_script_runner@3",
-					"when": "resourceExtname == .ps1 && !scriptRunner.isEnglish"
+					"when": "resourceExtname == .ps1 && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runPs1Admin.en",
@@ -368,9 +514,14 @@
 					"when": "resourceExtname == .ps1 && scriptRunner.isEnglish"
 				},
 				{
+					"command": "scriptRunner.runPs1Admin.cn",
+					"group": "z_script_runner@3",
+					"when": "resourceExtname == .ps1 && scriptRunner.isSimplified"
+				},
+				{
 					"command": "scriptRunner.runBat",
 					"group": "z_script_runner@4",
-					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish"
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runBat.en",
@@ -378,14 +529,24 @@
 					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isEnglish"
 				},
 				{
+					"command": "scriptRunner.runBat.cn",
+					"group": "z_script_runner@4",
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isSimplified"
+				},
+				{
 					"command": "scriptRunner.runBatAdmin",
 					"group": "z_script_runner@5",
-					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish"
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && !scriptRunner.isEnglish && !scriptRunner.isSimplified"
 				},
 				{
 					"command": "scriptRunner.runBatAdmin.en",
 					"group": "z_script_runner@5",
 					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isEnglish"
+				},
+				{
+					"command": "scriptRunner.runBatAdmin.cn",
+					"group": "z_script_runner@5",
+					"when": "(resourceExtname == .bat || resourceExtname == .cmd) && scriptRunner.isSimplified"
 				}
 			]
 		}

@@ -1,6 +1,6 @@
 /**
  * AI 上下文檢視器 - 多國語言字典 (locales.js)
- * 支援：zh-TW (繁體中文), en (English)
+ * 支援：zh-TW (繁體中文), zh-CN (简体中文), en (English)
  * 規範：僅限於工具介面 (UI Chrome) 翻譯，100% 不干擾使用者專案資料、路徑、規範與技能名稱
  */
 (function (root) {
@@ -12,8 +12,8 @@
       btn_expand_all_title: '展開全部卡片',
       btn_copy_summary_title: '複製當前上下文摘要',
       btn_refresh_title: '重新整理',
-      btn_lang_toggle_title: 'Switch to English',
-      btn_lang_indicator: 'EN',
+      btn_lang_menu_title: '選擇介面語言',
+      btn_lang_indicator: '繁',
 
       // 模式切換按鈕方陣
       btn_mode_live: '當前環境配置',
@@ -109,9 +109,116 @@
       toast_limit_items: '{count} 筆',
       toast_lang_switched: '已切換為繁體中文',
 
+      // 複製摘要
+      summary_timestamp: '時間',
+      summary_conversation: '對話任務',
+      summary_model: '使用模型',
+      summary_source_global: '全域',
+
       // 時間與雜項
       time_today: '今天 {time}',
       conv_snapshot_fallback: '對話快照 ({id})'
+    },
+
+    'zh-CN': {
+      header_title: 'AI 上下文查看器',
+      btn_collapse_all_title: '折叠全部卡片',
+      btn_expand_all_title: '展开全部卡片',
+      btn_copy_summary_title: '复制当前上下文摘要',
+      btn_refresh_title: '刷新',
+      btn_lang_menu_title: '选择界面语言',
+      btn_lang_indicator: '简',
+
+      btn_mode_live: '当前环境配置',
+      btn_mode_snapshot: '最近对话快照',
+
+      custom_conv_trigger_title: '点击选择历史对话快照',
+      trigger_conv_loading: '正在加载对话快照...',
+      conv_search_placeholder: '搜索对话主题、关键字或短 ID...',
+      btn_clear_search_title: '清除搜索',
+      pills_label: '条数:',
+      pill_limit_all: '全',
+      meta_model_label: '对话使用模型:',
+      conv_item_ws_prefix: '工作区：',
+
+      status_mode_live: '模式：环境实时扫描',
+      status_mode_snapshot: '模式：对话已调用快照',
+      status_mode_snapshot_cursor: '模式：对话足迹还原',
+
+      card_rules_active_title: '常驻规范 (Always-Active)',
+      btn_title_mode_title: '正文标题',
+      btn_title_mode_title_tooltip: '当前显示：正文标题（点击切换为：文件名）',
+      btn_title_mode_name: '文件名',
+      btn_title_mode_name_tooltip: '当前显示：文件名（点击切换为：正文标题）',
+
+      card_rules_conditional_title: '条件式规范 (Conditional)',
+
+      card_skills_title: '技能清单 (Skills)',
+      btn_title_mode_skill_title_tooltip: '当前显示：正文标题（点击切换为：技能名称）',
+      btn_title_mode_skill_name: '技能名称',
+      btn_title_mode_skill_name_tooltip: '当前显示：技能名称（点击切换为：正文标题）',
+      group_skills_workspace: '工作区专属技能 ({count})',
+      group_skills_global: '全局自定义技能 ({count})',
+      group_skills_user: '用户技能 ({count})',
+      group_skills_extension: '扩展技能 ({count})',
+      group_skills_builtin: 'IDE 内置技能 ({count})',
+      subgroup_toggle_tooltip: '点击展开 / 收起分组',
+      subgroup_expand: '展开',
+      subgroup_collapse: '收起',
+
+      card_mcp_title: 'MCP 服务器与 API',
+      btn_open_mcp_dir: '打开',
+      btn_open_mcp_dir_title: '打开 MCP 存放文件夹 (C:\\Users\\User\\.gemini\\antigravity-ide\\mcp)',
+      btn_open_mcp_dir_title_cursor: '打开 Cursor MCP 配置文件 (~/.cursor/mcp.json)',
+      btn_open_mcp_dir_title_vscode: '打开 VS Code MCP 配置文件 (%APPDATA%/Code/User/mcp.json)',
+      mcp_transport_stdio: 'stdio',
+      mcp_transport_http: 'HTTP',
+      mcp_disabled: '禁用',
+
+      btn_copy_name: '复制名称',
+      btn_copy_rule_name_title: '复制规范名称：{name}',
+      btn_copy_skill_name_title: '复制技能名称：{name}',
+      btn_reveal_path: '定位',
+      btn_reveal_rule_title: '在文件资源管理器中选中此文件',
+      btn_reveal_skill_title: '在文件资源管理器中选中此技能文件夹',
+      btn_open_file: '打开',
+      btn_open_rule_title: '在编辑器中打开',
+      btn_open_skill_title: '在编辑器中打开 SKILL.md',
+      tag_source_title: '所属项目：{source}',
+      desc_none: '无描述',
+
+      unit_items: '{count} 项',
+      unit_servers: '{count} 个',
+      unit_apis: '{count} 个 API',
+
+      empty_rules_active_snapshot: '此对话无常驻规范',
+      empty_rules_active_live: '无常驻规范',
+      empty_rules_cond_snapshot: '此对话未触发条件式规范',
+      empty_rules_cond_live: '无条件式规范',
+      empty_skills_snapshot: '此对话未调用额外技能',
+      empty_skills_live: '无可用技能',
+      empty_mcp_snapshot: '此对话未调用 MCP 工具',
+      empty_mcp_live: '无已注册的 MCP 服务器',
+      conv_empty_none: '没有任何历史对话记录',
+      conv_empty_search: '找不到符合的历史对话快照',
+      conv_empty_no_tasks: '无对话任务记录',
+
+      toast_refreshed: '已刷新 AI 上下文状态',
+      toast_copied_summary: '已复制上下文摘要到剪贴板',
+      toast_copied_item: '已复制 {label}: {text}',
+      toast_copy_failed: '复制失败: {error}',
+      toast_limit_changed: '已切换显示最近 {limit} 对话',
+      toast_limit_all: '全部',
+      toast_limit_items: '{count} 条',
+      toast_lang_switched: '已切换为简体中文',
+
+      summary_timestamp: '时间',
+      summary_conversation: '对话任务',
+      summary_model: '使用模型',
+      summary_source_global: '全局',
+
+      time_today: '今天 {time}',
+      conv_snapshot_fallback: '对话快照 ({id})'
     },
 
     'en': {
@@ -121,8 +228,8 @@
       btn_expand_all_title: 'Expand All Cards',
       btn_copy_summary_title: 'Copy Current Context Summary',
       btn_refresh_title: 'Refresh',
-      btn_lang_toggle_title: '切換為繁體中文',
-      btn_lang_indicator: '中',
+      btn_lang_menu_title: 'Choose interface language',
+      btn_lang_indicator: 'EN',
 
       // Mode Switch Grid
       btn_mode_live: 'Live Environment',
@@ -217,6 +324,11 @@
       toast_limit_all: 'All',
       toast_limit_items: '{count} items',
       toast_lang_switched: 'Switched to English',
+
+      summary_timestamp: 'Timestamp',
+      summary_conversation: 'Conversation Task',
+      summary_model: 'Model',
+      summary_source_global: 'Global',
 
       // Time & Misc
       time_today: 'Today {time}',

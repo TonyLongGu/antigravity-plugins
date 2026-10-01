@@ -12,7 +12,9 @@ const { QuickAccessTreeDataProvider, QuickAccessDragAndDropController } = requir
 function activate(context) {
   const i18n = new I18n(context.extensionUri);
   const syncLocaleContext = () => {
-    vscode.commands.executeCommand('setContext', 'quickAccess.isEnglish', i18n.getLocale() === 'en');
+    const locale = i18n.getLocale();
+    vscode.commands.executeCommand('setContext', 'quickAccess.isEnglish', locale === 'en');
+    vscode.commands.executeCommand('setContext', 'quickAccess.isSimplified', locale === 'zh-CN');
   };
   syncLocaleContext();
   const storageManager = new StorageManager(context, i18n);
@@ -460,47 +462,101 @@ function activate(context) {
     }
   });
 
+  const supportedLocales = ['zh-TW', 'zh-CN', 'en'];
+  async function persistSharedLocale(locale) {
+    if (!supportedLocales.includes(locale)) return;
+    await vscode.workspace.getConfiguration('antigravity').update('locale', locale, vscode.ConfigurationTarget.Global);
+    try {
+      await vscode.workspace.getConfiguration('scriptRunner').update('locale', locale, vscode.ConfigurationTarget.Global);
+    } catch (_) {}
+    try {
+      const quotaLocale = vscode.workspace.getConfiguration('aiQuota').get('locale');
+      if (quotaLocale && quotaLocale !== 'auto') {
+        await vscode.workspace.getConfiguration('aiQuota').update('locale', locale, vscode.ConfigurationTarget.Global);
+      }
+    } catch (_) {}
+  }
+
+  async function chooseLanguage() {
+    const current = i18n.getLocale();
+    const items = [
+      { label: `${current === 'zh-TW' ? '$(check) ' : ''}繁體中文`, lang: 'zh-TW' },
+      { label: `${current === 'zh-CN' ? '$(check) ' : ''}简体中文`, lang: 'zh-CN' },
+      { label: `${current === 'en' ? '$(check) ' : ''}English`, lang: 'en' }
+    ];
+    const selected = await vscode.window.showQuickPick(items, {
+      placeHolder: i18n.t('lang_placeholder')
+    });
+    if (!selected || selected.lang === current) return;
+    await persistSharedLocale(selected.lang);
+    syncLocaleContext();
+    treeDataProvider.refresh();
+    vscode.window.setStatusBarMessage(i18n.t('lang_updated'), 2500);
+  }
+
   context.subscriptions.push(
     treeView,
     treeDataProvider,
     vscode.commands.registerCommand('antigravity.quickAccess.add', addHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.add.en', addHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.add.cn', addHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.addPinned', addPinnedHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.addPinned.en', addPinnedHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.addPinned.cn', addPinnedHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.addActive', addActiveHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.addActive.en', addActiveHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.addActive.cn', addActiveHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.remove', removeHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.remove.en', removeHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.remove.cn', removeHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.togglePin', togglePinHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.togglePin.en', togglePinHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.togglePin.cn', togglePinHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.clearScratchpad', clearScratchpadHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.clearScratchpad.en', clearScratchpadHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.clearScratchpad.cn', clearScratchpadHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.refresh', refreshHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.refresh.en', refreshHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.refresh.cn', refreshHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.chooseLanguage', chooseLanguage),
+    vscode.commands.registerCommand('antigravity.quickAccess.chooseLanguage.cn', chooseLanguage),
+    vscode.commands.registerCommand('antigravity.quickAccess.chooseLanguage.en', chooseLanguage),
     vscode.commands.registerCommand('antigravity.quickAccess.revealInExplorer', revealInExplorerHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.revealInExplorer.en', revealInExplorerHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.revealInExplorer.cn', revealInExplorerHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.revealInOS', revealInOSHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.revealInOS.en', revealInOSHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.revealInOS.cn', revealInOSHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.addScriptToRunner', addScriptToRunnerHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.addScriptToRunner.en', addScriptToRunnerHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.addScriptToRunner.cn', addScriptToRunnerHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.viewImages', viewImagesHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.viewImages.en', viewImagesHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.viewImages.cn', viewImagesHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.viewAudios', viewAudiosHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.viewAudios.en', viewAudiosHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.viewAudios.cn', viewAudiosHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.viewVideos', viewVideosHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.viewVideos.en', viewVideosHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.viewVideos.cn', viewVideosHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.deleteFile', deleteFileHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.deleteFile.en', deleteFileHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.deleteFile.cn', deleteFileHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.runBat', runBatHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.runBat.en', runBatHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.runBat.cn', runBatHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.runBatAdmin', runBatAdminHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.runBatAdmin.en', runBatAdminHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.runBatAdmin.cn', runBatAdminHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.runPs1', runPs1Handler),
     vscode.commands.registerCommand('antigravity.quickAccess.runPs1.en', runPs1Handler),
+    vscode.commands.registerCommand('antigravity.quickAccess.runPs1.cn', runPs1Handler),
     vscode.commands.registerCommand('antigravity.quickAccess.runPs1Admin', runPs1AdminHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.runPs1Admin.en', runPs1AdminHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.runPs1Admin.cn', runPs1AdminHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.runPy', runPyHandler),
     vscode.commands.registerCommand('antigravity.quickAccess.runPy.en', runPyHandler),
+    vscode.commands.registerCommand('antigravity.quickAccess.runPy.cn', runPyHandler),
     workspaceFoldersWatcher,
     fsWatcher,
     configWatcher,

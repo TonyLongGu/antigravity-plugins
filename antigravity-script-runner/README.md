@@ -93,7 +93,7 @@
 | :--- | :--- | :--- | :--- |
 | `scriptRunner.runAsAdmin` | `boolean` | `true` | **是否預設以系統管理員身分 (Administrator) 執行腳本**。<br>• `true`：彈出 Windows UAC 確認並在提權獨立視窗執行。<br>• `false`：直接在 IDE 內部的整合終端機執行。 |
 | `scriptRunner.keepWindowOpen` | `boolean` | `true` | **以管理員執行時，是否在執行完畢後保持視窗開啟**（防止報錯或執行完瞬間閃退，便於檢視輸出）。 |
-| `scriptRunner.locale` | `string` | 跟隨 IDE | **介面語系**（`zh-TW` / `en`）。未設定時自動跟隨 Cursor / VS Code / Antigravity 顯示語言，並相容舊設定 `antigravity.locale`。 |
+| `scriptRunner.locale` | `string` | 跟隨 IDE | **介面語系**（`zh-TW` / `zh-CN` / `en`）。未設定時自動跟隨 Cursor / VS Code / Antigravity 顯示語言，並相容舊設定 `antigravity.locale`。 |
 
 ---
 
@@ -118,7 +118,7 @@ node tests/run-all.js      # 或 npm test
 
 | 檔案 | 驗證內容 | 斷言數 |
 | :--- | :--- | :--- |
-| `tests/locales.check.js` | 三個檢視器 zh-TW / en 鍵完全對稱、無空值、程式碼與 HTML 引用的鍵皆存在 | 3 組 |
+| `tests/locales.check.js` | 三個檢視器 zh-TW / zh-CN / en 鍵完全對稱、無空值、程式碼與 HTML 引用的鍵皆存在 | 3 組 |
 | `tests/frontend.dom.js` | 前端互動語意：檔案分頁／畫廊分頁 × `Esc`／右鍵／✕／`G`／按鈕，應送出正確訊息；含音訊刪檔續播與 `Esc` 優先序 | 61 |
 | `tests/backend.smoke.js` | 以 mock vscode 載入 `extension.js`：開檔沿用分頁、展開為畫廊分頁且標題為資料夾名、原檔案分頁被關閉、既有畫廊分頁復用並收到 `revealInGallery`、`closeCustomEditor` 防誤關守門 | 63 |
 

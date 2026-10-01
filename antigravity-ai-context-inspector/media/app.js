@@ -115,6 +115,7 @@
     btnRefresh: document.getElementById('btn-refresh'),
     btnCopy: document.getElementById('btn-copy-summary'),
     btnLangToggle: document.getElementById('btn-lang-toggle'),
+    langMenu: document.getElementById('lang-menu'),
     langIndicator: document.getElementById('lang-indicator'),
     modeLabel: document.getElementById('status-mode-label'),
     timeLabel: document.getElementById('status-time-label'),
@@ -159,17 +160,30 @@
   // ============================================================================
   const I18nModule = {
     currentLang: 'zh-TW',
+    supported: ['zh-TW', 'zh-CN', 'en'],
+    storageKey: 'antigravity_locale',
+
+    readStorage(key) {
+      try {
+        return localStorage.getItem(key);
+      } catch (e) {
+        return null;
+      }
+    },
+
+    writeStorage(key, value) {
+      try {
+        localStorage.setItem(key, value);
+      } catch (e) {}
+    },
 
     init() {
       const initial = (typeof window !== 'undefined' && window.INITIAL_LOCALE) || null;
-      let saved = null;
-      try {
-        saved = localStorage.getItem('antigravity_locale');
-      } catch (e) {}
+      const saved = this.readStorage(this.storageKey);
 
-      if (initial === 'zh-TW' || initial === 'en') {
+      if (this.supported.includes(initial)) {
         this.currentLang = initial;
-      } else if (saved === 'zh-TW' || saved === 'en') {
+      } else if (this.supported.includes(saved)) {
         this.currentLang = saved;
       } else {
         this.currentLang = 'zh-TW';
@@ -181,7 +195,18 @@
         dom.btnLangToggle.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          this.toggle();
+          if (this.isMenuOpen()) this.closeMenu();
+          else this.openMenu();
+        });
+      }
+
+      if (dom.langMenu) {
+        dom.langMenu.addEventListener('click', (e) => {
+          const item = e.target.closest('.lang-menu-item');
+          if (!item) return;
+          e.preventDefault();
+          e.stopPropagation();
+          this.setLanguage(item.getAttribute('data-lang'));
         });
       }
     },
@@ -198,29 +223,51 @@
       return text;
     },
 
-    toggle() {
-      const next = this.currentLang === 'zh-TW' ? 'en' : 'zh-TW';
-      this.applyLanguage(next, true);
-      vscode.postMessage({ type: 'setGlobalLocale', payload: { locale: next } });
+    isMenuOpen() {
+      return Boolean(dom.langMenu && !dom.langMenu.hidden);
+    },
+
+    openMenu() {
+      if (!dom.langMenu) return;
+      closeConvPopover();
+      dom.langMenu.hidden = false;
+      dom.btnLangToggle?.classList.add('is-open');
+      dom.btnLangToggle?.setAttribute('aria-expanded', 'true');
+    },
+
+    closeMenu() {
+      if (!dom.langMenu || dom.langMenu.hidden) return;
+      dom.langMenu.hidden = true;
+      dom.btnLangToggle?.classList.remove('is-open');
+      dom.btnLangToggle?.setAttribute('aria-expanded', 'false');
+    },
+
+    setLanguage(lang) {
+      this.closeMenu();
+      if (!this.supported.includes(lang) || lang === this.currentLang) return;
+
+      this.applyLanguage(lang, true);
+      vscode.postMessage({ type: 'setGlobalLocale', payload: { locale: lang } });
       Toast.show(this.t('toast_lang_switched'), 'info', 1800);
     },
 
     applyLanguage(lang, save = true) {
       this.currentLang = lang;
-      if (save) {
-        try {
-          localStorage.setItem('antigravity_locale', lang);
-        } catch (e) {}
-      }
+      if (save) this.writeStorage(this.storageKey, lang);
 
-      document.documentElement.lang = lang === 'zh-TW' ? 'zh-TW' : 'en';
+      document.documentElement.lang = lang;
 
       if (dom.langIndicator) {
         dom.langIndicator.textContent = this.t('btn_lang_indicator');
       }
       if (dom.btnLangToggle) {
-        dom.btnLangToggle.title = this.t('btn_lang_toggle_title');
+        dom.btnLangToggle.title = this.t('btn_lang_menu_title');
       }
+      document.querySelectorAll('.lang-menu-item').forEach((el) => {
+        const active = el.getAttribute('data-lang') === lang;
+        el.classList.toggle('is-active', active);
+        el.setAttribute('aria-checked', active ? 'true' : 'false');
+      });
 
       // 遍歷靜態 data-i18n
       document.querySelectorAll('[data-i18n]').forEach((el) => {
@@ -446,6 +493,7 @@
 
   function openConvPopover() {
     if (!dom.customConvPopover) return;
+    I18nModule.closeMenu();
     dom.customConvPopover.style.display = 'block';
     dom.customConvTrigger?.classList.add('is-open');
     renderCustomConvList();
@@ -802,20 +850,19 @@
   // 產生 Markdown 摘要字串
   function buildMarkdownSummary() {
     if (!currentData) return '';
-    const isEn = I18nModule.currentLang === 'en';
     const lines = [];
     lines.push(`# 🤖 ${I18nModule.t('header_title')} (${currentMode === 'live' ? I18nModule.t('btn_mode_live') : I18nModule.t('btn_mode_snapshot')})`);
-    lines.push(`- ${isEn ? 'Timestamp' : '時間'}: ${currentData.timestamp || new Date().toISOString()}`);
+    lines.push(`- ${I18nModule.t('summary_timestamp')}: ${currentData.timestamp || new Date().toISOString()}`);
     if (currentData.conversationTitle) {
-      lines.push(`- ${isEn ? 'Conversation Task' : '對話任務'}: ${currentData.conversationTitle} (${currentData.conversationId})`);
+      lines.push(`- ${I18nModule.t('summary_conversation')}: ${currentData.conversationTitle} (${currentData.conversationId})`);
     }
     if (currentData.model) {
-      lines.push(`- ${isEn ? 'Model' : '使用模型'}: ${currentData.model}`);
+      lines.push(`- ${I18nModule.t('summary_model')}: ${currentData.model}`);
     }
     lines.push('');
 
     lines.push(`## 📌 ${I18nModule.t('card_rules_active_title')} (${currentData.rules?.alwaysActive?.length || 0})`);
-    (currentData.rules?.alwaysActive || []).forEach(r => lines.push(`- **${r.displayName || r.name}** (${r.source || (isEn ? 'Global' : '全域')}): ${r.description || ''}`));
+    (currentData.rules?.alwaysActive || []).forEach(r => lines.push(`- **${r.displayName || r.name}** (${r.source || I18nModule.t('summary_source_global')}): ${r.description || ''}`));
     lines.push('');
 
     const condList = currentMode === 'snapshot' ? (currentData.rules?.conditional || []).filter(r => r.isInvoked) : (currentData.rules?.conditional || []);
@@ -967,12 +1014,16 @@
       if (!e.target.closest('.custom-dropdown-container')) {
         closeConvPopover();
       }
+      if (!e.target.closest('.lang-menu-wrap')) {
+        I18nModule.closeMenu();
+      }
     });
 
     // 鍵盤 Escape 鍵自動關閉 Popover
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         closeConvPopover();
+        I18nModule.closeMenu();
       }
     });
 
@@ -980,6 +1031,7 @@
     window.addEventListener('blur', () => {
       collapseAllSubcards();
       closeConvPopover();
+      I18nModule.closeMenu();
     });
 
     // 頁面切入背景 (Tab 或側邊欄切換) 時自動收合子卡片
@@ -987,6 +1039,7 @@
       if (document.hidden) {
         collapseAllSubcards();
         closeConvPopover();
+        I18nModule.closeMenu();
       }
     });
 
@@ -1079,12 +1132,14 @@
       } else if (type === 'toast') {
         Toast.show(payload.message, payload.status || 'info');
       } else if (type === 'localeChanged') {
-        if (event.data.locale && event.data.locale !== I18nModule.currentLang) {
-          I18nModule.applyLanguage(event.data.locale, true);
+        const next = event.data.locale;
+        if (I18nModule.supported.includes(next) && next !== I18nModule.currentLang) {
+          I18nModule.applyLanguage(next, true);
         }
       } else if (type === 'collapseSubcards') {
         collapseAllSubcards();
         closeConvPopover();
+        I18nModule.closeMenu();
       }
     });
 

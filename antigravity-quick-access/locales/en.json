@@ -43,5 +43,7 @@
   "cmd_run_ps1_admin": "Run PowerShell Script (Admin)",
   "cmd_run_py": "Run Python Script",
   "msg_plugin_script_runner_required": "Please install and enable the Script Runner extension first!",
-  "msg_plugin_toolbox_required": "Please install and enable the Antigravity Toolbox extension first!"
+  "msg_plugin_toolbox_required": "Please install and enable the Antigravity Toolbox extension first!",
+  "lang_placeholder": "Choose interface language",
+  "lang_updated": "Interface language updated"
 }

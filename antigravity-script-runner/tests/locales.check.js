@@ -2,9 +2,9 @@
  * 語系字典一致性檢查
  *
  * 檢查項目：
- *   1. 每個 viewer 的 zh-TW / en 鍵集合完全對稱（無缺漏、無多餘）
+ *   1. 每個 viewer 的 zh-TW / zh-CN / en 鍵集合完全對稱（無缺漏、無多餘）
  *   2. 無空字串值（避免介面出現空白標籤）
- *   3. 程式碼與 HTML 實際引用的 i18n 鍵，皆存在於兩個語系
+ *   3. 程式碼與 HTML 實際引用的 i18n 鍵，皆存在於三個語系
  *
  * 用法：node tests/locales.check.js
  */
@@ -25,8 +25,8 @@ function loadLocales(viewerDir) {
   vm.runInContext(src, sandbox, { filename: viewerDir + '/locales.js' });
   const found = Object.keys(sandbox)
     .map((k) => sandbox[k])
-    .find((v) => v && typeof v === 'object' && v['zh-TW'] && v['en']);
-  if (!found) throw new Error(viewerDir + '：找不到 locales 字典（zh-TW / en）');
+    .find((v) => v && typeof v === 'object' && v['zh-TW'] && v['zh-CN'] && v['en']);
+  if (!found) throw new Error(viewerDir + '：找不到 locales 字典（zh-TW / zh-CN / en）');
   return found;
 }
 
@@ -45,28 +45,32 @@ function collectUsedKeys(viewerDir) {
 let failed = 0;
 for (const viewerDir of VIEWERS) {
   const locales = loadLocales(viewerDir);
+  const langs = ['zh-TW', 'zh-CN', 'en'];
   const zhKeys = Object.keys(locales['zh-TW']).sort();
-  const enKeys = Object.keys(locales['en']).sort();
-  const missingInEn = zhKeys.filter((k) => !enKeys.includes(k));
-  const extraInEn = enKeys.filter((k) => !zhKeys.includes(k));
-  const emptyKeys = ['zh-TW', 'en'].flatMap((lang) =>
+  const mismatches = langs.slice(1).flatMap((lang) => {
+    const keys = Object.keys(locales[lang]).sort();
+    return [
+      ...zhKeys.filter((k) => !keys.includes(k)).map((k) => lang + ' missing ' + k),
+      ...keys.filter((k) => !zhKeys.includes(k)).map((k) => lang + ' extra ' + k)
+    ];
+  });
+  const emptyKeys = langs.flatMap((lang) =>
     Object.entries(locales[lang]).filter(([, v]) => !String(v).trim()).map(([k]) => lang + ':' + k));
 
   const used = collectUsedKeys(viewerDir);
   const unknownKeys = [...used]
-    .filter((k) => !(k in locales['zh-TW']) || !(k in locales['en']))
+    .filter((k) => langs.some((lang) => !(k in locales[lang])))
     .sort();
 
-  const syncOk = Object.keys(locales).length === 2
-    && !missingInEn.length && !extraInEn.length && !emptyKeys.length;
+  const syncOk = langs.every((lang) => locales[lang])
+    && !mismatches.length && !emptyKeys.length;
   const refOk = unknownKeys.length === 0;
   const pass = syncOk && refOk;
   if (!pass) failed++;
 
   console.log(`${pass ? 'PASS' : 'FAIL'}  ${viewerDir}`
-    + ` | zh-TW=${zhKeys.length} en=${enKeys.length}`
-    + ` | missing_in_en=${JSON.stringify(missingInEn)}`
-    + ` | extra_in_en=${JSON.stringify(extraInEn)}`
+    + ` | keys=${zhKeys.length}`
+    + ` | mismatch=${JSON.stringify(mismatches)}`
     + ` | empty=${JSON.stringify(emptyKeys)}`
     + ` | 程式碼引用未知鍵=${JSON.stringify(unknownKeys)}`);
 }

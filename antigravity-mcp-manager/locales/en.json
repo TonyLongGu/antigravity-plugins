@@ -4,8 +4,7 @@
   "btn_expand_all_title": "Expand All Cards",
   "btn_test_all_title": "Test All MCP Connections",
   "btn_refresh_title": "Refresh",
-  "btn_lang_toggle_title": "切換為繁體中文",
-  "btn_lang_indicator": "中",
+  "btn_lang_indicator": "EN",
   "card_global_title": "Global Configuration",
   "btn_open_global_config": "Open Config",
   "btn_open_global_config_title": "Open global mcp_config.json in editor",
@@ -132,5 +131,6 @@
   "cline_viewer_open_config_desc": "Open the active cline_mcp_settings.json in editor",
   "cline_status_enabled": "Enabled",
   "cline_status_disabled": "Disabled",
-  "err_cline_view_only": "Manage Cline MCP in Cline itself; this extension is read-only for Cline"
+  "err_cline_view_only": "Manage Cline MCP in Cline itself; this extension is read-only for Cline",
+  "btn_lang_menu_title": "Choose interface language"
 }

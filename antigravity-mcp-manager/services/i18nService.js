@@ -16,7 +16,7 @@ try {
 const fs = require('node:fs');
 const path = require('node:path');
 
-const SUPPORTED = ['zh-TW', 'en'];
+const SUPPORTED = ['zh-TW', 'zh-CN', 'en'];
 const FALLBACK = 'zh-TW';
 
 class I18nService {
@@ -47,6 +47,7 @@ class I18nService {
       const custom = vscode?.workspace?.getConfiguration('antigravity')?.get('locale');
       if (SUPPORTED.includes(custom)) return custom;
       const envLang = (vscode?.env?.language || '').toLowerCase();
+      if (envLang === 'zh-cn' || envLang.startsWith('zh-hans')) return 'zh-CN';
       if (envLang.startsWith('en')) return 'en';
     } catch (_) {}
     return FALLBACK;

@@ -1,0 +1,7 @@
+{
+  "terminal_name": "脚本执行器 (Script Runner)",
+  "warning_select_file": "请先在文件资源管理器中选取或开启已保存的实体脚本文件！",
+  "error_file_not_found": "文件不存在：{filePath}",
+  "status_started_admin": "🛡️ 已以系统管理员身份启动：{fileName}",
+  "status_started_terminal": "已在终端启动：{fileName}"
+}

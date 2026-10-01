@@ -66,11 +66,13 @@
           "enum": [
             "auto",
             "zh-TW",
+            "zh-CN",
             "en"
           ],
           "enumDescriptions": [
             "跟隨 Antigravity 語言或 IDE 介面語言",
             "繁體中文",
+            "简体中文",
             "English"
           ],
           "description": "狀態列與 Tooltip 語言"

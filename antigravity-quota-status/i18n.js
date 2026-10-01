@@ -13,9 +13,13 @@ class I18n {
     try {
       const baseDir = this.extensionUri?.fsPath || path.resolve(__dirname);
       const zhPath = path.join(baseDir, 'locales', 'zh-TW.json');
+      const cnPath = path.join(baseDir, 'locales', 'zh-CN.json');
       const enPath = path.join(baseDir, 'locales', 'en.json');
       if (fs.existsSync(zhPath)) {
         this.locales['zh-TW'] = JSON.parse(fs.readFileSync(zhPath, 'utf-8'));
+      }
+      if (fs.existsSync(cnPath)) {
+        this.locales['zh-CN'] = JSON.parse(fs.readFileSync(cnPath, 'utf-8'));
       }
       if (fs.existsSync(enPath)) {
         this.locales['en'] = JSON.parse(fs.readFileSync(enPath, 'utf-8'));
@@ -26,11 +30,15 @@ class I18n {
   }
 
   getLocale() {
+    const supported = ['zh-TW', 'zh-CN', 'en'];
     const override = vscode.workspace.getConfiguration('aiQuota').get('locale', 'auto');
-    if (override === 'zh-TW' || override === 'en') return override;
+    if (supported.includes(override)) return override;
+    const runner = vscode.workspace.getConfiguration('scriptRunner').get('locale');
+    if (supported.includes(runner)) return runner;
     const ag = vscode.workspace.getConfiguration('antigravity').get('locale');
-    if (ag === 'zh-TW' || ag === 'en') return ag;
+    if (supported.includes(ag)) return ag;
     const lang = String(vscode.env.language || '').toLowerCase();
+    if (lang === 'zh-cn' || lang.startsWith('zh-hans')) return 'zh-CN';
     if (lang.startsWith('zh')) return 'zh-TW';
     if (lang.startsWith('en')) return 'en';
     return 'zh-TW';

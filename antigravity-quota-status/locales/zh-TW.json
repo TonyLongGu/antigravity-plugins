@@ -72,5 +72,9 @@
   "resets_in_minutes": "{minutes} 分鐘後重置",
   "resets_soon": "即將重置",
   "connecting": "連線中...",
-  "checking": "檢查中..."
+  "checking": "檢查中...",
+  "menu_lang_label": "介面語言",
+  "menu_lang_desc": "繁體中文、简体中文、English",
+  "lang_placeholder": "選擇介面語言",
+  "lang_updated": "已切換介面語言"
 }
