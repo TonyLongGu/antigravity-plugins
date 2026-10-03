@@ -155,6 +155,7 @@ $pluginFolders = if (Test-Path -LiteralPath $pluginsDir) {
 }
 
 $uninstalledCount = 0
+$uninstalledSummary = @()
 
 foreach ($folder in $pluginFolders) {
     $pkgJsonPath = Join-Path $folder.FullName "package.json"
@@ -268,6 +269,11 @@ foreach ($folder in $pluginFolders) {
 
         if ($cleanedEnvs.Count -gt 0) {
             $uninstalledCount++
+            $uninstalledSummary += [PSCustomObject]@{
+                Name         = $displayName
+                Version      = $extVersion
+                Environments = ($cleanedEnvs -join ", ")
+            }
         } else {
             Write-Host "  [略過] 未在目標環境中偵測到安裝紀錄" -ForegroundColor DarkGray
         }
@@ -280,5 +286,8 @@ Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "  🎉 全套擴充套件解除安裝完成！共清理 $uninstalledCount 個外掛項目" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Cyan
+if ($uninstalledSummary.Count -gt 0) {
+    $uninstalledSummary | Format-Table -AutoSize
+}
 Write-Host "提示：Antigravity IDE / Cursor 可按 [Ctrl + Shift + P] -> [Developer: Reload Window] 刷新擴充狀態；VS Code 請完整關閉後重新啟動。" -ForegroundColor Gray
 Write-Host ""
