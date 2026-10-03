@@ -127,7 +127,7 @@ class ClineMcpService {
             if (s && s.disabled !== true) enabledCount++;
           }
 
-          // 評分標準：有啟用項者大幅加分 (例如 supermemory 啟用中)，其次為伺服器總數
+          // 評分標準：有啟用項者大幅加分 (例如共用記憶類 MCP 啟用中)，其次為伺服器總數
           const isDotCline = cand.includes('.cline');
           const score = (enabledCount * 100) + (isDotCline ? 50 : 0) + serverCount;
 

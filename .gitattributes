@@ -1,0 +1,5 @@
+# 換行統一：倉庫內一律存 LF；Windows 批次檔強制 CRLF（cmd 對 LF-only 的標籤跳轉不友善）
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

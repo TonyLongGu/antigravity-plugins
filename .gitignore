@@ -1,6 +1,11 @@
 node_modules/
 .DS_Store
 Thumbs.db
+desktop.ini
 *.log
+*.vsix
 .vscode/
 .idea/
+.vscode-test/
+.nyc_output/
+coverage/
