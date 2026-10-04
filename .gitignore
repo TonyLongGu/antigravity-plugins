@@ -9,3 +9,23 @@ desktop.ini
 .vscode-test/
 .nyc_output/
 coverage/
+
+# 憑證與機密（避免誤提交）
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.pfx
+*.p12
+credentials.json
+*credentials*.json
+secrets.json
+
+# 本機狀態與資料庫快照（可能含對話紀錄、權杖）
+*.vscdb
+*.vscdb-*
+*.toolbox-bak
+*.db
+*.db-journal
+*.db-wal

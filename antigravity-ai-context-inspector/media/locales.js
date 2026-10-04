@@ -61,7 +61,7 @@
       // 卡片 4：MCP 伺服器
       card_mcp_title: 'MCP 伺服器與 API',
       btn_open_mcp_dir: '開啟',
-      btn_open_mcp_dir_title: '開啟 MCP 存放資料夾 (C:\\Users\\User\\.gemini\\antigravity-ide\\mcp)',
+      btn_open_mcp_dir_title: '開啟 MCP 存放資料夾 (~/.gemini/antigravity-ide/mcp)',
       btn_open_mcp_dir_title_cursor: '開啟 Cursor MCP 設定檔 (~/.cursor/mcp.json)',
       btn_open_mcp_dir_title_vscode: '開啟 VS Code MCP 設定檔 (%APPDATA%/Code/User/mcp.json)',
       mcp_transport_stdio: 'stdio',
@@ -168,7 +168,7 @@
 
       card_mcp_title: 'MCP 服务器与 API',
       btn_open_mcp_dir: '打开',
-      btn_open_mcp_dir_title: '打开 MCP 存放文件夹 (C:\\Users\\User\\.gemini\\antigravity-ide\\mcp)',
+      btn_open_mcp_dir_title: '打开 MCP 存放文件夹 (~/.gemini/antigravity-ide/mcp)',
       btn_open_mcp_dir_title_cursor: '打开 Cursor MCP 配置文件 (~/.cursor/mcp.json)',
       btn_open_mcp_dir_title_vscode: '打开 VS Code MCP 配置文件 (%APPDATA%/Code/User/mcp.json)',
       mcp_transport_stdio: 'stdio',
@@ -277,7 +277,7 @@
       // Card 4: MCP Servers
       card_mcp_title: 'MCP Servers & Tools',
       btn_open_mcp_dir: 'Open',
-      btn_open_mcp_dir_title: 'Open MCP Storage Folder (C:\\Users\\User\\.gemini\\antigravity-ide\\mcp)',
+      btn_open_mcp_dir_title: 'Open MCP Storage Folder (~/.gemini/antigravity-ide/mcp)',
       btn_open_mcp_dir_title_cursor: 'Open Cursor MCP config (~/.cursor/mcp.json)',
       btn_open_mcp_dir_title_vscode: 'Open VS Code MCP config (%APPDATA%/Code/User/mcp.json)',
       mcp_transport_stdio: 'stdio',

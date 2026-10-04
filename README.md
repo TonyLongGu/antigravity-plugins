@@ -17,6 +17,43 @@
 
 ---
 
+## 🔐 隱私與權限說明
+
+本專案為**本機自用工具**，設計上不具備回傳資料的能力。安裝前請先了解它會碰觸的範圍。
+
+### 資料處理原則
+
+- **不蒐集、不上傳**：本外掛本身無遙測、無分析、無回報端點，所有掃描結果只在本機 UI 顯示。
+- **無第三方伺服器**：唯一的對外連線是 Cursor 官方端點（`cursor.com`、`api2.cursor.sh`），用於查詢你自己的額度；其餘套件完全不連外網。
+- **憑證不落地**：讀取到的 access token 僅存在記憶體，只用於前述官方端點或本機 `127.0.0.1` 服務，不寫入任何檔案、不輸出到日誌。
+- 讀取 MCP 設定時**只取伺服器名稱與啟動方式，不讀 `env` / `headers`**，避免把權杖帶進 UI。
+
+### 會讀取的本機資料
+
+- **上下文檢視儀 / MCP 管理器**：各 `mcp.json`（`%APPDATA%/Code/User`、`~/.cursor`、工作區 `.vscode`）、`state.vscdb` 的對話索引與 `mcp.enablement`。
+- **額度監控**：Cursor `state.vscdb` 的 `cursorAuth/accessToken`、Cursor 自身 Sentry scope 檔中的 user ID、Antigravity Language Server 行程資訊。
+- **全能控制中心**：各 IDE 的 `globalStorage` / `workspaceStorage`、Skills 目錄。
+- **腳本執行助手**：你的工作區檔案（供圖片 / 音訊 / 影片檢視）。
+
+### 會寫入的本機資料
+
+- **全能控制中心**：清理對話時改寫 `state.vscdb` 的 `chat.ChatSessionStore.index` 單一鍵，**寫入前自動備份**該檔（副檔名 `.toolbox-bak`），不影響其他儲存資料。
+- **全能控制中心**：同步 Skills 時於目標目錄建立 Windows Junction（`mklink /J`）。
+- 其餘套件只寫入自身在 IDE 的設定儲存區。
+
+### 執行能力警示
+
+- **腳本執行助手**可依你的操作執行 Python、批次檔與 PowerShell，並支援**以系統管理員權限**啟動（`RunAs`）。請只對信任的腳本使用。
+- 安裝 / 解除安裝腳本以 `-ExecutionPolicy Bypass` 執行 PowerShell，這是繞過 IDE 外掛載入限制的必要手段；請自行檢視腳本內容後再執行。
+- 本機影音串流服務綁定 `127.0.0.1`（不對外開放），並以每次啟動隨機產生的 session token 校驗請求。
+
+### 使用者責任
+
+- 讀取第三方服務（Cursor 等）的本機憑證並呼叫其 API，**可能受該服務條款約束**，請自行確認並承擔合規責任。
+- 本專案以 MIT 授權提供，不提供任何形式之擔保。
+
+---
+
 ## 🌐 介面語言
 
 六個套件共用同一組介面語言。在有語言按鈕的面板上點一下，會彈出選單：

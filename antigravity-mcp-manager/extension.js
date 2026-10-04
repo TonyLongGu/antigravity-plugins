@@ -14,6 +14,9 @@ const McpConfigService = require('./services/mcpConfigService');
 const ProbeService = require('./services/probeService');
 const SystemService = require('./services/systemService');
 const I18n = require('./services/i18nService');
+// Cline 純檢視（showClineMcpViewer 直接使用）；
+// 其 init(context) 已由 McpConfigService.init 統一完成，勿重複呼叫。
+const ClineMcpService = require('./services/clineMcpService');
 
 // 原生 UI（狀態列、通知、Toast）的語言須與面板一致，
 // 故統一由 I18nService 提供；解析順序見該模組。
