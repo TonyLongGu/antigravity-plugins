@@ -81,7 +81,11 @@
   const savedState = vscode.getState() || {};
   let currentData = null;
   let currentMode = savedState.mode || 'live'; // 'live' | 'snapshot'
-  let currentConvLimit = savedState.convLimit || 10;
+  // 對話清單顯示筆數：僅提供 5/10/20/50，50 為硬上限（避免一次渲染過多項目拖慢側邊欄）
+  const CONV_LIMIT_OPTIONS = [5, 10, 20, 50];
+  const CONV_LIMIT_DEFAULT = 10;
+  const savedConvLimit = parseInt(savedState.convLimit, 10);
+  let currentConvLimit = CONV_LIMIT_OPTIONS.includes(savedConvLimit) ? savedConvLimit : CONV_LIMIT_DEFAULT;
   let selectedConvId = savedState.selectedConvId || null;
   let searchKeyword = '';
   let ruleActiveTitleMode = savedState.ruleActiveTitleMode || 'title'; // 'title' (內文標題) | 'name' (檔案名稱)
@@ -437,7 +441,7 @@
       return;
     }
 
-    const limit = parseInt(currentConvLimit, 10) || 10;
+    const limit = Math.min(parseInt(currentConvLimit, 10) || CONV_LIMIT_DEFAULT, CONV_LIMIT_OPTIONS[CONV_LIMIT_OPTIONS.length - 1]);
     let filtered = allConversations;
 
     // 搜尋過濾
@@ -992,11 +996,11 @@
         pill.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          const lim = parseInt(pill.getAttribute('data-limit'), 10) || 10;
+          const lim = parseInt(pill.getAttribute('data-limit'), 10) || CONV_LIMIT_DEFAULT;
           currentConvLimit = lim;
           saveState();
           renderCustomConvList();
-          const limStr = lim >= 500 ? I18nModule.t('toast_limit_all') : I18nModule.t('toast_limit_items', { count: lim });
+          const limStr = I18nModule.t('toast_limit_items', { count: lim });
           Toast.show(I18nModule.t('toast_limit_changed', { limit: limStr }), 'info', 1500);
         });
       });

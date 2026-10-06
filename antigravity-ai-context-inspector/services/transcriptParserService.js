@@ -388,7 +388,6 @@ class TranscriptParserService {
     const invokedTools = new Set();
     const invokedMcpServers = new Set();
     const invokedMcpTools = new Set();
-    const touchedFiles = new Set();
     const discoveredSkillPaths = new Map(); // dirName.toLowerCase() -> fullFilePath
     const discoveredRulePaths = new Map();  // fileName.toLowerCase() -> fullFilePath
     const discoveredWorkspaceRoots = new Set(dbSessionMeta.workspaces);
@@ -516,7 +515,6 @@ class TranscriptParserService {
                 const cleanFp = ContextScannerService.normalizeFsPath(fp);
                 if (cleanFp && fs.existsSync(cleanFp)) {
                   const lowerFp = cleanFp.toLowerCase();
-                  touchedFiles.add(lowerFp);
                   if (lowerFp.includes('skill.md')) {
                     const skillDir = path.basename(path.dirname(cleanFp));
                     const skillKey = skillDir.toLowerCase();
@@ -551,7 +549,6 @@ class TranscriptParserService {
               const cleanFp = ContextScannerService.normalizeFsPath(matchPath[1]);
               if (cleanFp && fs.existsSync(cleanFp)) {
                 const lowerFp = cleanFp.toLowerCase();
-                touchedFiles.add(lowerFp);
                 if (lowerFp.includes('skill.md')) {
                   const skillDir = path.basename(path.dirname(cleanFp));
                   const skillKey = skillDir.toLowerCase();

@@ -25,7 +25,6 @@
       conv_search_placeholder: '搜尋對話主題、關鍵字或短 ID...',
       btn_clear_search_title: '清除搜尋',
       pills_label: '筆數:',
-      pill_limit_all: '全',
       meta_model_label: '對話使用模型:',
       conv_item_ws_prefix: '工作區：',
 
@@ -105,7 +104,6 @@
       toast_copied_item: '已複製 {label}: {text}',
       toast_copy_failed: '複製失敗: {error}',
       toast_limit_changed: '已切換顯示最近 {limit} 對話',
-      toast_limit_all: '全部',
       toast_limit_items: '{count} 筆',
       toast_lang_switched: '已切換為繁體中文',
 
@@ -137,7 +135,6 @@
       conv_search_placeholder: '搜索对话主题、关键字或短 ID...',
       btn_clear_search_title: '清除搜索',
       pills_label: '条数:',
-      pill_limit_all: '全',
       meta_model_label: '对话使用模型:',
       conv_item_ws_prefix: '工作区：',
 
@@ -208,7 +205,6 @@
       toast_copied_item: '已复制 {label}: {text}',
       toast_copy_failed: '复制失败: {error}',
       toast_limit_changed: '已切换显示最近 {limit} 对话',
-      toast_limit_all: '全部',
       toast_limit_items: '{count} 条',
       toast_lang_switched: '已切换为简体中文',
 
@@ -241,7 +237,6 @@
       conv_search_placeholder: 'Search title, keyword or ID...',
       btn_clear_search_title: 'Clear search',
       pills_label: 'Limit:',
-      pill_limit_all: 'All',
       meta_model_label: 'Model:',
       conv_item_ws_prefix: 'Workspace: ',
 
@@ -321,7 +316,6 @@
       toast_copied_item: 'Copied {label}: {text}',
       toast_copy_failed: 'Copy failed: {error}',
       toast_limit_changed: 'Showing recent {limit} conversations',
-      toast_limit_all: 'All',
       toast_limit_items: '{count} items',
       toast_lang_switched: 'Switched to English',
 
