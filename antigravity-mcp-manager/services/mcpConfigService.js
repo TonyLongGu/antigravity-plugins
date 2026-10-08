@@ -6,6 +6,7 @@
 //   Cursor — ~/.cursor/mcp.json（僅檢視／探測／備註；開關請用 Customize）
 //   VS Code — <User>/mcp.json + 工作區 .vscode/mcp.json
 //             （僅檢視／探測／備註；開關存於 state.vscdb 的 mcp.enablement，請用 VS Code 原生 UI）
+//             + Copilot CLI（~/.copilot/mcp-config.json，純檢視，與 VS Code 來源並列顯示）
 // ==============================================================================
 
 let vscode;
@@ -21,7 +22,12 @@ const os = require('node:os');
 const CursorEnablementService = require('./cursorEnablementService');
 const VscodeEnablementService = require('./vscodeEnablementService');
 const ClineMcpService = require('./clineMcpService');
+const CopilotCliMcpService = require('./copilotCliMcpService');
+const AgentHostMcpService = require('./agentHostMcpService');
 const I18n = require('./i18nService');
+
+// Copilot CLI 條目與 VS Code 同名時的鍵前綴（僅內部鍵，顯示名稱仍為原始名稱）
+const COPILOT_CLI_KEY_PREFIX = 'copilot-cli:';
 
 // 訊息一律取自 locales/*.json，確保與面板語言一致
 // （勿寫死字串：寫死會導致切換語系時原生 UI 與面板語言不一致）
@@ -31,6 +37,7 @@ class McpConfigService {
     CursorEnablementService.init(context);
     VscodeEnablementService.init(context);
     ClineMcpService.init(context);
+    AgentHostMcpService.init(context);
   }
 
   static get isClineInstalled() {
@@ -39,6 +46,20 @@ class McpConfigService {
 
   static get clineConfigPath() {
     return ClineMcpService.getConfigPath();
+  }
+
+  /** Copilot CLI 設定檔路徑（唯讀來源；供檔案監聽與快捷選單使用） */
+  static get copilotCliConfigPath() {
+    return CopilotCliMcpService.getConfigPath();
+  }
+
+  static get isCopilotCliAvailable() {
+    return CopilotCliMcpService.isAvailable();
+  }
+
+  /** Agent Host 的 MCP 開關檔路徑（customizationEnablement；供檔案監聽與簽章輪詢） */
+  static get agentHostStoragePath() {
+    return AgentHostMcpService.storageFilePath;
   }
 
   static get appName() {
@@ -96,7 +117,9 @@ class McpConfigService {
   static enablementSignature() {
     if (this.hostKind !== 'vscode') return '';
     try {
-      return VscodeEnablementService.dbSignature();
+      // 兩套開關都要納入簽章：state.vscdb（VS Code 自己的來源）
+      // 與 agent-host-storage.json（agent host／Copilot CLI 來源）
+      return `${VscodeEnablementService.dbSignature()}|${AgentHostMcpService.signature()}`;
     } catch {
       return '';
     }
@@ -322,6 +345,30 @@ class McpConfigService {
     };
   }
 
+  /**
+   * 讀取 Copilot CLI 的 MCP 摘要（純檢視）
+   * 僅在 VS Code 分支使用：Copilot CLI 與 VS Code 同屬 Copilot 生態，
+   * 且 Copilot CLI 設定檔的使用者就是這個宿主的使用者。
+   * 停用判定一律由服務層完成（傳入 agent host 開關狀態），呼叫端不再自行覆寫，
+   * 避免同一件事有兩份實作而各自漂移。
+   * @param {Map<string,boolean>} agentHostStates agent host 的開關狀態（工作區覆寫優先）
+   */
+  static async readCopilotCliSummary(agentHostStates = null) {
+    const data = await CopilotCliMcpService.getServers(agentHostStates);
+    const servers = data.servers || {};
+    const keys = Object.keys(servers);
+    const stats = data.stats || { total: keys.length, enabled: keys.length, disabled: 0 };
+
+    return {
+      isCopilotCliAvailable: data.exists === true,
+      copilotCliParseError: data.parseError === true,
+      copilotCliServers: servers,
+      copilotCliStats: stats,
+      copilotCliConfigPath: data.path || '',
+      copilotCliEnabledNames: keys.filter((name) => servers[name].disabled !== true),
+    };
+  }
+
   static emptyUnsupportedData() {
     return {
       path: '',
@@ -498,6 +545,35 @@ class McpConfigService {
     };
   }
 
+  /**
+   * 將 Copilot CLI 伺服器正規化為儀表板統一格式（唯讀來源）
+   * 停用狀態來自設定檔自身的宣告（格式其實不允許，保留相容）或 agent host 開關
+   * @param {string} key 清單內部鍵（同名衝突時帶來源前綴）
+   * @param {string} name 設定檔中的原始名稱（顯示用）
+   */
+  static normalizeCopilotCliServer(key, name, server, notes) {
+    // 備註以內部鍵為優先，其次才是原始名稱：
+    // 前端編輯說明時送出的是 data-name（= 內部鍵），兩種鍵都必須對得上
+    const note = notes[key] || notes[name] || {};
+    const disabled = server.disabled === true;
+
+    return {
+      ...server,
+      name: key,
+      rawName: name,
+      sourceType: 'copilotCli',
+      source: 'copilotCli',
+      scope: 'global',
+      serverUrl: server.serverUrl || server.url,
+      description: note.description || server.description || '',
+      disabled,
+      effectiveDisabled: disabled,
+      // 停用來源（'agentHost' = VS Code 的 MCP 開關；'config' = 設定檔自身宣告）
+      disabledBy: server.disabledBy || '',
+      workspaceOverride: 'inherit',
+    };
+  }
+
   static async getVscodeData(displaySource = 'both') {
     const configPath = this.globalConfigPath;
     const notesPath = this.notesFilePath;
@@ -533,8 +609,72 @@ class McpConfigService {
 
     if (!fs.existsSync(configPath)) createdConfig = true;
 
-    // 本 IDE（VS Code）自身的統計；與 Antigravity 分支同名同義，供狀態列與懸停視窗共用
+    // 本 IDE（VS Code）自身的統計；與 Antigravity 分支同名同義
+    // 註：必須在併入 Copilot CLI 條目「之前」計算，否則本 IDE 數字會混入另一個來源
     const agStats = this.calculateStats(normalizedServers);
+    const agEnabledNames = Object.keys(normalizedServers).filter(
+      (name) => normalizedServers[name].disabled !== true
+    );
+
+    // Copilot CLI（純檢視）：與 VS Code 來源並列於同一份清單，以來源徽章區分
+    // 同名衝突時以 VS Code 來源為準（與 VS Code 內部的來源優先序一致），
+    // CLI 條目改用帶前綴的內部鍵，顯示名稱仍為原始名稱。
+    // 開關狀態取自 agent host（customizationEnablement）：Copilot CLI 設定檔本身沒有停用欄位，
+    // 使用者在 VS Code 的 MCP 清單切換開關時寫入的正是 agent host，故必須以它為準。
+    const workspaceUri = vscode?.workspace?.workspaceFolders?.[0]?.uri?.toString?.() || '';
+    const agentHostState = await AgentHostMcpService.readState(workspaceUri);
+    const agentHostStates = AgentHostMcpService.resolveStates(agentHostState);
+
+    const {
+      isCopilotCliAvailable,
+      copilotCliParseError,
+      copilotCliServers,
+      copilotCliStats,
+      copilotCliConfigPath,
+      copilotCliEnabledNames,
+    } = await this.readCopilotCliSummary(agentHostStates);
+
+    for (const [name, server] of Object.entries(copilotCliServers)) {
+      const hasNameConflict = Object.prototype.hasOwnProperty.call(normalizedServers, name);
+      const key = hasNameConflict ? `${COPILOT_CLI_KEY_PREFIX}${name}` : name;
+      if (Object.prototype.hasOwnProperty.call(normalizedServers, key)) continue;
+      normalizedServers[key] = this.normalizeCopilotCliServer(key, name, server, notes);
+    }
+
+    // 狀態列與懸停視窗的「本 IDE」數字改以主要來源為準：
+    // 判定順序（先看「有沒有東西可用」，避免狀態列顯示 0 卻藏著實際可用的來源）：
+    //   1. Copilot CLI 有啟用中的伺服器 → Copilot CLI
+    //   2. 否則本 IDE（VS Code）自己有啟用中的伺服器 → VS Code
+    //   3. 兩邊都沒有啟用中的伺服器時，只要 CLI 有設定檔就仍以 CLI 為主
+    //      （顯示 0/6 比顯示 0/0 有資訊量；使用者才知道伺服器是被停用而非不存在）
+    const primaryIsCopilotCli =
+      copilotCliStats.enabled > 0
+        ? true
+        : agStats.enabled > 0
+          ? false
+          : copilotCliStats.total > 0;
+    const primaryStats = primaryIsCopilotCli ? copilotCliStats : agStats;
+    const primaryEnabledNames = primaryIsCopilotCli ? copilotCliEnabledNames : agEnabledNames;
+    const primarySourceName = primaryIsCopilotCli ? I18n.t('source_copilot_cli') : this.nativeSourceName;
+    const primarySourceShort = primaryIsCopilotCli ? I18n.t('source_short_copilot_cli') : this.nativeSourceShort;
+
+    // 次要來源（另一個設定檔）：只在「確有伺服器」或「檔案存在但無法解析」時列出，
+    // 避免空設定檔在懸停視窗留下沒有資訊量的 0/0
+    const otherSource = primaryIsCopilotCli
+      ? {
+          name: this.nativeSourceName,
+          stats: agStats,
+          enabledNames: agEnabledNames,
+          parseError: false,
+        }
+      : {
+          name: I18n.t('source_copilot_cli'),
+          stats: copilotCliStats,
+          enabledNames: copilotCliEnabledNames,
+          parseError: copilotCliParseError,
+        };
+    const secondarySource = otherSource.parseError || otherSource.stats.total > 0 ? otherSource : null;
+
     // Cline 僅檢視：與 Antigravity / Cursor 一致地並列顯示，開關仍由 Cline 自身 UI 管理
     const { isClineInstalled, clineServers, clineStats, clineConfigPath, clineEnabledNames } =
       await this.readClineSummary();
@@ -564,14 +704,29 @@ class McpConfigService {
         enabled: agStats.enabled + clineStats.enabled,
         disabled: agStats.disabled + clineStats.disabled,
       },
-      agEnabledNames: Object.keys(normalizedServers).filter((name) => normalizedServers[name].disabled !== true),
+      agEnabledNames,
       clineEnabledNames,
       clineServers,
+      isCopilotCliAvailable,
+      copilotCliParseError,
+      copilotCliConfigPath,
+      // agent host 開關狀態來源（供除錯與前端提示）
+      agentHostEnablementPath: agentHostState.path || '',
+      agentHostEnablementAvailable: agentHostState.exists === true,
+      copilotCliStats,
+      copilotCliEnabledNames,
+      copilotCliServers,
+      // 主要來源（狀態列與懸停視窗第一段），VS Code 宿主可能是 Copilot CLI
+      primaryIsCopilotCli,
+      primarySourceName,
+      primarySourceShort,
+      primaryEnabledNames,
+      secondarySource,
       config: {
         ...rawConfig,
         mcpServers: normalizedServers,
       },
-      stats: agStats,
+      stats: primaryStats,
     };
   }
 

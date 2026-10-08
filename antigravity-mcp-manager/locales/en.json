@@ -132,5 +132,11 @@
   "cline_status_enabled": "Enabled",
   "cline_status_disabled": "Disabled",
   "err_cline_view_only": "Manage Cline MCP in Cline itself; this extension is read-only for Cline",
-  "btn_lang_menu_title": "Choose interface language"
+  "btn_lang_menu_title": "Choose interface language",
+  "badge_source_copilot_cli": "Copilot CLI",
+  "source_copilot_cli": "Copilot CLI",
+  "source_short_copilot_cli": "Copilot",
+  "badge_source_copilot_cli_title": "This server comes from the Copilot CLI config (~/.copilot/mcp-config.json, overridable with COPILOT_HOME); it is a read-only source and Copilot CLI has no disable state, so every entry counts as enabled",
+  "menu_open_copilot_cli_config": "Open Copilot CLI MCP Config",
+  "tooltip_copilot_cli_parse_error": "Config file could not be parsed; check its contents"
 }

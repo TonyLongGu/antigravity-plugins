@@ -57,6 +57,9 @@
     let typeBadge = '';
     if (server.sourceType === 'cline') {
       typeBadge = `<span class="src-badge src-cline" title="Cline MCP">${escapeHtml(I18nModule.t('badge_source_cline'))}</span>`;
+    } else if (server.sourceType === 'copilotCli') {
+      // 唯讀來源：另一份設定檔（Copilot CLI），與 VS Code 的 mcp.json 並列顯示
+      typeBadge = `<span class="src-badge src-copilot-cli" title="${escapeHtml(I18nModule.t('badge_source_copilot_cli_title'))}">${escapeHtml(I18nModule.t('badge_source_copilot_cli'))}</span>`;
     }
     // Antigravity 標籤不顯示：側邊欄已確定只管理 Antigravity 伺服器，標籤無資訊量
 
@@ -527,14 +530,10 @@
         if (!this.data || !this.data.config) return;
         const servers = this.data.config.mcpServers || {};
         const now = Date.now();
-        let total = 0;
-        let enabled = 0;
-        let disabled = 0;
 
         this.pendingToggles.clear();
 
         for (const [key, server] of Object.entries(servers)) {
-          total++;
           const currentDisabled = server.disabled === true;
           let newDisabled = currentDisabled;
           if (action === 'enable_all') newDisabled = false;
@@ -542,8 +541,6 @@
           else if (action === 'invert') newDisabled = !currentDisabled;
 
           server.disabled = newDisabled;
-          if (newDisabled) disabled++;
-          else enabled++;
 
           // 設置樂觀更新鎖
           this.pendingToggles.set(key, {
@@ -552,8 +549,7 @@
           });
         }
 
-        // 就地更新統計數據並立即 0ms 重新渲染
-        this.data.stats = { total, enabled, disabled };
+        // 就地更新卡片狀態並立即 0ms 重新渲染（統計標籤由列出的伺服器推導，故不需另行同步）
         this.render();
       };
 
@@ -598,15 +594,20 @@
       applyHostChrome();
 
       const servers = (this.data.config && this.data.config.mcpServers) || {};
-      const stats = this.data.stats || { total: 0, enabled: 0, disabled: 0 };
       const serverKeys = Object.keys(servers);
       const query = this.searchQuery.toLowerCase().trim();
       const filter = this.currentFilter;
 
-      // 更新統計 Badge
-      if (this.dom.statTotal) this.dom.statTotal.textContent = stats.total;
-      if (this.dom.statEnabled) this.dom.statEnabled.textContent = stats.enabled;
-      if (this.dom.statDisabled) this.dom.statDisabled.textContent = stats.disabled;
+      // 更新統計 Badge：一律由「實際列出的伺服器」計算。
+      // 後端 stats 只涵蓋本 IDE 自身的來源（狀態列沿用同一語意），
+      // 清單卻可能併入唯讀來源（如 Copilot CLI），若沿用後端數字會與卡片數量不一致。
+      let enabledCount = 0;
+      serverKeys.forEach((key) => {
+        if (servers[key].disabled !== true) enabledCount++;
+      });
+      if (this.dom.statTotal) this.dom.statTotal.textContent = serverKeys.length;
+      if (this.dom.statEnabled) this.dom.statEnabled.textContent = enabledCount;
+      if (this.dom.statDisabled) this.dom.statDisabled.textContent = serverKeys.length - enabledCount;
 
       // 過濾項目（支援比對名稱、指令、URL 與用途說明 description）
       const filteredKeys = serverKeys.filter((key) => {

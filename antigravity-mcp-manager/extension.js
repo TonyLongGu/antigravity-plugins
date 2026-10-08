@@ -259,6 +259,36 @@ class MCPManagerViewProvider {
     }
   }
 
+  /**
+   * 追加單一 MCP 來源區段（名稱 + 統計 + 已啟用清單）
+   * 主要來源與次要來源共用同一種呈現，避免兩段各寫一份而再度不一致
+   * @param {object|null} source { name, stats, enabledNames, parseError }
+   */
+  _appendSourceTooltip(tooltip, source) {
+    if (!source) return;
+
+    if (source.parseError) {
+      tooltip.appendMarkdown(`**${source.name}** $(warning) ${I18n.t('tooltip_copilot_cli_parse_error')}\n\n\n---\n\n`);
+      return;
+    }
+
+    const stats = source.stats || { total: 0, enabled: 0, disabled: 0 };
+    const icon = stats.enabled > 0 ? '$(pass-filled)' : '$(circle-slash)';
+    tooltip.appendMarkdown(`**${source.name}** ${icon} \`${stats.enabled} / ${stats.total}\`\n\n`);
+
+    const enabledNames = source.enabledNames || [];
+    if (enabledNames.length > 0) {
+      enabledNames.forEach((name) => tooltip.appendMarkdown(`• \`${name}\`\n`));
+      if (stats.disabled > 0) {
+        tooltip.appendMarkdown(`\n*(其餘 ${stats.disabled} 個已停用)*\n`);
+      }
+    } else {
+      tooltip.appendMarkdown(`*${I18n.t('status_tooltip_none')}*\n`);
+    }
+
+    tooltip.appendMarkdown(`\n---\n\n`);
+  }
+
   async refreshWebviewData(immediate = false, delayMs = 120, force = false) {
     if (this._refreshDebounceTimer) {
       clearTimeout(this._refreshDebounceTimer);
@@ -270,6 +300,7 @@ class MCPManagerViewProvider {
         const globalData = await McpConfigService.getGlobalData(McpConfigService.displayMode);
         const servers = (globalData.config && globalData.config.mcpServers) || {};
         const clineServers = globalData.clineServers || {};
+        const copilotCliServers = globalData.copilotCliServers || {};
         const fingerprint = JSON.stringify({
           path: globalData.path,
           viewOnly: globalData.viewOnly === true,
@@ -281,6 +312,11 @@ class MCPManagerViewProvider {
           clineServers: Object.keys(clineServers)
             .sort()
             .map((name) => [name, clineServers[name].disabled === true]),
+          // Copilot CLI 同為獨立設定檔來源：清單變更（含停用數不變的增刪）也要反映
+          copilotCliStats: globalData.copilotCliStats || { total: 0, enabled: 0, disabled: 0 },
+          copilotCliServers: Object.keys(copilotCliServers)
+            .sort()
+            .map((name) => [name, copilotCliServers[name].disabled === true]),
           servers: Object.keys(servers)
             .sort()
             .map((name) => [
@@ -299,22 +335,21 @@ class MCPManagerViewProvider {
         // 更新 IDE 底部 Status Bar
         if (this._statusBarItem) {
           const isCline = globalData.isClineInstalled;
+          // stats 已是「主要來源」的數字（VS Code 宿主在 Copilot CLI 有伺服器時即為 CLI）
           const stats = globalData.stats || { total: 0, enabled: 0, disabled: 0 };
-          const agStats = globalData.agStats || stats;
           const clineStats = globalData.clineStats || { total: 0, enabled: 0, disabled: 0 };
+          const primaryShort = globalData.primarySourceShort || McpConfigService.nativeSourceShort;
 
           // 狀態列簡潔文字（顯示範圍一律取自 McpConfigService.displayMode，單一真相來源）
           const currentMode = McpConfigService.displayMode;
 
-          const nativeName = McpConfigService.nativeSourceName;
           if (isCline) {
             if (currentMode === 'antigravity') {
-              this._statusBarItem.text = `$(plug) MCP: ${agStats.enabled}/${agStats.total}`;
+              this._statusBarItem.text = `$(plug) MCP: ${primaryShort} ${stats.enabled}/${stats.total}`;
             } else if (currentMode === 'cline') {
               this._statusBarItem.text = `$(plug) MCP (Cline): ${clineStats.enabled}/${clineStats.total}`;
             } else {
-              const nativeShort = McpConfigService.nativeSourceShort;
-              this._statusBarItem.text = `$(plug) MCP: ${nativeShort} ${agStats.enabled}/${agStats.total} · Cline ${clineStats.enabled}/${clineStats.total}`;
+              this._statusBarItem.text = `$(plug) MCP: ${primaryShort} ${stats.enabled}/${stats.total} · Cline ${clineStats.enabled}/${clineStats.total}`;
             }
           } else {
             this._statusBarItem.text = `$(plug) MCP: ${stats.enabled}/${stats.total}`;
@@ -325,41 +360,45 @@ class MCPManagerViewProvider {
           tooltip.isTrusted = true;
           tooltip.supportThemeIcons = true;
 
+          // 第一段 = 主要來源（VS Code 宿主可能是 Copilot CLI），第二段 = 另一個來源（若有內容）
+          const primaryLabel = I18n.t('tooltip_antigravity_mcp', {
+            name: globalData.primarySourceName || McpConfigService.nativeSourceName,
+          });
+          const primarySection = {
+            name: primaryLabel,
+            stats,
+            enabledNames: globalData.primaryEnabledNames || globalData.agEnabledNames || [],
+            parseError: false,
+          };
+          const secondarySection = globalData.secondarySource
+            ? {
+                name: I18n.t('tooltip_antigravity_mcp', { name: globalData.secondarySource.name }),
+                stats: globalData.secondarySource.stats,
+                enabledNames: globalData.secondarySource.enabledNames,
+                parseError: globalData.secondarySource.parseError === true,
+              }
+            : null;
+
           if (isCline) {
             tooltip.appendMarkdown(`### $(plug) ${I18n.t('tooltip_mcp_dashboard')}\n\n`);
 
-            // 1. Antigravity 啟用狀態
-            const agIcon = agStats.enabled > 0 ? '$(pass-filled)' : '$(circle-slash)';
-            tooltip.appendMarkdown(`**${I18n.t('tooltip_antigravity_mcp', { name: nativeName })}** ${agIcon} \`${agStats.enabled} / ${agStats.total}\`\n\n`);
-            const agEnabled = globalData.agEnabledNames || [];
-            if (agEnabled.length > 0) {
-              agEnabled.forEach((name) => tooltip.appendMarkdown(`• \`${name}\`\n`));
-              if (agStats.disabled > 0) {
-                tooltip.appendMarkdown(`\n*(其餘 ${agStats.disabled} 個已停用)*\n`);
-              }
-            } else {
-              tooltip.appendMarkdown(`*${I18n.t('status_tooltip_none')}*\n`);
-            }
+            // 1. 主要來源啟用狀態
+            this._appendSourceTooltip(tooltip, primarySection);
 
-            tooltip.appendMarkdown(`\n---\n\n`);
+            // 2. 次要來源（Copilot CLI 或 VS Code 自身，視主要來源而定）
+            this._appendSourceTooltip(tooltip, secondarySection);
 
-            // 2. Cline 啟用狀態
-            const clineIcon = clineStats.enabled > 0 ? '$(pass-filled)' : '$(circle-slash)';
-            tooltip.appendMarkdown(`**${I18n.t('tooltip_cline_mcp')}** ${clineIcon} \`${clineStats.enabled} / ${clineStats.total}\`\n\n`);
-            const clineEnabled = globalData.clineEnabledNames || [];
-            if (clineEnabled.length > 0) {
-              clineEnabled.forEach((name) => tooltip.appendMarkdown(`• \`${name}\`\n`));
-              if (clineStats.disabled > 0) {
-                tooltip.appendMarkdown(`\n*(其餘 ${clineStats.disabled} 個已停用)*\n`);
-              }
-            } else {
-              tooltip.appendMarkdown(`*${I18n.t('status_tooltip_none')}*\n`);
-            }
-
-            tooltip.appendMarkdown(`\n---\n\n`);
+            // 3. Cline 啟用狀態
+            this._appendSourceTooltip(tooltip, {
+              name: I18n.t('tooltip_cline_mcp'),
+              stats: clineStats,
+              enabledNames: globalData.clineEnabledNames || [],
+            });
 
             const modeNames = {
-              antigravity: I18n.t('menu_mode_antigravity', { name: nativeName }),
+              antigravity: I18n.t('menu_mode_antigravity', {
+                name: globalData.primarySourceName || McpConfigService.nativeSourceName,
+              }),
               cline: I18n.t('menu_mode_cline'),
               both: I18n.t('menu_mode_both'),
             };
@@ -368,18 +407,8 @@ class MCPManagerViewProvider {
             tooltip.appendMarkdown(`$(info) ${I18n.t('tooltip_click_hint')}`);
           } else {
             tooltip.appendMarkdown(`### $(plug) ${I18n.t('status_tooltip_title', { env: globalData.envName })}\n\n`);
-            const agIcon = stats.enabled > 0 ? '$(pass-filled)' : '$(circle-slash)';
-            tooltip.appendMarkdown(`**${I18n.t('tooltip_antigravity_mcp', { name: nativeName })}** ${agIcon} \`${stats.enabled} / ${stats.total}\`\n\n`);
-            const agEnabled = globalData.agEnabledNames || [];
-            if (agEnabled.length > 0) {
-              agEnabled.forEach((name) => tooltip.appendMarkdown(`• \`${name}\`\n`));
-              if (stats.disabled > 0) {
-                tooltip.appendMarkdown(`\n*(其餘 ${stats.disabled} 個已停用)*\n`);
-              }
-            } else {
-              tooltip.appendMarkdown(`*${I18n.t('status_tooltip_none')}*\n`);
-            }
-            tooltip.appendMarkdown(`\n---\n\n`);
+            this._appendSourceTooltip(tooltip, primarySection);
+            this._appendSourceTooltip(tooltip, secondarySection);
             tooltip.appendMarkdown(`$(info) ${I18n.t('tooltip_click_hint')}`);
           }
 
@@ -590,6 +619,20 @@ async function activate(context) {
         context.subscriptions.push(clineWatcher);
       } catch (e) {}
     }
+
+    // Copilot CLI MCP 設定檔監聽（該來源僅在 VS Code 面板並列顯示）
+    if (McpConfigService.isVsCode && McpConfigService.copilotCliConfigPath) {
+      try {
+        const copilotPath = McpConfigService.copilotCliConfigPath;
+        const copilotWatcher = vscode.workspace.createFileSystemWatcher(
+          new vscode.RelativePattern(vscode.Uri.file(path.dirname(copilotPath)), path.basename(copilotPath))
+        );
+        copilotWatcher.onDidChange(() => provider.refreshWebviewData());
+        copilotWatcher.onDidCreate(() => provider.refreshWebviewData());
+        copilotWatcher.onDidDelete(() => provider.refreshWebviewData());
+        context.subscriptions.push(copilotWatcher);
+      } catch (e) {}
+    }
   }
 
   if (McpConfigService.isCursor) {
@@ -680,7 +723,7 @@ async function showQuickMenu(provider) {
       });
 
       const currentMode = McpConfigService.displayMode;
-      const nativeName = McpConfigService.nativeSourceName;
+      const nativeName = globalData.primarySourceName || McpConfigService.nativeSourceName;
       const modeLabels = {
         both: I18n.t('mode_both_label'),
         antigravity: I18n.t('mode_antigravity_label', { name: nativeName }),
@@ -737,6 +780,17 @@ async function showQuickMenu(provider) {
         description: globalData.clineConfigPath,
         action: 'openConfig',
         path: globalData.clineConfigPath,
+      });
+    }
+
+    // Copilot CLI 設定檔（唯讀來源；與 VS Code 的 mcp.json 是兩份不同檔案，
+    // 故即使在 VS Code 宿主也要獨立列出，否則使用者找不到面板上那些 CLI 條目的來源）
+    if (globalData.isCopilotCliAvailable && globalData.copilotCliConfigPath) {
+      items.push({
+        label: `$(file-code) ${I18n.t('menu_open_copilot_cli_config')}`,
+        description: globalData.copilotCliConfigPath,
+        action: 'openConfig',
+        path: globalData.copilotCliConfigPath,
       });
     }
 
@@ -821,22 +875,23 @@ async function promptChangeDisplayMode(provider) {
   const current = McpConfigService.displayMode;
 
   const globalData = await McpConfigService.getGlobalData();
-  const agStats = globalData.agStats || { enabled: 0, total: 0 };
+  // 「本 IDE」的標籤與數字一律跟隨主要來源（VS Code 宿主在 Copilot CLI 有伺服器時即為 CLI）
+  const stats = globalData.stats || { enabled: 0, total: 0 };
   const clineStats = globalData.clineStats || { enabled: 0, total: 0 };
 
-  const name = McpConfigService.nativeSourceName;
+  const name = globalData.primarySourceName || McpConfigService.nativeSourceName;
   const modes = [
     {
       label: I18n.t('mode_both_label'),
       description: I18n.t('mode_both_desc', { name }),
-      detail: `${name}: ${agStats.enabled}/${agStats.total} · Cline: ${clineStats.enabled}/${clineStats.total}`,
+      detail: `${name}: ${stats.enabled}/${stats.total} · Cline: ${clineStats.enabled}/${clineStats.total}`,
       value: 'both',
       picked: current === 'both',
     },
     {
       label: I18n.t('mode_antigravity_label', { name }),
       description: I18n.t('mode_antigravity_desc', { name }),
-      detail: `${name}: ${agStats.enabled}/${agStats.total}`,
+      detail: `${name}: ${stats.enabled}/${stats.total}`,
       value: 'antigravity',
       picked: current === 'antigravity',
     },

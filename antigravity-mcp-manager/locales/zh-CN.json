@@ -132,5 +132,11 @@
   "cline_status_enabled": "启用中",
   "cline_status_disabled": "已停用",
   "err_cline_view_only": "Cline 的 MCP 开关请在 Cline 自身的 MCP 面板操作；本套件对 Cline 仅提供查看",
-  "btn_lang_menu_title": "选择界面语言"
+  "btn_lang_menu_title": "选择界面语言",
+  "badge_source_copilot_cli": "Copilot CLI",
+  "source_copilot_cli": "Copilot CLI",
+  "source_short_copilot_cli": "Copilot",
+  "badge_source_copilot_cli_title": "此服务器来自 Copilot CLI 配置文件（~/.copilot/mcp-config.json，COPILOT_HOME 可覆盖）；此为只读来源，Copilot CLI 没有禁用状态，故一律计为启用",
+  "menu_open_copilot_cli_config": "打开 Copilot CLI MCP 配置文件",
+  "tooltip_copilot_cli_parse_error": "配置文件无法解析，请检查文件内容"
 }

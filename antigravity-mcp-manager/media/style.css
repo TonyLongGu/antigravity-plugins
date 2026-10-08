@@ -533,6 +533,12 @@ details[open] > summary .chevron {
   border: 1px solid rgba(249, 115, 22, 0.35);
 }
 
+.src-copilot-cli {
+  background: rgba(56, 189, 248, 0.16);
+  color: #a5e4ff;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
 .src-override-on {
   background: var(--accent-green-soft);
   color: #34d399;
