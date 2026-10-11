@@ -118,6 +118,23 @@ class McpDetectorService {
   }
 
   /**
+   * Copilot CLI 家目錄（COPILOT_HOME 可覆寫；空字串視為未設定）
+   */
+  static getCopilotHomeDir() {
+    const override = process.env.COPILOT_HOME;
+    if (typeof override === 'string' && override.trim()) return override.trim();
+    return path.join(this.getUserHome(), '.copilot');
+  }
+
+  /**
+   * Copilot CLI 的 MCP 設定檔；VS Code 啟用 `chat.mcp.discovery.enabled.copilot` 後，
+   * 這就是 VS Code 實際載入的那一份（不再是 <User>/mcp.json）
+   */
+  static getCopilotCliConfigPath() {
+    return path.join(this.getCopilotHomeDir(), 'mcp-config.json');
+  }
+
+  /**
    * 掃描 Cursor 使用者與工作區 MCP 設定（~/.cursor/mcp.json、{workspace}/.cursor/mcp.json）
    * 僅解析伺服器清單與啟動方式，不讀取 env / headers，避免把權杖帶進 UI。
    */
@@ -130,14 +147,81 @@ class McpDetectorService {
   }
 
   /**
-   * 掃描 VS Code 使用者與工作區 MCP 設定（%APPDATA%/Code/User/mcp.json、{workspace}/.vscode/mcp.json）
+   * 掃描 VS Code「實際會載入」的 MCP 伺服器
+   * VS Code 會依 `chat.mcp.discovery.enabled` 讀取外部工具的設定檔；本機已啟用 copilot，
+   * 也就是 VS Code 的 MCP 來源其實是 Copilot CLI 的 `~/.copilot/mcp-config.json`，
+   * `<User>/mcp.json` 反而不存在——只讀後者會讓清單整片空白。
+   * 故三處併列（<User>/mcp.json、{workspace}/.vscode/mcp.json、Copilot CLI），
+   * 同名時以 VS Code 自身來源優先（與 VS Code 內部的來源優先序一致）。
    */
   static async scanVsCodeMcpServers(workspaceFolders = []) {
-    return this._scanJsonMcpServers(
+    const own = await this._scanJsonMcpServers(
       path.join(this.getVsCodeUserDir(), 'mcp.json'),
       ['.vscode', 'mcp.json'],
       workspaceFolders
     );
+    const copilotCli = await this.scanCopilotCliMcpServers();
+    return this._mergeMcpServers([own, copilotCli]);
+  }
+
+  /** 跨來源合併：同名（不分大小寫）時以先出現者為準 */
+  static _mergeMcpServers(lists) {
+    const servers = [];
+    const seen = new Set();
+    for (const list of lists) {
+      for (const server of list || []) {
+        const key = (server.name || '').toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        servers.push(server);
+      }
+    }
+    return servers;
+  }
+
+  /**
+   * 掃描 Copilot CLI 的 MCP 設定（VS Code 啟用 discovery 後實際載入的那一份）
+   * 純檢視：只列名稱、範圍與啟動方式，不讀 env / headers（本功能不標注啟停狀態）。
+   */
+  static async scanCopilotCliMcpServers() {
+    const configPath = this.getCopilotCliConfigPath();
+    if (!fs.existsSync(configPath)) return [];
+
+    const servers = [];
+
+    try {
+      const content = await fsPromises.readFile(configPath, 'utf-8');
+      const parsed = this.parseJsonText(content);
+      const mcpServers = parsed.mcpServers || parsed.servers || {};
+      const serverKeys = Object.keys(mcpServers).sort((a, b) => this.naturalCompare(a, b));
+
+      for (const sName of serverKeys) {
+        const sCfg = mcpServers[sName] || {};
+        const url = typeof sCfg.url === 'string' ? sCfg.url : '';
+        const command = typeof sCfg.command === 'string' ? sCfg.command : '';
+        const args = Array.isArray(sCfg.args) ? sCfg.args.filter(a => typeof a === 'string') : [];
+        const type = typeof sCfg.type === 'string' ? sCfg.type.toLowerCase() : '';
+        const transport = (type === 'http' || type === 'sse' || url) ? 'http' : 'stdio';
+        // 設定檔的 tools 是白名單（通常 ["*"]）而非工具清單，故不計數也不列出
+        servers.push({
+          name: sName,
+          scope: 'Copilot CLI',
+          path: configPath,
+          toolCount: 0,
+          tools: [],
+          hasInstructions: false,
+          instructionsPath: null,
+          transport,
+          command,
+          args,
+          url,
+        });
+      }
+    } catch (err) {
+      console.error(`Error reading MCP config at ${configPath}:`, err);
+    }
+
+    return servers;
   }
 
   static async _scanJsonMcpServers(userConfigPath, workspaceRelParts, workspaceFolders = []) {
@@ -200,7 +284,6 @@ class McpDetectorService {
           command,
           args,
           url,
-          disabled: Boolean(sCfg.disabled)
         });
       }
     } catch (err) {
@@ -210,9 +293,6 @@ class McpDetectorService {
     return servers;
   }
 
-  /**
-   * 讀取特定 MCP Server 資料夾下的工具 JSON 定義
-   */
   static async _scanServerTools(serverPath) {
     const tools = [];
     try {

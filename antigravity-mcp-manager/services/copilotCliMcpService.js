@@ -92,13 +92,17 @@ class CopilotCliMcpService {
    * @param {Map<string, boolean>|Set<string>|null} agentHostStates
    *   agent host 的開關狀態（Map 的值 false = 停用；亦接受 Set = 停用清單）。
    *   Copilot CLI 設定檔本身沒有停用欄位，實際開關由 agent host 保管，故由呼叫端注入。
-   * @returns {Promise<{path:string, exists:boolean, parseError:boolean, servers:object, stats:{total:number,enabled:number,disabled:number}>}>}
+   * @param {(name:string)=>boolean|null} isDisabledByChat
+   *   「本機 chat」這一層（VS Code 讀外部設定檔的發現來源，識別碼為
+   *   `<來源>.<remoteAuthority>.<名稱>`）的停用查詢。該層與 agent host 互不相干，
+   *   兩者任一為停用即視為停用；未提供時不猜測。
+   * @returns {Promise<{path:string, exists:boolean, parseError:boolean, servers:object, stats:{total:number,enabled:number,disabled:number}, layers:{config:number,agentHost:number,discovery:number}>}>}
    */
-  static async getServers(agentHostStates = null) {
+  static async getServers(agentHostStates = null, isDisabledByChat = null) {
     const { path: configPath, exists, parseError, servers: rawServers } = await this.readRaw();
     const normalizedServers = {};
 
-    // Copilot CLI 設定檔本身沒有停用欄位，實際開關由 agent host 保管 → 由呼叫端注入，
+    // Copilot CLI 設定檔本身沒有停用欄位，實際開關由呼叫端注入（兩層各自獨立），
     // 未提供時只反映設定檔自身宣告（不猜測），避免同一件事有兩份不一致的計算
     const isDisabledByAgentHost = (name) => {
       if (!agentHostStates) return false;
@@ -107,11 +111,21 @@ class CopilotCliMcpService {
       if (typeof agentHostStates.get === 'function') return agentHostStates.get(name) === false;
       return false;
     };
+    // 本機 chat（發現來源）這一層：與 agent host 各自獨立，故分開判定
+    const isDisabledByLocalChat = (name) =>
+      typeof isDisabledByChat === 'function' && isDisabledByChat(name) === true;
+
+    // 各停用來源的顆數（僅計主因，供懸停視窗說明「是誰關的」）
+    const layers = { config: 0, agentHost: 0, discovery: 0 };
 
     for (const [name, server] of Object.entries(rawServers)) {
       const declaredDisabled = server.disabled === true;
       const agentHostDisabled = !declaredDisabled && isDisabledByAgentHost(name);
-      const isDisabled = declaredDisabled || agentHostDisabled;
+      const chatDisabled = !declaredDisabled && !agentHostDisabled && isDisabledByLocalChat(name);
+      const isDisabled = declaredDisabled || agentHostDisabled || chatDisabled;
+      // 停用來源（優先序：設定檔自身宣告 > agent host > 本機 chat）
+      const disabledBy = declaredDisabled ? 'config' : agentHostDisabled ? 'agentHost' : chatDisabled ? 'discovery' : '';
+      if (disabledBy) layers[disabledBy]++;
       normalizedServers[name] = {
         ...server,
         // 舊檔案若沿用 VS Code 的 local 型別，語意等同 stdio（VS Code 遷移器亦如此轉換）
@@ -122,8 +136,7 @@ class CopilotCliMcpService {
         serverUrl: server.serverUrl || server.url,
         disabled: isDisabled,
         effectiveDisabled: isDisabled,
-        // 停用來源：'config' = 設定檔自身宣告、'agentHost' = VS Code 的 MCP 開關
-        disabledBy: declaredDisabled ? 'config' : agentHostDisabled ? 'agentHost' : '',
+        disabledBy,
         workspaceOverride: 'inherit',
         source: 'copilotCli',
         scope: 'global',
@@ -136,6 +149,8 @@ class CopilotCliMcpService {
       parseError,
       servers: normalizedServers,
       stats: this.calculateStats(normalizedServers),
+      // 各停用來源的顆數（與 disabledBy 同一優先序，僅計主因）
+      layers,
     };
   }
 }

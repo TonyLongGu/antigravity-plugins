@@ -262,7 +262,7 @@ class MCPManagerViewProvider {
   /**
    * 追加單一 MCP 來源區段（名稱 + 統計 + 已啟用清單）
    * 主要來源與次要來源共用同一種呈現，避免兩段各寫一份而再度不一致
-   * @param {object|null} source { name, stats, enabledNames, parseError }
+   * @param {object|null} source { name, stats, enabledNames, parseError, note }
    */
   _appendSourceTooltip(tooltip, source) {
     if (!source) return;
@@ -284,6 +284,11 @@ class MCPManagerViewProvider {
       }
     } else {
       tooltip.appendMarkdown(`*${I18n.t('status_tooltip_none')}*\n`);
+    }
+
+    // 停用來源說明（僅 Copilot CLI 來源會帶）：該來源的開關分成兩層，講清楚「是誰關的」
+    if (source.note) {
+      tooltip.appendMarkdown(`\n*${source.note}*\n`);
     }
 
     tooltip.appendMarkdown(`\n---\n\n`);
@@ -361,6 +366,19 @@ class MCPManagerViewProvider {
           tooltip.supportThemeIcons = true;
 
           // 第一段 = 主要來源（VS Code 宿主可能是 Copilot CLI），第二段 = 另一個來源（若有內容）
+          // Copilot CLI 的停用來源說明（CLI 設定檔沒有停用欄位，開關分成 agent host
+          // 與本機 chat 兩層；只在確有停用時顯示，避免雜訊）
+          const cliLayers = globalData.copilotCliDisabledLayers || {};
+          const cliLayerParts = [];
+          if (cliLayers.agentHost > 0) {
+            cliLayerParts.push(I18n.t('tooltip_cli_layer_agent_host', { count: cliLayers.agentHost }));
+          }
+          if (cliLayers.discovery > 0) {
+            cliLayerParts.push(I18n.t('tooltip_cli_layer_chat', { count: cliLayers.discovery }));
+          }
+          const cliSourceNote = cliLayerParts.length
+            ? I18n.t('tooltip_cli_disable_layers', { layers: cliLayerParts.join(' · ') })
+            : '';
           const primaryLabel = I18n.t('tooltip_antigravity_mcp', {
             name: globalData.primarySourceName || McpConfigService.nativeSourceName,
           });
@@ -369,6 +387,7 @@ class MCPManagerViewProvider {
             stats,
             enabledNames: globalData.primaryEnabledNames || globalData.agEnabledNames || [],
             parseError: false,
+            note: globalData.primaryIsCopilotCli ? cliSourceNote : '',
           };
           const secondarySection = globalData.secondarySource
             ? {
@@ -376,6 +395,7 @@ class MCPManagerViewProvider {
                 stats: globalData.secondarySource.stats,
                 enabledNames: globalData.secondarySource.enabledNames,
                 parseError: globalData.secondarySource.parseError === true,
+                note: globalData.primaryIsCopilotCli ? '' : cliSourceNote,
               }
             : null;
 

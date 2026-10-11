@@ -349,12 +349,13 @@ class McpConfigService {
    * 讀取 Copilot CLI 的 MCP 摘要（純檢視）
    * 僅在 VS Code 分支使用：Copilot CLI 與 VS Code 同屬 Copilot 生態，
    * 且 Copilot CLI 設定檔的使用者就是這個宿主的使用者。
-   * 停用判定一律由服務層完成（傳入 agent host 開關狀態），呼叫端不再自行覆寫，
+   * 停用判定一律由服務層完成（傳入 agent host 開關狀態與本機 chat 開關查詢），呼叫端不再自行覆寫，
    * 避免同一件事有兩份實作而各自漂移。
    * @param {Map<string,boolean>} agentHostStates agent host 的開關狀態（工作區覆寫優先）
+   * @param {(name:string)=>boolean|null} isDisabledByChat 本機 chat（發現來源）這一層的停用查詢
    */
-  static async readCopilotCliSummary(agentHostStates = null) {
-    const data = await CopilotCliMcpService.getServers(agentHostStates);
+  static async readCopilotCliSummary(agentHostStates = null, isDisabledByChat = null) {
+    const data = await CopilotCliMcpService.getServers(agentHostStates, isDisabledByChat);
     const servers = data.servers || {};
     const keys = Object.keys(servers);
     const stats = data.stats || { total: keys.length, enabled: keys.length, disabled: 0 };
@@ -365,6 +366,7 @@ class McpConfigService {
       copilotCliServers: servers,
       copilotCliStats: stats,
       copilotCliConfigPath: data.path || '',
+      copilotCliDisabledLayers: data.layers || { config: 0, agentHost: 0, discovery: 0 },
       copilotCliEnabledNames: keys.filter((name) => servers[name].disabled !== true),
     };
   }
@@ -619,11 +621,15 @@ class McpConfigService {
     // Copilot CLI（純檢視）：與 VS Code 來源並列於同一份清單，以來源徽章區分
     // 同名衝突時以 VS Code 來源為準（與 VS Code 內部的來源優先序一致），
     // CLI 條目改用帶前綴的內部鍵，顯示名稱仍為原始名稱。
-    // 開關狀態取自 agent host（customizationEnablement）：Copilot CLI 設定檔本身沒有停用欄位，
-    // 使用者在 VS Code 的 MCP 清單切換開關時寫入的正是 agent host，故必須以它為準。
+    // 開關狀態取自兩層且互不相干（CLI 設定檔本身沒有停用欄位，故以兩層聯集為準，
+    // 任一層停用即視為停用）：agent host（customizationEnablement）與本機 chat 的發現來源
+    // （state.vscdb 的 mcp.enablement，id 形如 `copilot.<remoteAuthority>.<名稱>`）。
     const workspaceUri = vscode?.workspace?.workspaceFolders?.[0]?.uri?.toString?.() || '';
     const agentHostState = await AgentHostMcpService.readState(workspaceUri);
     const agentHostStates = AgentHostMcpService.resolveStates(agentHostState);
+    // 本機 chat 這一層（VS Code 讀外部設定檔的發現來源）與 agent host 各自獨立，
+    // 故以查詢函式注入，由服務層判定兩層聯集
+    const isDisabledByChat = VscodeEnablementService.discoveryDisabledLookup(enablement);
 
     const {
       isCopilotCliAvailable,
@@ -632,7 +638,8 @@ class McpConfigService {
       copilotCliStats,
       copilotCliConfigPath,
       copilotCliEnabledNames,
-    } = await this.readCopilotCliSummary(agentHostStates);
+      copilotCliDisabledLayers,
+    } = await this.readCopilotCliSummary(agentHostStates, isDisabledByChat);
 
     for (const [name, server] of Object.entries(copilotCliServers)) {
       const hasNameConflict = Object.prototype.hasOwnProperty.call(normalizedServers, name);
@@ -714,6 +721,7 @@ class McpConfigService {
       agentHostEnablementPath: agentHostState.path || '',
       agentHostEnablementAvailable: agentHostState.exists === true,
       copilotCliStats,
+      copilotCliDisabledLayers,
       copilotCliEnabledNames,
       copilotCliServers,
       // 主要來源（狀態列與懸停視窗第一段），VS Code 宿主可能是 Copilot CLI

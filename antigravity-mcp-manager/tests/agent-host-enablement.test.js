@@ -6,6 +6,7 @@
 //     2. enablement 鍵的命名空間（mcpServers#<名稱> vs <pluginSource>#mcp=<名稱>）
 //     3. 主要來源（狀態列）的判定順序
 //     4. VS Code 來源與 CLI 來源並列時的同名衝突處理
+//     5. 本機 chat（發現來源）這一層的 id 命名空間（copilot.<remoteAuthority>.<名稱>）與兩層聯集
 //   執行：node tests/agent-host-enablement.test.js
 //   離開碼：0 = 全數通過、1 = 有失敗
 //   設計：所有夾具都在系統暫存目錄，測試結束自動清除，不觸碰真實設定檔
@@ -39,9 +40,16 @@ const CLI_NAMES = Object.keys(CLI_SERVERS);
 const copilotConfigPath = path.join(COPILOT_HOME, 'mcp-config.json');
 const agentHostStoragePath = path.join(USER_DIR, 'globalStorage', 'agent-host-storage.json');
 const userMcpPath = path.join(USER_DIR, 'mcp.json');
+const stateDbPath = path.join(USER_DIR, "globalStorage", "state.vscdb");
 
 function writeCli(servers) {
   fs.writeFileSync(copilotConfigPath, JSON.stringify({ mcpServers: servers }), 'utf-8');
+}
+
+// 偽造 state.vscdb：只要含 mcp.enablement 鍵與其後的 JSON 陣列即可
+// （node:sqlite 打不開非 SQLite 檔時會退回檔頭掃描，故不需真的建立資料庫）
+function writeEnablementDb(entries) {
+  fs.writeFileSync(stateDbPath, JSON.stringify({ "mcp.enablement": entries }), "utf-8");
 }
 
 function writeEnablement(global, extra = {}) {
@@ -79,9 +87,20 @@ const AgentHostService = require(path.join(EXT_ROOT, 'services', 'agentHostMcpSe
 
 // ── 測試框架 ────────────────────────────────────────────────────────────────
 const results = [];
+const pendingChecks = [];
 const check = (label, fn) => {
   try {
-    fn();
+      const ret = fn();
+      // 非同步斷言必須等它落地，否則失敗只會變成 unhandled rejection 而被誤判為通過
+      if (ret && typeof ret.then === "function") {
+        const entry = ["PASS", label];
+        results.push(entry);
+        pendingChecks.push(ret.then(
+          () => {},
+          (e) => { entry[0] = "FAIL"; entry[1] = label + " :: " + e.message; }
+        ));
+        return;
+      }
     results.push(['PASS', label]);
   } catch (e) {
     results.push(['FAIL', `${label} :: ${e.message}`]);
@@ -263,7 +282,69 @@ async function main() {
     assert.ok(typeof s1 === 'string' && s1.includes(':'), '簽章應含 mtime:size 片段');
   });
 
+  // ═══ G. 本機 chat（發現來源）這一層 ════════════════════════════════════════
+  // VS Code 讀 ~/.copilot/mcp-config.json 時（chat.mcp.discovery.enabled.copilot），
+  // 伺服器定義的識別碼為 copilot.<remoteAuthority>.<名稱>，開關記在 state.vscdb 的
+  // mcp.enablement；該層與 agent host 各自獨立，兩者任一停用即視為停用。
+  // 註：夾具一律在 check 之外先寫好、斷言同步執行，避免非同步競態造成誤判。
+  fs.rmSync(userMcpPath, { force: true });
+  writeEnablement({});
+  writeEnablementDb([
+    ['copilot.null.github', false],
+    ['copilot.ssh-remote+devbox.pollo', false],
+  ]);
+  const g1 = await McpConfigService.getGlobalData('both');
+  check('G1 發現來源 id copilot.<remoteAuthority>.<名稱> 納入停用判定', () => {
+    assert.deepStrictEqual(g1.copilotCliStats, { total: 6, enabled: 4, disabled: 2 },
+      '實際 ' + JSON.stringify(g1.copilotCliStats));
+    assert.strictEqual(g1.stats.enabled, 4, '狀態列數字也應反映本機 chat 這一層');
+    assert.strictEqual(g1.config.mcpServers.github.disabledBy, 'discovery',
+      '實際 ' + g1.config.mcpServers.github.disabledBy);
+    assert.strictEqual(g1.config.mcpServers.pollo.disabled, true, '遠端 authority 的識別碼也應命中');
+    assert.deepStrictEqual(g1.copilotCliDisabledLayers, { config: 0, agentHost: 0, discovery: 2 },
+      '實際 ' + JSON.stringify(g1.copilotCliDisabledLayers));
+  });
+  writeEnablement({ 'mcpServers#unityMCP': false });
+  const g2 = await McpConfigService.getGlobalData('both');
+  check('G2 兩層各自獨立：任一層停用即停用，並回報主要停用來源', () => {
+    assert.strictEqual(g2.config.mcpServers.unityMCP.disabledBy, 'agentHost',
+      '實際 ' + g2.config.mcpServers.unityMCP.disabledBy);
+    assert.strictEqual(g2.config.mcpServers.github.disabledBy, 'discovery',
+      '實際 ' + g2.config.mcpServers.github.disabledBy);
+    assert.deepStrictEqual(g2.copilotCliStats, { total: 6, enabled: 3, disabled: 3 },
+      '實際 ' + JSON.stringify(g2.copilotCliStats));
+    assert.deepStrictEqual(g2.copilotCliDisabledLayers, { config: 0, agentHost: 1, discovery: 2 },
+      '實際 ' + JSON.stringify(g2.copilotCliDisabledLayers));
+  });
+  writeEnablement({});
+  writeEnablementDb([
+    ['mcp.config.usrlocal.github', false],
+    ['claude-desktop.null.pollo', false],
+    ['copilot.null.githubx', false],
+  ]);
+  const g3 = await McpConfigService.getGlobalData('both');
+  check('G3 其他命名空間的同名鍵不影響 CLI 條目', () => {
+    assert.deepStrictEqual(g3.copilotCliStats, { total: 6, enabled: 6, disabled: 0 },
+      '實際 ' + JSON.stringify(g3.copilotCliStats));
+    assert.deepStrictEqual(g3.copilotCliDisabledLayers, { config: 0, agentHost: 0, discovery: 0 },
+      '實際 ' + JSON.stringify(g3.copilotCliDisabledLayers));
+  });
+
+  // 負對照：未注入本機 chat 這一層時，服務層不得自行推測停用（否則 G1 可能因別的原因而通過）
+  writeEnablementDb([['copilot.null.github', false]]);
+  const g4 = await CopilotCliService.getServers(
+    AgentHostService.resolveStates(await AgentHostService.readState())
+  );
+  check('G4 未注入本機 chat 這一層時不自行推測停用（負對照）', () => {
+    assert.strictEqual(g4.servers.github.disabled, false, '未注入時 github 應維持啟用');
+    assert.deepStrictEqual(g4.layers, { config: 0, agentHost: 0, discovery: 0 },
+      '實際 ' + JSON.stringify(g4.layers));
+  });
+
   // ── 收尾 ─────────────────────────────────────────────────────────────────
+  // 等所有非同步斷言落地後再彙整結果（否則失敗會被誤判為通過）
+  await Promise.all(pendingChecks);
+
   const failed = results.filter((r) => r[0] === 'FAIL');
   for (const [status, label] of results) {
     console.log(`${status}  ${label}`);

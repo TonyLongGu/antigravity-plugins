@@ -30,6 +30,15 @@ const ID_USER = 'mcp.config.usrlocal';
 const ID_WORKSPACE_FOLDER = 'mcp.config.ws';
 const ID_WORKSPACE_ROOT_FILE = 'workspace-dot-mcp';
 
+// 發現來源（外部設定轉接器）的來源識別碼
+//   VS Code 依 `chat.mcp.discovery.enabled` 決定要不要讀其他工具的 MCP 設定檔，
+//   讀進來的伺服器開關同樣記在 mcp.enablement，但識別碼是
+//   `<discoverySource>.<remoteAuthority>.<名稱>`（本機非遠端時 remoteAuthority 為 null）。
+//   例：Copilot CLI 來源（~/.copilot/mcp-config.json）→ `copilot.null.3dsmax-mcp`
+//   依據：反編譯 workbench.desktop.main.js —— 轉接器 `id = \`${source}.${remoteAuthority}\``，
+//         伺服器定義 `id = \`${adapterId}.${name}\``（同一命名空間的伺服器才可互相比對）
+const DISCOVERY_SOURCE_COPILOT = 'copilot';
+
 // 開關狀態（語意層）
 const OVERRIDE_INHERIT = 'inherit';
 const OVERRIDE_ON = 'on';
@@ -116,6 +125,61 @@ class VscodeEnablementService {
       if (key.endsWith(suffix) || key.endsWith(slashSuffix)) return key;
     }
     return fallbackId;
+  }
+
+  // ── 發現來源（外部設定轉接器）──────────────────────────────────────────────
+
+  /**
+   * 在既有對照表中找出「發現來源」的識別碼
+   * 這類伺服器由 VS Code 讀取外部工具設定檔而產生（本機即 `~/.copilot/mcp-config.json`），
+   * 其開關與 profile mcp.json 的伺服器同存於 mcp.enablement，但命名空間不同，
+   * 故不可用 buildServerId() 推測，必須以 `<來源>.<remoteAuthority>.<名稱>` 比對。
+   * 只比對指定的來源：其他轉接器（例 claude-desktop）的同名伺服器屬不同實體，
+   * 拿來判定會像 plugin 鍵一樣跨來源誤停用；含 `/` 的鍵亦排除（那是擴充提供者的命名空間）。
+   * @returns {string} 命中的識別碼；找不到回傳空字串
+   */
+  static resolveDiscoveryId(map, name, discoverySource = DISCOVERY_SOURCE_COPILOT) {
+    if (!map || !name || !discoverySource) return '';
+    const prefix = `${discoverySource}.`;
+    const suffix = `.${name}`;
+    for (const key of map.keys()) {
+      if (!key.startsWith(prefix) || !key.endsWith(suffix) || key.includes('/')) continue;
+      // 前綴與名稱之間必須還有 remoteAuthority 這一段（本機非遠端時為 null）
+      if (key.length > prefix.length + suffix.length) return key;
+    }
+    return '';
+  }
+
+  /**
+   * 解析發現來源這一層的停用狀態（工作區覆寫優先於全域，語意與 resolve() 一致）
+   * @param {object} state readState() 的結果
+   * @param {string} name 伺服器名稱
+   * @returns {{profileId:string, workspaceId:string, id:string, found:boolean, disabled:boolean}}
+   */
+  static resolveDiscovered(state, name, discoverySource = DISCOVERY_SOURCE_COPILOT) {
+    const profileId = this.resolveDiscoveryId(state && state.profile, name, discoverySource);
+    const workspaceId = this.resolveDiscoveryId(state && state.workspace, name, discoverySource);
+    const profileDisabled = profileId ? state.profile.get(profileId) === false : false;
+    const workspaceDisabled = workspaceId ? state.workspace.get(workspaceId) === false : profileDisabled;
+    const id = workspaceId || profileId;
+    return {
+      profileId,
+      workspaceId,
+      id,
+      found: !!id,
+      disabled: id ? (workspaceId ? workspaceDisabled : profileDisabled) : false,
+    };
+  }
+
+  /**
+   * 產生「發現來源這一層是否已停用」的查詢函式
+   * 供呼叫端注入 Copilot CLI 來源：CLI 設定檔沒有停用欄位，開關分成 agent host
+   * 與本機 chat（發現來源）兩層且互不相干，兩者任一為停用即視為停用。
+   * @returns {(name:string)=>boolean}
+   */
+  static discoveryDisabledLookup(state, discoverySource = DISCOVERY_SOURCE_COPILOT) {
+    if (!state) return () => false;
+    return (name) => this.resolveDiscovered(state, name, discoverySource).disabled;
   }
 
   // ── 讀取 ───────────────────────────────────────────────────────────────────

@@ -742,13 +742,11 @@
       dom.listMcp.innerHTML = mcpServers.map(s => {
         const scopeShort = (s.scope || '').replace(/Global MCP|MCP Server/gi, 'Global').replace(/Workspace \(([^)]+)\)/, '$1');
         const hint = s.url || [s.command, ...(s.args || [])].filter(Boolean).join(' ');
-        const disabledClass = s.disabled ? ' is-disabled' : '';
         const invokedClass = s.isInvoked ? ' highlight-invoked' : '';
         return `
-          <div class="mcp-row-item${invokedClass}${disabledClass}" title="${escapeHtml(hint)}">
+          <div class="mcp-row-item${invokedClass}" title="${escapeHtml(hint)}">
             <div class="mcp-info-left">
               <span class="mcp-name">${escapeHtml(s.name)}</span>
-              ${s.disabled ? `<span class="mcp-scope-tag">${escapeHtml(I18nModule.t('mcp_disabled'))}</span>` : ''}
             </div>
             <div class="mcp-actions-right">
               ${s.instructionsPath ? `<button class="item-btn btn-open-file" data-path="${escapeHtml(s.instructionsPath)}">${I18nModule.t('btn_open_file')}</button>` : ''}

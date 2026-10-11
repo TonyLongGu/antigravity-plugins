@@ -61,15 +61,21 @@ VS Code 的 MCP 伺服器與 Copilot CLI（Agent Host）的 MCP 伺服器是**�
   3. 兩邊都沒有啟用中的伺服器時，只要 CLI 有設定檔就仍以 CLI 為主（`0/6` 比 `0/0` 有資訊量：讓你知道伺服器是被停用而非不存在）
 - 兩份設定檔都有伺服器時，另一個來源會以第二段列出，資訊不會被隱藏。
 - **開關只能由 VS Code 的 UI 切換**：實測 `agent-host-storage.json` 由 VS Code 自身持有，直接改檔會在數分鐘內被它覆寫回原值（2026-10-08 實證：寫入後 3 分鐘被還原）。要啟停請用 MCP 伺服器清單的開關；面板會在約 1.5 秒內跟上。
-- **開關狀態來自 agent host（不是 CLI 檔案）**：VS Code 的 MCP 開關寫在
-  `<User>/globalStorage/agent-host-storage.json` 的 `customizationEnablement.global["mcpServers#<名稱>"]`
-  （`false` = 已停用）；Copilot CLI 設定檔本身沒有停用欄位。面板會讀這份狀態，因此你在 VS Code 的 MCP 清單切換開關後，約 1.5 秒內就會反映（同一輪輪詢也涵蓋 `state.vscdb`）。
-  - 工作區層覆寫（`workingDirectories[<工作區 URI>]`）優先於全域，與 agent host 的解析順序一致。
-  - 停用時卡片會標記 `disabledBy: agentHost`，與「設定檔自身宣告停用」區分。
+- **開關狀態來自兩層，兩者任一停用即視為停用**（CLI 設定檔本身沒有停用欄位）：
+  1. **agent host**：`<User>/globalStorage/agent-host-storage.json` 的
+     `customizationEnablement.global["mcpServers#<名稱>"]`（`false` = 已停用）。
+     工作區層覆寫（`workingDirectories[<工作區 URI>]`）優先於全域，與 agent host 的解析順序一致。
+  2. **本機 chat 的發現來源**：`<User>/globalStorage/state.vscdb` 的 `mcp.enablement`，識別碼為
+     `copilot.<remoteAuthority>.<名稱>`（本機非遠端時即 `copilot.null.<名稱>`；`false` = 已停用）。
+     這是 VS Code 以 `chat.mcp.discovery.enabled.copilot` 讀 `~/.copilot/mcp-config.json` 時產生的命名空間，
+     與 agent host **各自獨立**；只讀 agent host 會漏掉你在 Copilot／MCP 清單關掉的伺服器
+     （2026-10-11 實證：20 顆全關、狀態列卻仍顯示 `15/20`，原因就是漏了這一層）。
+- 面板會讀這兩份狀態，因此在 VS Code 的 MCP 清單切換開關後約 1.5 秒內就會反映（同一輪輪詢涵蓋兩者）。
+- 停用時卡片會標記 `disabledBy`：`agentHost`（agent host 關的）、`discovery`（本機 chat 清單關的）或 `config`（設定檔自身宣告），優先序同此；懸停視窗會列出各層關了幾顆。
 - 路徑推導：`COPILOT_HOME` 環境變數優先，否則 `~/.copilot/mcp-config.json`（與 VS Code 內建 MCP 遷移器的解析一致）。
 - 鍵名為 `mcpServers`（**不是** VS Code 的 `servers`）；型別為 `stdio` / `http`，舊檔案的 `local` 視同 `stdio`。
 - **同名衝突**：同名時以 VS Code 來源優先，CLI 條目改用內部鍵 `copilot-cli:<名稱>`，畫面仍顯示原始名稱；備註（`mcp_notes.json`）兩種鍵都對得上。
-- **Copilot CLI 沒有停用狀態**（不像 VS Code 有 `state.vscdb` 的 `mcp.enablement`），故 CLI 條目一律計為啟用、不提供開關；只有設定檔自行宣告 `disabled` 時才會顯示為停用。
+- **Copilot CLI 設定檔沒有停用欄位**，啟停一律由上面那兩層保管；面板只讀不寫（`getServers()` 未注入開關狀態時不猜測，一律視為啟用）。
 - 設定檔存在但無法解析時，懸停視窗會標示「設定檔無法解析」，而不是靜默顯示 0 個伺服器。
 - 此來源只在 VS Code 宿主顯示；Antigravity 與 Cursor 的面板維持原樣（主要來源仍為各自的 `mcp_config.json` / `mcp.json`）。
 - `~/.copilot/mcp-config.json` 有檔案監聽，內容變更時會即時更新。
@@ -153,8 +159,8 @@ node tests/agent-host-enablement.test.js
 ```
 
 - 離開碼 `0` = 全數通過、`1` = 有失敗（可直接接 CI 或 hook）。
-- 涵蓋 20 項斷言：enablement 鍵的命名空間（`mcpServers#<名稱>` 與 `<pluginSource>#mcp=<名稱>` 的區分，避免跨來源誤停用）、停用狀態以 agent host 為準、主要來源判定順序、工作區覆寫、設定檔自身宣告、VS Code 與 CLI 兩來源並列的同名衝突、以及簽章是否涵蓋開關檔（輪詢即時性）。
-- 負對照已驗證：把「plugin 前綴過濾」或「主要來源規則」還原成舊寫法時，對應斷言會失敗。
+- 涵蓋 24 項斷言：enablement 鍵的命名空間（`mcpServers#<名稱>` 與 `<pluginSource>#mcp=<名稱>` 的區分，避免跨來源誤停用）、停用狀態以 agent host 與本機 chat（發現來源）**兩層聯集**為準、發現來源識別碼 `copilot.<remoteAuthority>.<名稱>` 的比對（含遠端 authority、其他命名空間不誤傷）、主要來源判定順序、工作區覆寫、設定檔自身宣告、VS Code 與 CLI 兩來源並列的同名衝突、以及簽章是否涵蓋開關檔（輪詢即時性）。
+- 負對照已驗證：把「plugin 前綴過濾」、「主要來源規則」或「本機 chat 這一層的注入」還原成舊寫法時，對應斷言會失敗（G3／G4 即為此而設）。
 
 ---
 

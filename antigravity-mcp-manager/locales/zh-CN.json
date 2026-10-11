@@ -112,6 +112,9 @@
   "tooltip_cline_mcp": "Cline MCP",
   "tooltip_current_display": "目前显示范围",
   "tooltip_click_hint": "点击状态列开启快捷操作选单",
+  "tooltip_cli_disable_layers": "禁用来源：{layers}",
+  "tooltip_cli_layer_agent_host": "Agent Host {count} 颗",
+  "tooltip_cli_layer_chat": "本机聊天 {count} 颗",
   "badge_source_cline": "Cline",
   "menu_toggle_display_mode": "切换状态列显示方式",
   "menu_toggle_display_mode_desc": "选择状态列呈现 {name}、Cline 或两者",
@@ -136,7 +139,7 @@
   "badge_source_copilot_cli": "Copilot CLI",
   "source_copilot_cli": "Copilot CLI",
   "source_short_copilot_cli": "Copilot",
-  "badge_source_copilot_cli_title": "此服务器来自 Copilot CLI 配置文件（~/.copilot/mcp-config.json，COPILOT_HOME 可覆盖）；此为只读来源，Copilot CLI 没有禁用状态，故一律计为启用",
+  "badge_source_copilot_cli_title": "此服务器来自 Copilot CLI 配置文件（~/.copilot/mcp-config.json，COPILOT_HOME 可覆盖）；该配置文件没有禁用字段，启停状态取自 VS Code 的两层开关（agent host 与本机聊天清单），任一层禁用即计为禁用",
   "menu_open_copilot_cli_config": "打开 Copilot CLI MCP 配置文件",
   "tooltip_copilot_cli_parse_error": "配置文件无法解析，请检查文件内容"
 }

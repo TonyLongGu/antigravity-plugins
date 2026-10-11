@@ -1055,24 +1055,11 @@ details[open] > summary .subgroup-chevron {
   text-overflow: ellipsis;
 }
 
-.mcp-scope-tag {
-  font-size: 10.5px;
-  color: #a8a8a8;
-  background: rgba(255, 255, 255, 0.04);
-  padding: 0 4px;
-  border-radius: 2px;
-  white-space: nowrap;
-}
-
 .mcp-actions-right {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
   flex-shrink: 0;
-}
-
-.mcp-row-item.is-disabled {
-  opacity: 0.55;
 }
 
 /* 按鈕樣式 */

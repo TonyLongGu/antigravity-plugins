@@ -65,7 +65,6 @@
       btn_open_mcp_dir_title_vscode: '開啟 VS Code MCP 設定檔 (%APPDATA%/Code/User/mcp.json)',
       mcp_transport_stdio: 'stdio',
       mcp_transport_http: 'HTTP',
-      mcp_disabled: '停用',
 
       // 卡片子項目通用動作按鈕
       btn_copy_name: '複製名稱',
@@ -170,7 +169,6 @@
       btn_open_mcp_dir_title_vscode: '打开 VS Code MCP 配置文件 (%APPDATA%/Code/User/mcp.json)',
       mcp_transport_stdio: 'stdio',
       mcp_transport_http: 'HTTP',
-      mcp_disabled: '禁用',
 
       btn_copy_name: '复制名称',
       btn_copy_rule_name_title: '复制规范名称：{name}',
@@ -277,7 +275,6 @@
       btn_open_mcp_dir_title_vscode: 'Open VS Code MCP config (%APPDATA%/Code/User/mcp.json)',
       mcp_transport_stdio: 'stdio',
       mcp_transport_http: 'HTTP',
-      mcp_disabled: 'Disabled',
 
       // Item Actions
       btn_copy_name: 'Copy Name',

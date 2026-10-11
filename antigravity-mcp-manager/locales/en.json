@@ -112,6 +112,9 @@
   "tooltip_cline_mcp": "Cline MCP",
   "tooltip_current_display": "Current Scope",
   "tooltip_click_hint": "Click status bar to open quick actions menu",
+  "tooltip_cli_disable_layers": "Disabled by: {layers}",
+  "tooltip_cli_layer_agent_host": "Agent Host {count}",
+  "tooltip_cli_layer_chat": "local chat {count}",
   "badge_source_cline": "Cline",
   "menu_toggle_display_mode": "Change Status Bar Display Mode",
   "menu_toggle_display_mode_desc": "Configure whether status bar shows {name}, Cline, or both",
@@ -136,7 +139,7 @@
   "badge_source_copilot_cli": "Copilot CLI",
   "source_copilot_cli": "Copilot CLI",
   "source_short_copilot_cli": "Copilot",
-  "badge_source_copilot_cli_title": "This server comes from the Copilot CLI config (~/.copilot/mcp-config.json, overridable with COPILOT_HOME); it is a read-only source and Copilot CLI has no disable state, so every entry counts as enabled",
+  "badge_source_copilot_cli_title": "This server comes from the Copilot CLI config (~/.copilot/mcp-config.json, overridable with COPILOT_HOME); that file has no disable field, so the state comes from the two VS Code switch layers (agent host and the local chat list) - disabled if either says so",
   "menu_open_copilot_cli_config": "Open Copilot CLI MCP Config",
   "tooltip_copilot_cli_parse_error": "Config file could not be parsed; check its contents"
 }

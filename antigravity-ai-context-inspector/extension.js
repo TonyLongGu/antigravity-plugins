@@ -204,6 +204,13 @@ class AiContextViewProvider {
               this.openFileInEditor(vscodeMcpFile);
               break;
             }
+            // 沒有 mcp.json 時多半代表 VS Code 改以外部設定檔為來源（chat.mcp.discovery.enabled），
+            // 此時開 Copilot CLI 那一份比開資料夾有用
+            const copilotCliFile = McpDetectorService.getCopilotCliConfigPath();
+            if (fs.existsSync(copilotCliFile)) {
+              this.openFileInEditor(copilotCliFile);
+              break;
+            }
             const vscodeUserDir = McpDetectorService.getVsCodeUserDir();
             if (!fs.existsSync(vscodeUserDir)) {
               fs.mkdirSync(vscodeUserDir, { recursive: true });
