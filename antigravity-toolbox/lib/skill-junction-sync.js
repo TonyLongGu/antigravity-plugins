@@ -119,13 +119,31 @@ function createJunction(destPath, sourcePath) {
   }
 }
 
-function collectSourceSkills(enabledFolders, wsDir) {
+/**
+ * 掃描啟用中專案的 Skills 目錄，收集所有可連結的來源技能
+ * @param {Array<{path?: string, name?: string}>} enabledFolders
+ * @param {string} wsDir 工作區目錄 (解析相對路徑用)
+ * @param {{ excludedCanon?: Set<string>, stats?: { excludedProjects: string[] } }} [options]
+ *   - excludedCanon: 需排除的專案路徑集合 (小寫正規化)，例如「首專案」
+ *   - stats: 收集排除結果的統計物件 (供介面提示使用)
+ * @returns {Array<{ sourcePath: string, baseName: string, projectName: string }>}
+ */
+function collectSourceSkills(enabledFolders, wsDir, options = {}) {
+  const excludedCanon = options.excludedCanon || null;
+  const stats = options.stats || null;
   const sources = [];
   const seen = new Set();
 
   for (const folder of enabledFolders || []) {
     const projFull = resolveFullPath(folder.path || '', wsDir);
     if (!projFull || !isExistingDirectory(projFull)) continue;
+
+    // 排除指定專案 (如首專案)：僅略過來源收集，其既有連結會被視為過期而解除
+    if (excludedCanon && excludedCanon.has(projFull.toLowerCase())) {
+      if (stats) stats.excludedProjects.push(folder.name || path.basename(projFull));
+      continue;
+    }
+
     const projName = folder.name || path.basename(projFull);
 
     for (const subRel of SKILL_SUB_PATHS) {
@@ -162,13 +180,24 @@ function collectSourceSkills(enabledFolders, wsDir) {
 
 /**
  * 依啟用專案比對全域 Skills Junction
- * @returns {{ added: number, removed: number, kept: number, failed: number, protected: number, skipped?: string }}
+ * @param {Array<{path?: string, name?: string}>} enabledFolders 啟用中的專案清單
+ * @param {string} wsDir 工作區目錄 (解析相對路徑用)
+ * @param {{ dryRun?: boolean, globalDir?: string, excludePaths?: string[] }} [options]
+ *   - excludePaths: 不納入同步來源的專案路徑 (例如首專案)；其既有連結會被一併解除
+ * @returns {{ added: number, removed: number, kept: number, failed: number, protected: number, excludedProjects: string[], skipped?: string }}
  */
 function syncWorkspaceSkills(enabledFolders, wsDir, options = {}) {
   const dryRun = !!options.dryRun;
   const globalDir = options.globalDir
     ? resolveFullPath(options.globalDir)
     : getDefaultGlobalSkillsDir();
+
+  const excludedCanon = new Set(
+    (Array.isArray(options.excludePaths) ? options.excludePaths : [])
+      .map((p) => resolveFullPath(p || '', wsDir).toLowerCase())
+      .filter(Boolean)
+  );
+  const collectStats = { excludedProjects: [] };
 
   if (!Array.isArray(enabledFolders) || enabledFolders.length === 0) {
     return {
@@ -177,11 +206,15 @@ function syncWorkspaceSkills(enabledFolders, wsDir, options = {}) {
       kept: 0,
       failed: 0,
       protected: 0,
+      excludedProjects: [],
       skipped: 'empty-enabled',
     };
   }
 
-  const sourceSkills = collectSourceSkills(enabledFolders, wsDir);
+  const sourceSkills = collectSourceSkills(enabledFolders, wsDir, {
+    excludedCanon,
+    stats: collectStats,
+  });
   if (!dryRun) ensureDir(globalDir);
 
   const existingLinks = [];
@@ -286,6 +319,7 @@ function syncWorkspaceSkills(enabledFolders, wsDir, options = {}) {
     kept,
     failed,
     protected: protectedNames.size,
+    excludedProjects: collectStats.excludedProjects,
     plan,
     globalDir,
   };

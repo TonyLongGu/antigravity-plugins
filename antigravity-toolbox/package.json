@@ -47,6 +47,11 @@
 					"type": "boolean",
 					"default": false,
 					"description": "開啟後立即依啟用專案對齊 ~/.agents/skills，並跟隨專案開關與 Skills 目錄變更；關閉則停止跟隨、保留現有連結（適用 Codex / Cline）"
+				},
+				"antigravity.skillSyncExcludeFirstProject": {
+					"type": "boolean",
+					"default": false,
+					"description": "開啟後，面板專案清單排序第 1 個專案（首專案）不納入 ~/.agents/skills 同步來源，且其先前建立的 Junction 連結會一併解除；關閉則首專案照常同步。僅在「開關專案時同步全域 Skills」開啟時生效"
 				}
 			}
 		},

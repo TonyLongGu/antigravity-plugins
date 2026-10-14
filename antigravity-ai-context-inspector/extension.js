@@ -70,20 +70,21 @@ class AiContextViewProvider {
   }
 
   /**
-   * 在編輯器分頁中開啟 AI 上下文檢視器 (向右分割 ViewColumn.Beside 並自動鎖定群組)
-   * @param {vscode.ViewColumn} [column=vscode.ViewColumn.Beside]
+   * 在編輯器分頁中開啟 AI 上下文檢視器
+   * - 開在「目前使用中的編輯器群組」（`ViewColumn.Active`），不另外向右分割出新欄
+   * - 若已開啟則直接顯示既有分頁（`reveal()` 不帶參數，不移動群組、不重複建立分頁）
+   * - 不鎖定（lock）編輯器群組，維持一般分頁行為
    */
-  async openInEditor(column = vscode.ViewColumn.Beside) {
+  async openInEditor() {
     if (this._panel) {
-      this._panel.reveal(column);
-      this._lockEditorGroup();
+      this._panel.reveal();
       return;
     }
 
     this._panel = vscode.window.createWebviewPanel(
       'antigravity.aiContextEditor',
       'AI 上下文檢視器',
-      column,
+      vscode.ViewColumn.Active,
       {
         enableScripts: true,
         retainContextWhenHidden: true,
@@ -114,22 +115,6 @@ class AiContextViewProvider {
     });
 
     this.pushData(0);
-
-    // 自動鎖定該編輯器群組 (避免後續點選代碼檔案覆蓋檢視器)
-    this._lockEditorGroup();
-  }
-
-  /**
-   * 鎖定當前編輯器群組
-   */
-  _lockEditorGroup() {
-    setTimeout(async () => {
-      try {
-        await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
-      } catch (err) {
-        // 忽略在特定無 UI 或特殊環境下的例外
-      }
-    }, 100);
   }
 
   /**

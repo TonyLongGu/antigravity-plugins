@@ -5,6 +5,7 @@ const { getCanonicalPath } = require('./systemService');
 const { SKILL_SUB_PATHS, getDefaultGlobalSkillsDir, syncWorkspaceSkills } = require('../lib/skill-junction-sync');
 
 const SETTING_KEY = 'syncSkillsOnFolderToggle';
+const EXCLUDE_FIRST_SETTING_KEY = 'skillSyncExcludeFirstProject';
 const WATCH_DEBOUNCE_MS = 400;
 
 function getGlobalSkillsDir() {
@@ -13,6 +14,13 @@ function getGlobalSkillsDir() {
 
 function isSyncEnabled() {
   return !!vscode.workspace.getConfiguration('antigravity').get(SETTING_KEY, false);
+}
+
+/**
+ * 「排除首專案（面板清單排序第 1 個專案）」開關狀態
+ */
+function isExcludeFirstProjectEnabled() {
+  return !!vscode.workspace.getConfiguration('antigravity').get(EXCLUDE_FIRST_SETTING_KEY, false);
 }
 
 let syncWriteInFlight = false;
@@ -34,6 +42,35 @@ function toastText(zh, en) {
   return isEnglishLocale() ? en : zh;
 }
 
+/**
+ * 取得需排除於同步來源的專案路徑（目前僅「首專案」= 面板專案清單排序第 1 個）
+ * @returns {string[]} 完整路徑陣列；未開啟排除時為空陣列
+ */
+function resolveExcludedProjectPaths() {
+  if (!isExcludeFirstProjectEnabled()) return [];
+  try {
+    const workspaceService = require('./workspaceService');
+    const firstPath = workspaceService.getFirstProjectFullPath();
+    return firstPath ? [firstPath] : [];
+  } catch (err) {
+    console.error('解析首專案排除路徑失敗:', err);
+    return [];
+  }
+}
+
+/**
+ * 產生排除首專案的提示後綴文字
+ * @param {object} result
+ */
+function excludedSuffix(result) {
+  const names = Array.isArray(result?.excludedProjects) ? result.excludedProjects : [];
+  if (names.length === 0) return '';
+  return toastText(
+    `（已排除首專案：${names.join('、')}）`,
+    ` (excluded first project: ${names.join(', ')})`
+  );
+}
+
 function notifySyncResult(result, provider, options = {}) {
   if (!provider?.pushToast || !result) return;
   const { notify = false, force = false } = options;
@@ -53,8 +90,8 @@ function notifySyncResult(result, provider, options = {}) {
   if (result.failed > 0) {
     provider.pushToast(
       toastText(
-        `Skills 同步完成：新增 ${result.added}、解除 ${result.removed}、失敗 ${result.failed}`,
-        `Skills synced: added ${result.added}, removed ${result.removed}, failed ${result.failed}`
+        `Skills 同步完成：新增 ${result.added}、解除 ${result.removed}、失敗 ${result.failed}${excludedSuffix(result)}`,
+        `Skills synced: added ${result.added}, removed ${result.removed}, failed ${result.failed}${excludedSuffix(result)}`
       ),
       'warning'
     );
@@ -64,8 +101,8 @@ function notifySyncResult(result, provider, options = {}) {
   if (result.added > 0 || result.removed > 0) {
     provider.pushToast(
       toastText(
-        `Skills 同步完成：新增 ${result.added}、解除 ${result.removed}（Codex / Cline）`,
-        `Skills synced: added ${result.added}, removed ${result.removed} (Codex / Cline)`
+        `Skills 同步完成：新增 ${result.added}、解除 ${result.removed}（Codex / Cline）${excludedSuffix(result)}`,
+        `Skills synced: added ${result.added}, removed ${result.removed} (Codex / Cline)${excludedSuffix(result)}`
       ),
       'success'
     );
@@ -75,14 +112,21 @@ function notifySyncResult(result, provider, options = {}) {
   if (force) {
     provider.pushToast(
       toastText(
-        `Skills 已對齊目前啟用專案，無需變更（${result.kept} 個連結）`,
-        `Skills already match enabled projects (${result.kept} links)`
+        `Skills 已對齊目前啟用專案，無需變更（${result.kept} 個連結）${excludedSuffix(result)}`,
+        `Skills already match enabled projects (${result.kept} links)${excludedSuffix(result)}`
       ),
       'info'
     );
   }
 }
 
+/**
+ * 依啟用專案對齊全域 Skills Junction（開啟「排除首專案」時，首專案不列入來源）
+ * @param {Array<{path?: string, name?: string}>} enabledFolders
+ * @param {string} wsDir
+ * @param {object} [provider]
+ * @param {{ notify?: boolean, force?: boolean }} [options]
+ */
 function syncEnabledProjectSkills(enabledFolders, wsDir, provider = null, options = {}) {
   const { notify = false, force = false } = options;
   if (!force && !isSyncEnabled()) return null;
@@ -90,6 +134,7 @@ function syncEnabledProjectSkills(enabledFolders, wsDir, provider = null, option
 
   const result = syncWorkspaceSkills(enabledFolders, wsDir, {
     globalDir: getGlobalSkillsDir(),
+    excludePaths: resolveExcludedProjectPaths(),
   });
   notifySyncResult(result, provider, { notify, force });
   return result;
@@ -136,9 +181,15 @@ function refreshSkillWatchers(enabledFolders, wsDir) {
     return [posix, `${posix}/*`];
   });
 
+  // 排除首專案：其 Skills 變更不會影響全域連結，故不需建立監看
+  const excludedCanon = new Set(
+    resolveExcludedProjectPaths().map((p) => getCanonicalPath(p).toLowerCase())
+  );
+
   for (const folder of enabledFolders || []) {
     const projFull = getCanonicalPath(folder.path || '', wsDir);
     if (!projFull || !fs.existsSync(projFull)) continue;
+    if (excludedCanon.has(projFull.toLowerCase())) continue;
 
     const base = vscode.Uri.file(projFull);
     for (const glob of globs) {
@@ -218,13 +269,61 @@ async function setSyncEnabled(enabled, provider = null, enabledFolders = [], wsD
   }
 }
 
+/**
+ * 設定「排除首專案」開關（首專案不列入同步來源，其既有連結會一併解除）
+ * @param {boolean} enabled
+ * @param {object} [provider]
+ * @param {Array} [enabledFolders]
+ * @param {string} [wsDir]
+ */
+async function setExcludeFirstProject(enabled, provider = null, enabledFolders = [], wsDir = '') {
+  lastProvider = provider;
+  const config = vscode.workspace.getConfiguration('antigravity');
+  const target = vscode.workspace.workspaceFile
+    ? vscode.ConfigurationTarget.Workspace
+    : vscode.ConfigurationTarget.Global;
+
+  syncWriteInFlight = true;
+  try {
+    await config.update(EXCLUDE_FIRST_SETTING_KEY, enabled, target);
+  } finally {
+    setTimeout(() => {
+      syncWriteInFlight = false;
+    }, 400);
+  }
+
+  // 僅在主要同步開關已開啟時才立即重新對齊，避免關閉狀態下被動觸發同步
+  if (isSyncEnabled()) {
+    syncEnabledProjectSkills(enabledFolders, wsDir, provider, { notify: true, force: true });
+    refreshSkillWatchers(enabledFolders, wsDir);
+    return;
+  }
+
+  if (provider?.pushToast) {
+    provider.pushToast(
+      toastText(
+        enabled
+          ? '已開啟「排除首專案」，待開啟 Skills 同步後生效。'
+          : '已關閉「排除首專案」。',
+        enabled
+          ? 'Exclude first project enabled; it takes effect once Skills sync is on.'
+          : 'Exclude first project disabled.'
+      ),
+      'info'
+    );
+  }
+}
+
 module.exports = {
   SETTING_KEY,
+  EXCLUDE_FIRST_SETTING_KEY,
   getGlobalSkillsDir,
   isSyncEnabled,
+  isExcludeFirstProjectEnabled,
   isSyncWriteInFlight,
   syncEnabledProjectSkills,
   setSyncEnabled,
+  setExcludeFirstProject,
   refreshSkillSync,
   bindSkillSync,
   syncWatchersToSetting,

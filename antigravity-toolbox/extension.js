@@ -54,20 +54,21 @@ class ToolboxViewProvider {
   }
 
   /**
-   * 在代碼編輯器分頁 (Editor Tab) 中開啟控制中心 (原生向右分割至 ViewColumn.Beside 並自動鎖定群組)
-   * @param {vscode.ViewColumn} [column=vscode.ViewColumn.Beside]
+   * 在代碼編輯器分頁 (Editor Tab) 中開啟控制中心
+   * - 開在「目前使用中的編輯器群組」（`ViewColumn.Active`），不另外向右分割出新欄
+   * - 若已開啟則直接顯示既有分頁（`reveal()` 不帶參數，不移動群組、不重複建立分頁）
+   * - 不鎖定（lock）編輯器群組，維持一般分頁行為
    */
-  openInEditor(column = vscode.ViewColumn.Beside) {
+  openInEditor() {
     if (this._panel) {
-      this._panel.reveal(column);
-      this._lockEditorGroup();
+      this._panel.reveal();
       return;
     }
 
     this._panel = vscode.window.createWebviewPanel(
       'antigravity.toolboxEditor',
       'Antigravity 控制中心',
-      column,
+      vscode.ViewColumn.Active,
       {
         enableScripts: true,
         retainContextWhenHidden: true,
@@ -90,22 +91,6 @@ class ToolboxViewProvider {
 
     // 立即向新開啟的編輯器分頁推送當前完整狀態
     this.pushStatus(0);
-
-    // 自動鎖定該編輯器群組 (避免後續點選代碼檔案覆蓋控制中心)
-    this._lockEditorGroup();
-  }
-
-  /**
-   * 鎖定當前編輯器群組
-   */
-  _lockEditorGroup() {
-    setTimeout(async () => {
-      try {
-        await vscode.commands.executeCommand('workbench.action.lockEditorGroup');
-      } catch (err) {
-        // 忽略在特定無 UI 或特殊環境下的例外
-      }
-    }, 100);
   }
 
   /**
@@ -157,6 +142,19 @@ class ToolboxViewProvider {
         const ctx = workspaceService.loadWorkspaceContext(this, true);
         const enabledFolders = Array.isArray(ctx?.json?.folders) ? ctx.json.folders : [];
         await skillSyncService.setSyncEnabled(
+          !!msg.enabled,
+          this,
+          enabledFolders,
+          ctx?.wsDir || ''
+        );
+        this.pushStatus();
+        break;
+      }
+
+      case 'toggleSkillSyncExcludeFirstProject': {
+        const ctx = workspaceService.loadWorkspaceContext(this, true);
+        const enabledFolders = Array.isArray(ctx?.json?.folders) ? ctx.json.folders : [];
+        await skillSyncService.setExcludeFirstProject(
           !!msg.enabled,
           this,
           enabledFolders,
@@ -466,6 +464,21 @@ function activate(context) {
         && !skillSyncService.isSyncWriteInFlight()
       ) {
         skillSyncService.syncWatchersToSetting();
+        provider.pushStatus(50);
+      }
+      if (
+        e.affectsConfiguration('antigravity.skillSyncExcludeFirstProject')
+        && !skillSyncService.isSyncWriteInFlight()
+      ) {
+        // 外部修改設定（如 settings.json）：立即依新規則重新對齊，並重整監看範圍
+        const ctx = workspaceService.loadWorkspaceContext(provider, true);
+        skillSyncService.syncEnabledProjectSkills(
+          Array.isArray(ctx?.json?.folders) ? ctx.json.folders : [],
+          ctx?.wsDir || '',
+          provider,
+          { notify: true }
+        );
+        skillSyncService.refreshSkillWatchers();
         provider.pushStatus(50);
       }
     })

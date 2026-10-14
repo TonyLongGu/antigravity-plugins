@@ -288,6 +288,7 @@
   const pendingToggles = new Map(); // key: path -> { active: boolean, time: number }
   const PENDING_TOGGLE_MS = 2000;
   let pendingSkillSync = null; // { enabled: boolean, time: number }
+  let pendingExcludeFirst = null; // { enabled: boolean, time: number } 首專案排除開關
 
   /**
    * 立即原地更新專案卡片的顯示/隱藏視覺狀態與樂觀計數器 (0ms 即時反饋)
@@ -631,6 +632,7 @@
       skillSyncRow: document.getElementById('ws-skill-sync-row'),
       skillSyncRefresh: document.getElementById('btn-refresh-skill-sync'),
       skillSyncToggle: document.getElementById('toggle-sync-skills'),
+      excludeFirstToggle: document.getElementById('toggle-exclude-first-project'),
       folderList: document.getElementById('folder-list'),
       folderListCount: document.getElementById('folder-list-count'),
     },
@@ -714,6 +716,37 @@
           vscode.postMessage({ type: 'toggleSkillSync', enabled: nextEnabled });
         });
       }
+
+      if (this.dom.excludeFirstToggle) {
+        this.dom.excludeFirstToggle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          this.toggleExcludeFirstProject();
+        });
+      }
+    },
+
+    /**
+     * 切換「排除首專案」開關（樂觀更新 + 送出後端）
+     */
+    toggleExcludeFirstProject() {
+      const switchEl = this.dom.excludeFirstToggle;
+      if (!switchEl) return;
+
+      const nextEnabled = !switchEl.classList.contains('is-checked');
+      pendingExcludeFirst = { enabled: nextEnabled, time: Date.now() };
+      switchEl.classList.toggle('is-checked', nextEnabled);
+
+      const curState = vscode.getState() || {};
+      if (curState.workspace) {
+        curState.workspace.skillSyncExcludeFirstProject = nextEnabled;
+      }
+      vscode.setState({
+        ...curState,
+        pendingExcludeFirst,
+      });
+
+      vscode.postMessage({ type: 'toggleSkillSyncExcludeFirstProject', enabled: nextEnabled });
     },
 
     /**
@@ -856,6 +889,26 @@
         const isChecked = this.dom.skillSyncToggle.classList.contains('is-checked');
         if (isChecked !== skillSyncEnabled) {
           this.dom.skillSyncToggle.classList.toggle('is-checked', skillSyncEnabled);
+        }
+      }
+      if (this.dom.excludeFirstToggle) {
+        const savedPendingExclude = pendingExcludeFirst || (vscode.getState() || {}).pendingExcludeFirst;
+        let excludeFirstEnabled = !!workspace.skillSyncExcludeFirstProject;
+        if (savedPendingExclude && now - savedPendingExclude.time < PENDING_TOGGLE_MS) {
+          excludeFirstEnabled = !!savedPendingExclude.enabled;
+          workspace.skillSyncExcludeFirstProject = excludeFirstEnabled;
+          pendingExcludeFirst = savedPendingExclude;
+        } else if (savedPendingExclude) {
+          pendingExcludeFirst = null;
+          const curState = vscode.getState() || {};
+          if (curState.pendingExcludeFirst) {
+            delete curState.pendingExcludeFirst;
+            vscode.setState(curState);
+          }
+        }
+        const isExcludeChecked = this.dom.excludeFirstToggle.classList.contains('is-checked');
+        if (isExcludeChecked !== excludeFirstEnabled) {
+          this.dom.excludeFirstToggle.classList.toggle('is-checked', excludeFirstEnabled);
         }
       }
       if (this.dom.skillSyncList) {

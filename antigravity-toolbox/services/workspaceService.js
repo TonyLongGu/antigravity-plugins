@@ -259,6 +259,24 @@ function createFolderComparator(orderList, wsDir) {
 }
 
 /**
+ * 取得面板「專案清單」排序後的第 1 個專案（首專案）完整路徑
+ * 供全域 Skills 同步的「排除首專案」使用；排序基準與清單顯示一致（folderOrder）
+ * @returns {string} 正規化完整路徑；無工作區或無專案時為空字串
+ */
+function getFirstProjectFullPath() {
+  const ctx = loadWorkspaceContext();
+  if (!ctx) return '';
+
+  const { wsDir, json } = ctx;
+  const orderList = syncFolderOrder(json, wsDir);
+  const comparator = createFolderComparator(orderList, wsDir);
+  const allItems = [...json.folders, ...json.disabledFolders].sort(comparator);
+  if (allItems.length === 0) return '';
+
+  return getCanonicalPath(allItems[0].path || '', wsDir);
+}
+
+/**
  * 檢測專案清單同名衝突與同層連帶專案需求
  * @param {Array} folderInfos
  * @returns {{ duplicateCount: number, customNameCount: number }}
@@ -314,6 +332,7 @@ function analyzeWorkspace() {
       customNameCount: 0,
       hasCustomNames: false,
       syncSkillsOnFolderToggle: skillSyncService.isSyncEnabled(),
+      skillSyncExcludeFirstProject: skillSyncService.isExcludeFirstProjectEnabled(),
       folders: folders.map((f) => {
         const fullPath = getCanonicalPath(f.uri.fsPath);
         return {
@@ -375,6 +394,7 @@ function analyzeWorkspace() {
     customNameCount,
     hasCustomNames: customNameCount > 0,
     syncSkillsOnFolderToggle: skillSyncService.isSyncEnabled(),
+    skillSyncExcludeFirstProject: skillSyncService.isExcludeFirstProjectEnabled(),
     folders: allInfos,
   };
 }
@@ -767,6 +787,7 @@ module.exports = {
   saveWorkspaceJson,
   maybeSyncSkills,
   analyzeWorkspace,
+  getFirstProjectFullPath,
   setWorkspaceFolderEnabled,
   batchSetWorkspaceFoldersEnabled,
   toggleWorkspaceFolder,
