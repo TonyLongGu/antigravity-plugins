@@ -330,8 +330,273 @@ console.log('\n=== 回歸：刪除檔案分頁所播放的檔案 ===');
   ok(countPost(c, 'expandToFolderGallery') === 0, '檔案分頁刪檔不會誤觸畫廊轉換');
 }
 
-console.log('\n---------------------------------------------');
-console.log((failed === 0 ? 'FRONTEND-ALL-ASSERTIONS-PASSED' : 'FRONTEND-TEST-FAILED')
-  + '  (checked=' + checked + ', failed=' + failed + ')');
-process.exitCode = failed === 0 ? 0 : 1;
+// ===========================================================================
+// 影片檢視器：Autoplay 保底靜音下的音量控制語意
+//
+// 背景（真實症狀：開啟影片預設無聲，按下喇叭鈕想開聲音卻依然無聲）：
+
+//   1. Webview 首次開啟時，瀏覽器會擋「帶聲音的自動播放」，檢視器因此降級為
+//      「靜音自動播放」（isAutoplayMutedFallback），並等待使用者的第一次手勢解除。
+//   2. 解除動作掛在 document 的「捕捉階段」(pointerdown/keydown)，比按鈕自己的
+//      click 更早執行；若 click 讀的是「當下已非靜音」的狀態，就會把「開聲音」
+//      誤判為「靜音」→ 按一次等於沒反應（音量被歸 0，圖示與聽感都不變）。
+//   3. 保底靜音是「播放器的權宜狀態」，不是「使用者的選擇」；若被寫進持久化狀態
+//      （muted:true），之後每次開檔都會預設無聲。
+//   4. 滾輪調音量（window wheel）不在首次手勢清單內，必須靠「主動調音量」結束保底靜音。
+// ===========================================================================
+/** 開啟影片檢視器，並讓第一次 play() 以 NotAllowedError 失敗（模擬 Webview 的 Autoplay 限制） */
+function vidWithAutoplayBlock(opts) {
+  const c = boot('video-viewer');
+  const videoEl = c.getEl('playerVideo');
+  let playCalls = 0;
+  videoEl.play = () => {
+    playCalls++;
+    if (playCalls === 1) {
+      const err = new Error("play() failed because the user didn't interact with the document first.");
+      err.name = 'NotAllowedError';
+      return Promise.reject(err);
+    }
+    return Promise.resolve();
+  };
+
+  const list = makeList(FOLDER, VID_NAMES);
+  const target = list[opts.targetIndex === undefined ? 1 : opts.targetIndex];
+  c.fireMessage({
+    type: 'initData',
+    folderPath: FOLDER,
+    folderName: FOLDER_NAME,
+    isCustomEditor: !!opts.isCustomEditor,
+    targetFilePath: target.fullPath,
+    videos: list,
+    thumbSize: 140,
+    volume: 0.35,
+    muted: false,
+    lastVolume: 0.35
+  });
+  c.posted.length = 0;
+  return { c, videoEl, target: target.fullPath };
+}
+
+/** 使用者在畫面上按下某處（保底靜音的解除就發生在這一刻的捕捉階段） */
+const pressOn = (c, el) => c.fireDocument('pointerdown', {
+  type: 'pointerdown', target: el, clientX: 0, clientY: 0,
+  preventDefault() {}, stopPropagation() {}
+});
+/** 等待 play() 的 Promise 鏈與 saveVolume 去抖完成 */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 60));
+/** 等待 saveVolumeState 的 200ms 去抖真正送出訊息 */
+const settleSaved = () => new Promise((resolve) => setTimeout(resolve, 280));
+const sliderVal = (c) => parseFloat(c.getEl('volumeSlider').value);
+const lastVolumePost = (c) => [...c.posted].reverse().find((m) => m && m.type === 'saveVolume') || null;
+
+async function runVideoAutoplayFallbackTests() {
+  console.log('\n=== 影片檢視器：Autoplay 保底靜音下的音量語意 ===');
+  {
+    const { c, videoEl } = vidWithAutoplayBlock({ isCustomEditor: true });
+    await settle();
+    ok(videoEl.muted === true, '前提：Autoplay 被擋時以「靜音自動播放」保底（畫面先動起來）');
+  }
+  {
+    const { c, videoEl } = vidWithAutoplayBlock({ isCustomEditor: true });
+    await settle();
+    pressOn(c, c.getEl('volumeBtn'));
+    c.getEl('volumeBtn').click();
+    await settle();
+    ok(videoEl.muted === false && sliderVal(c) > 0,
+      '保底靜音時按喇叭鈕 → 開啟聲音（修正前會被同一次手勢誤判為「靜音」，音量歸 0 而無聲）');
+  }
+  {
+    const { c, videoEl } = vidWithAutoplayBlock({ isCustomEditor: true });
+    await settle();
+    pressOn(c, c.getEl('volumeSlider'));
+    c.getEl('volumeSlider')._fire('input', { target: { value: '0.6' } });
+    await settle();
+    ok(videoEl.muted === false && sliderVal(c) === 0.6, '保底靜音時拖曳音量滑桿 → 依設定值出聲');
+  }
+  {
+    const { c, videoEl } = vidWithAutoplayBlock({ isCustomEditor: true });
+    await settle();
+    c.fireWindow('wheel', { deltaY: -100, preventDefault() {}, ctrlKey: false, metaKey: false });
+    await settle();
+    ok(videoEl.muted === false && sliderVal(c) > 0.35,
+      '保底靜音時以滾輪調音量 → 出聲（滾輪不在首次手勢清單內，修正前保底靜音不會被解除）');
+  }
+  {
+    const { c } = vidWithAutoplayBlock({ isCustomEditor: true });
+    await settle();
+    c.posted.length = 0;
+    c.getEl('sortSelect')._fire('change', { target: { value: 'size-desc' } });
+    await settle();
+    const post = lastVolumePost(c);
+    ok(post && post.muted === false,
+      '只改排序不會把「保底靜音」寫成使用者靜音（修正前會污染持久化狀態，之後每次開檔都預設無聲）');
+  }
+  {
+    const { c, videoEl } = vidWithAutoplayBlock({ isCustomEditor: true });
+    await settle();
+    pressOn(c, c.getEl('volumeBtn'));
+    c.getEl('volumeBtn').click(); // 第一次：使用者要開聲音
+    await settle();
+    ok(videoEl.muted === false, '前置：保底靜音後按一次喇叭鈕確實出聲');
+    c.posted.length = 0;
+    pressOn(c, c.getEl('volumeBtn'));
+    c.getEl('volumeBtn').click(); // 第二次：使用者主動靜音
+    await settleSaved();
+    const post = lastVolumePost(c);
+    ok(videoEl.muted === true && sliderVal(c) === 0 && !!post && post.muted === true,
+      '使用者主動靜音才會持久化 muted:true（意圖與保底狀態必須可區分）');
+  }
+}
+
+// ===========================================================================
+// 音訊相容模式（IDE 內建 Chromium 缺 AAC 等專利解碼器：上游 microsoft/vscode#167685）
+//
+// 為什麼要測：這是讓「AAC 影片／音檔」在 IDE 內真的發出聲音的唯一路徑
+//   （症狀：畫面正常、零音訊位元組、不報錯，怎麼調音量都沒用）。
+// 風險點：偵測條件若不嚴謹（把已正常解碼、或處於靜音狀態的檔案也判為需要轉檔），
+//   會造成無謂的 ffmpeg 轉檔（CPU／磁碟浪費），因此兩個方向都要固定下來。
+// ===========================================================================
+/** 等待相容偵測的 1.5s 計時器 */
+const settleCompat = () => new Promise((resolve) => setTimeout(resolve, 1700));
+
+/** 開啟影片檢視器（未觸發 Autoplay 保底，音量正常） */
+function openVideoForCompat() {
+  const c = boot('video-viewer');
+  const videoEl = c.getEl('playerVideo');
+  const list = makeList(FOLDER, VID_NAMES);
+  c.fireMessage({
+    type: 'initData', folderPath: FOLDER, folderName: FOLDER_NAME,
+    isCustomEditor: true, targetFilePath: list[0].fullPath, videos: list,
+    thumbSize: 140, volume: 0.5, muted: false, lastVolume: 0.5
+  });
+  videoEl.paused = false;
+  return { c, videoEl, target: list[0].fullPath };
+}
+
+/** 開啟音訊檢視器並讓播放列處於播放中 */
+function openAudioForCompat() {
+  const c = boot('audio-viewer');
+  const audioEl = c.getEl('playerAudio');
+  const list = makeList(FOLDER, AUD_NAMES);
+  c.fireMessage({
+    type: 'initData', folderPath: FOLDER, folderName: FOLDER_NAME,
+    isCustomEditor: true, targetFilePath: list[0].fullPath, audios: list,
+    cardSize: 140, volume: 1, muted: false, lastVolume: 1
+  });
+  audioEl.paused = false;
+  return { c, audioEl, target: list[0].fullPath };
+}
+
+async function runAudioCompatTests() {
+  console.log('\n=== 音訊相容模式：開檔即以 ffprobe 判定播放規則 ===');
+  {
+    const { c, target } = openVideoForCompat();
+    const probe = c.posted.find((m) => m && m.type === 'probeAudioCompat');
+    ok(!!probe && probe.filePath === target,
+      '影片一開檔就送出 probeAudioCompat（帶出檔案路徑）→ 依實際音軌編碼決定播放規則，不必等播放後才偵測（舊版必須手動暫停再播放才會觸發）');
+  }
+  {
+    const { c, videoEl } = openVideoForCompat();
+    c.posted.length = 0;
+    c.fireMessage({ type: 'audioCompatDetected', filePath: 'x.mp4', codec: 'aac' });
+    videoEl.webkitAudioDecodedByteCount = 0;
+    videoEl._fire('playing');
+    await settleCompat();
+    ok(!c.posted.some((m) => m && m.type === 'probeAudioCompat' && m.force),
+      '後端已判定需要相容（audioCompatDetected）→ 不再重複請求轉檔，避免同一檔案被轉兩次');
+  }
+  {
+    const { c, videoEl, target } = openVideoForCompat();
+    videoEl.webkitAudioDecodedByteCount = 0;
+    videoEl.currentTime = 12.5;
+    c.fireMessage({ type: 'audioCompatReady', filePath: target, uri: 'http://127.0.0.1:9/video?compat=1' });
+    ok(videoEl.src === 'http://127.0.0.1:9/video?compat=1' && videoEl.currentTime === 12.5,
+      '收到 audioCompatReady → 換用相容串流並保留播放位置（不在第 0 秒重播）');
+  }
+  {
+    const { c, videoEl } = openVideoForCompat();
+    c.posted.length = 0;
+    c.fireMessage({ type: 'audioCompatNotNeeded', filePath: 'x.mp4', codec: 'mp3' });
+    videoEl.webkitAudioDecodedByteCount = 0;
+    videoEl._fire('playing');
+    await settleCompat();
+    ok(!c.posted.some((m) => m && m.type === 'probeAudioCompat' && m.force),
+      '後端判定編碼可解碼（audioCompatNotNeeded）→ 即使零解碼位元組也不轉檔（避免無謂的 ffmpeg 消耗）');
+  }
+  {
+    const { c, videoEl, target } = openVideoForCompat();
+    c.posted.length = 0;
+    c.fireMessage({ type: 'audioCompatUnavailable', filePath: target });
+    videoEl.webkitAudioDecodedByteCount = 0;
+    videoEl._fire('playing');
+    await settleCompat();
+    ok(c.posted.some((m) => m && m.type === 'probeAudioCompat' && m.force === true && m.filePath === target),
+      '後端無 ffprobe（audioCompatUnavailable）→ 啟用啟發式：零解碼位元組時以 force 請求轉檔');
+  }
+  {
+    const { c, videoEl, target } = openVideoForCompat();
+    c.fireMessage({ type: 'audioCompatUnavailable', filePath: target });
+    c.posted.length = 0;
+    videoEl.muted = true; // 模擬 Autoplay 保底靜音（此時本來就不會發聲）
+    videoEl.webkitAudioDecodedByteCount = 0;
+    videoEl._fire('playing');
+    await settleCompat();
+    const requestedWhileMuted = c.posted.some((m) => m && m.type === 'probeAudioCompat' && m.force);
+    videoEl.muted = false; // 使用者點一下解除靜音
+    videoEl._fire('volumechange');
+    await settleCompat();
+    ok(!requestedWhileMuted && c.posted.some((m) => m && m.type === 'probeAudioCompat' && m.force === true),
+      '保底靜音期間不誤判、解除靜音後立即觸發轉檔（舊版必須手動暫停再播放才會觸發，此即本次優化重點）');
+  }
+  {
+    const { c, audioEl, target } = openAudioForCompat();
+    const probe = c.posted.find((m) => m && m.type === 'probeAudioCompat');
+    ok(!!probe && probe.filePath === target, '音訊檢視器同樣在開始播放時就送出 probeAudioCompat');
+    audioEl.currentTime = 7.5;
+    c.fireMessage({ type: 'audioCompatReady', filePath: target, uri: 'http://127.0.0.1:9/audio?compat=1' });
+    ok(audioEl.src === 'http://127.0.0.1:9/audio?compat=1' && audioEl.currentTime === 7.5,
+      '音訊收到 audioCompatReady → 換用 MP3 相容串流並保留播放位置');
+  }
+
+  console.log('\n=== 音訊相容模式：提示整合（同一流程只留一則）===');
+  const visibleToasts = (c) => c.created.filter((el) => typeof el.className === 'string'
+    && el.className.startsWith('toast toast-') && !el._removed);
+  {
+    const { c } = openVideoForCompat();
+    c.created.length = 0;
+    c.fireMessage({ type: 'audioCompatDetected', filePath: 'x.mp4', codec: 'aac' });
+    const pending = visibleToasts(c);
+    ok(pending.length === 1,
+      `建立相容音軌期間只顯示一則提示（實際 ${pending.length} 則；修正前會與其他提示疊成三則）`);
+
+    c.fireMessage({ type: 'audioCompatReady', filePath: 'x.mp4', uri: 'http://127.0.0.1:9/video?compat=1' });
+    const after = visibleToasts(c);
+    ok(after.length === 1 && after[0] === pending[0], '轉檔完成時「就地更新同一則提示」，不會再多彈一則');
+  }
+  {
+    // 先讓 Autoplay 保底提示出現，再進入相容流程 → 應合併為一則（只留最重要的）
+    const { c } = vidWithAutoplayBlock({ isCustomEditor: true });
+    await settle();
+    const hintCount = visibleToasts(c).length;
+    c.fireMessage({ type: 'audioCompatDetected', filePath: 'x.mp4', codec: 'aac' });
+    const merged = visibleToasts(c);
+    ok(hintCount === 1 && merged.length === 1 && merged[0].innerHTML.includes('ffmpeg'),
+      '進入相容流程時收掉先前的 Autoplay 提示並合併成一則（使用者實測回饋：不要一次彈三則）');
+  }
+  {
+    const { c } = openVideoForCompat();
+    c.created.length = 0;
+    c.fireMessage({ type: 'audioCompatReady', filePath: 'x.mp4', uri: 'http://127.0.0.1:9/video?compat=1', cached: true });
+    ok(visibleToasts(c).length === 0, '快取命中（瞬間完成）→ 完全不顯示提示，避免無謂干擾');
+  }
+}
+
+runVideoAutoplayFallbackTests()
+  .then(runAudioCompatTests)
+  .then(() => {
+    console.log('\n---------------------------------------------');
+    console.log((failed === 0 ? 'FRONTEND-ALL-ASSERTIONS-PASSED' : 'FRONTEND-TEST-FAILED')
+      + '  (checked=' + checked + ', failed=' + failed + ')');
+    process.exitCode = failed === 0 ? 0 : 1;
+  });
 

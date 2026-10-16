@@ -12,7 +12,8 @@ const { spawnSync } = require('node:child_process');
 const SUITES = [
   { file: 'locales.check.js', title: '語系字典對稱性與引用完整性' },
   { file: 'frontend.dom.js', title: '前端互動語意（DOM 模擬）' },
-  { file: 'backend.smoke.js', title: '後端面板生命週期與訊息流（mock vscode）' }
+  { file: 'backend.smoke.js', title: '後端面板生命週期與訊息流（mock vscode）' },
+  { file: 'stream.smoke.js', title: '串流伺服器 HTTP 語意（Range / 206 / 白名單）' }
 ];
 
 let failedSuites = 0;

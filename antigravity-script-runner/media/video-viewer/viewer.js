@@ -10,6 +10,10 @@
  */
 
 (function () {
+  // 版本標記（排查「IDE 是否載入到最新前端」用：命令面板 → Developer: Open Webview Developer Tools → Console）
+  const VIEWER_BUILD = 'video-viewer build 2026-10-16 (audio-autoplay-fix)';
+  console.log(`[VideoViewer] ${VIEWER_BUILD}`);
+
   // 1. VS Code API 雙軌安全適配
   let vscode = null;
   try {
@@ -52,6 +56,7 @@
   let lastOpenVideoTime = 0;
   let cleanupRestoreSound = null;
   let isAutoplayMutedFallback = false;
+  let hasShownAutoplaySilentHint = false;
 
   // 播放器狀態
   let currentIndex = -1;
@@ -347,29 +352,109 @@
   }
 
   // 5. Toast 訊息提示 (畫面中上方醒目輕量提示)
-  function showToast(message, type = 'info') {
-    if (!toastContainerEl) return;
-    const toast = document.createElement('div');
-    toast.className = `toast toast-${type}`;
+  // 支援 key／replaces：同一流程（例如建立相容音軌）的狀態更新會「就地更新同一則」，
+  // 並可順手收掉不再需要的提示，避免一次彈出多則造成干擾（使用者實測回饋）。
+  const activeToasts = new Map(); // key → { el, timer }
 
+  function buildToastIcon(type) {
     let iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
     if (type === 'success') {
       iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
     } else if (type === 'warn') {
       iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
     }
+    return iconSvg;
+  }
 
-    toast.innerHTML = `${iconSvg}<span>${message}</span>`;
-    toastContainerEl.appendChild(toast);
+  function dismissToast(key) {
+    const entry = activeToasts.get(key);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    if (entry.el.parentNode) {
+      entry.el.remove();
+    }
+    activeToasts.delete(key);
+  }
 
-    setTimeout(() => {
+  /** 指定 key 的提示目前是否顯示中（用於判斷「是否為同一流程的後續更新」） */
+  function hasToast(key) {
+    return activeToasts.has(key);
+  }
+
+  /**
+   * @param {string} message
+   * @param {'info'|'success'|'warn'|'error'} [type]
+   * @param {{ key?: string, replaces?: string[], duration?: number }} [options]
+   *   key      同一流程的識別碼（相同 key 會更新同一則提示）
+   *   replaces 顯示前先收掉這些 key 的提示（合併資訊、只留一則）
+   *   duration 自動消失毫秒數（預設 1800；長流程可用較大值）
+   */
+  function showToast(message, type = 'info', options = {}) {
+    if (!toastContainerEl) return null;
+    const key = options.key || null;
+    if (Array.isArray(options.replaces)) {
+      options.replaces.forEach((k) => dismissToast(k));
+    }
+
+    const existing = key ? activeToasts.get(key) : null;
+    const toast = existing ? existing.el : document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `${buildToastIcon(type)}<span>${message}</span>`;
+
+    if (existing) {
+      clearTimeout(existing.timer);
+    } else {
+      toastContainerEl.appendChild(toast);
+    }
+
+    const duration = typeof options.duration === 'number' ? options.duration : 1800;
+    const timer = setTimeout(() => {
       toast.classList.add('hiding');
       setTimeout(() => {
         if (toast.parentNode) {
           toast.remove();
         }
+        const entry = key ? activeToasts.get(key) : null;
+        if (entry && entry.el === toast) {
+          activeToasts.delete(key);
+        }
       }, 250);
-    }, 1800);
+    }, duration);
+
+    if (key) {
+      activeToasts.set(key, { el: toast, timer });
+    }
+    return toast;
+  }
+
+  // ---- 音訊相容流程的提示整合（同一流程只留一則，就地更新） ----
+  /** 目前是否因瀏覽器 Autoplay 政策而靜音（需要一次點擊才會出聲） */
+  function needsUnmuteClick() {
+    return playerVideoEl.muted || playerVideoEl.volume === 0;
+  }
+
+  function toastClickHint() {
+    return needsUnmuteClick() ? ' ' + I18nModule.t('hint_click_to_unmute') : '';
+  }
+
+  function notifyAudioCompatPending() {
+    showToast(I18nModule.t('toast_audio_compat_start') + toastClickHint(), 'info', {
+      key: 'audio-compat',
+      replaces: ['autoplay-hint'],
+      duration: 15000
+    });
+  }
+
+  function notifyAudioCompatReady() {
+    if (!hasToast('audio-compat')) return; // 快取命中（瞬間完成）→ 不打擾使用者
+    showToast(I18nModule.t('toast_audio_compat_ready') + toastClickHint(), 'success', { key: 'audio-compat' });
+  }
+
+  function notifyAudioCompatFailed(reason) {
+    showToast(I18nModule.t('toast_audio_compat_failed', { reason: reason || '' }), 'error', {
+      key: 'audio-compat',
+      replaces: ['autoplay-hint']
+    });
   }
 
   // 6. 時間格式化 (秒 -> MM:SS 或 HH:MM:SS)
@@ -396,7 +481,9 @@
   function saveVolumeState() {
     const rawVol = parseFloat(volumeSliderEl.value);
     const vol = Math.round(Math.max(0, Math.min(1, isNaN(rawVol) ? 0.5 : rawVol)) * 100) / 100;
-    const muted = isMuted || (playerVideoEl && playerVideoEl.muted) || vol === 0;
+    // 只記錄「使用者的意圖」。Autoplay 保底靜音（playerVideoEl.muted）不是使用者的選擇，
+    // 若一併寫進持久化狀態，下次開檔會變成預設無聲且使用者難以察覺。
+    const muted = isMuted || vol === 0;
     if (vol > 0) {
       lastVolume = vol;
     }
@@ -445,7 +532,8 @@
   function saveUiState() {
     const rawVol = parseFloat(volumeSliderEl.value);
     const vol = Math.round(Math.max(0, Math.min(1, isNaN(rawVol) ? 0.5 : rawVol)) * 100) / 100;
-    const muted = isMuted || (playerVideoEl && playerVideoEl.muted) || vol === 0;
+    // 同 saveVolumeState：只記使用者意圖，不可把 Autoplay 保底靜音寫成 muted:true
+    const muted = isMuted || vol === 0;
     if (vol > 0) {
       lastVolume = vol;
     }
@@ -1336,6 +1424,11 @@
     playerVideoEl.playbackRate = currentSpeed;
     playerVideoEl.loop = isLooping;
     syncVolumeUI();
+    // 先重置狀態再送出 probe，否則 reset 會把 'probing' 蓋回 'unknown'，
+    // 導致啟發式在探測期間搶先送出多餘的強制轉檔請求
+    resetAudioCompatState();
+    // 開檔即請後端以 ffprobe 判定音軌編碼（不依賴播放後的解碼位元組啟發式）
+    requestAudioCompatProbe(v);
     updateAutoNextUI();
     updateLoopUI();
 
@@ -1364,6 +1457,13 @@
         syncVolumeUI();
         playerVideoEl.play().then(() => {
           updatePlayPauseUI(true);
+          // 首次播放受 Autoplay 政策限制而必須靜音時，明確告知使用者「點一下即可開啟聲音」
+          // （每個 Webview 工作階段僅提示一次，避免重複開檔造成干擾）
+          if (!hasShownAutoplaySilentHint) {
+            hasShownAutoplaySilentHint = true;
+            // 同一種提示只留一則；若稍後進入相容流程，會被合併收掉（見 notifyAudioCompatPending）
+            showToast(I18nModule.t('toast_autoplay_silent_hint'), 'info', { key: 'autoplay-hint', duration: 6000 });
+          }
           // 一旦使用者點擊畫面或按鍵，自動恢復原聲音並解除監聽
           const onFirstGesture = () => {
             if (cleanupRestoreSound) cleanupRestoreSound();
@@ -1689,6 +1789,92 @@
   // 14. 影片元素本體事件監聽
   playerVideoEl.addEventListener('play', () => updatePlayPauseUI(true));
   playerVideoEl.addEventListener('pause', () => updatePlayPauseUI(false));
+  playerVideoEl.addEventListener('playing', () => scheduleAudioCompatCheck());
+
+  // ==========================================================================
+  // 21. 音訊相容模式（IDE 內建 Chromium 缺 AAC 等專利解碼器：上游 microsoft/vscode#167685）
+  //
+  // 症狀：MP4/MOV 內的 AAC / AC-3 / E-AC-3 / Opus / ALAC 音軌「有畫面、零音訊位元組、不報錯」，
+  //       導致「怎麼調音量都沒聲音」；而 PCM(WAV) / MP3 / FLAC / Vorbis 正常。
+  // 判定（主要）：開啟檔案時即以 ffprobe 讀出音軌編碼（後端 probeAudioCompat）→ 立即決定播放規則，
+  //       因此不必等播放後才偵測，也不會再出現「要先暫停再播放才會觸發轉檔」。
+  // 判定（備援）：後端回報 unknown（無 ffprobe）時才用啟發式——
+  //       播放中 + 已解除靜音 + 音量非 0，1.5 秒後解碼位元組仍為 0。
+  // 處理：後端以本機 ffmpeg 產生「畫面無損 stream copy、僅音軌轉 MP3」的暫存檔後無縫續播
+  //       （原始檔永不修改；暫存檔依 路徑+大小+mtime 快取，進行中任務去重）。
+  // ==========================================================================
+  let audioCompatRequestedPath = null;
+  let audioCompatAppliedPath = null;
+  let audioCompatTimer = null;
+  let audioCompatProbeTimer = null;
+  let audioCompatProbeState = 'unknown'; // 'probing' | 'needs-compat' | 'ok' | 'unknown'
+  let audioCompatHeuristicTries = 0;
+
+  function resetAudioCompatState() {
+    clearTimeout(audioCompatTimer);
+    clearTimeout(audioCompatProbeTimer);
+    audioCompatTimer = null;
+    audioCompatProbeTimer = null;
+    audioCompatRequestedPath = null;
+    audioCompatAppliedPath = null;
+    audioCompatProbeState = 'unknown';
+    audioCompatHeuristicTries = 0;
+  }
+
+  /** 開啟檔案時即請後端以 ffprobe 判定該檔音軌是否需相容處理 */
+  function requestAudioCompatProbe(v) {
+    if (!v) return;
+    audioCompatProbeState = 'probing';
+    if (vscode) {
+      vscode.postMessage({ type: 'probeAudioCompat', filePath: v.fullPath });
+    }
+    clearTimeout(audioCompatProbeTimer);
+    audioCompatProbeTimer = setTimeout(() => {
+      // 後端逾時未回應 → 退回啟發式，避免卡在 probing 而完全沒有補救
+      if (audioCompatProbeState === 'probing') {
+        audioCompatProbeState = 'unknown';
+        scheduleAudioCompatCheck();
+      }
+    }, 3000);
+  }
+
+  function scheduleAudioCompatCheck() {
+    // 後端已用 ffprobe 給出確定答案（ok／needs-compat）→ 不做啟發式，避免無謂轉檔
+    if (audioCompatProbeState === 'ok' || audioCompatProbeState === 'needs-compat') return;
+    clearTimeout(audioCompatTimer);
+    audioCompatTimer = setTimeout(() => {
+      const v = filteredVideos[currentIndex];
+      if (!v || !playerModalEl.classList.contains('active')) return;
+      if (playerVideoEl.muted || playerVideoEl.volume === 0 || playerVideoEl.paused) {
+        // 尚未真正有聲（例如 Autoplay 保底靜音中）→ 稍後再試，
+        // 避免像舊版一樣必須「手動暫停再播放」才會觸發轉檔
+        if (audioCompatHeuristicTries < 4) {
+          audioCompatHeuristicTries++;
+          scheduleAudioCompatCheck();
+        }
+        return;
+      }
+      if (typeof playerVideoEl.webkitAudioDecodedByteCount !== 'number') return;
+      if (playerVideoEl.webkitAudioDecodedByteCount > 0) return; // 正常解碼中
+      if (audioCompatRequestedPath === v.fullPath || audioCompatAppliedPath === v.fullPath) return;
+      if (audioCompatHeuristicTries >= 4) return; // 上限，避免無限轉檔
+      audioCompatRequestedPath = v.fullPath;
+      audioCompatHeuristicTries++;
+      notifyAudioCompatPending();
+      if (vscode) {
+        // force：已實測零解碼位元組，直接轉檔（不依賴編碼白名單）
+        vscode.postMessage({ type: 'probeAudioCompat', filePath: v.fullPath, force: true });
+      }
+    }, 1500);
+  }
+
+  // 解除靜音（Autoplay 保底被解除或手動調整）後立刻重新評估——
+  // 舊版缺這段，導致「開檔時處於保底靜音 → 檢查被跳過 → 必須暫停再播放才會轉檔」。
+  playerVideoEl.addEventListener('volumechange', () => {
+    if (!playerVideoEl.muted && playerVideoEl.volume > 0) {
+      scheduleAudioCompatCheck();
+    }
+  });
 
   playerVideoEl.addEventListener('timeupdate', () => {
     if (isSeeking) return; // 尋道中不干擾使用者拖曳
@@ -1792,6 +1978,8 @@
     } else {
       isMuted = false;
       lastVolume = clamped;
+      // 使用者主動把音量調回來（滑桿／滾輪／↑↓）→ 結束「Autoplay 保底靜音」
+      isAutoplayMutedFallback = false;
     }
     syncVolumeUI();
 
@@ -1804,8 +1992,20 @@
     setVolume(parseFloat(e.target.value));
   });
 
+  // 喇叭鈕的「開／關聲音」必須以「使用者按下前畫面上顯示的狀態」判斷意圖：
+  // Autoplay 保底靜音的解除掛在 document 的捕捉階段（比按鈕自己的 click 更早執行），
+  // 若在 click 當下才讀狀態，聲音已被自動開啟，這次點擊就會反被誤判成「靜音」。
+  let gestureStartMuted = false;
+  function captureGestureStartVolumeState() {
+    const rawVol = parseFloat(volumeSliderEl.value);
+    const curVol = Math.round(Math.max(0, Math.min(1, isNaN(rawVol) ? 0.5 : rawVol)) * 100) / 100;
+    gestureStartMuted = isMuted || isAutoplayMutedFallback || curVol === 0;
+  }
+  document.addEventListener('pointerdown', captureGestureStartVolumeState, true);
+  document.addEventListener('keydown', captureGestureStartVolumeState, true);
+
   volumeBtnEl.addEventListener('click', () => {
-    if (isMuted || playerVideoEl.muted || playerVideoEl.volume === 0) {
+    if (gestureStartMuted) {
       setVolume(lastVolume > 0 ? lastVolume : 0.5);
     } else {
       setVolume(0);
@@ -2749,6 +2949,47 @@
             }
           }
         }
+        break;
+
+      case 'audioCompatDetected':
+        // 後端以 ffprobe 判定此檔音軌無法由 IDE 內建解碼器解碼 → 已開始建立相容音軌
+        audioCompatProbeState = 'needs-compat';
+        notifyAudioCompatPending();
+        break;
+
+      case 'audioCompatNotNeeded':
+        // 已確認編碼可解碼（或此檔沒有音軌）→ 停用啟發式，避免無謂的 ffmpeg 轉檔
+        audioCompatProbeState = 'ok';
+        break;
+
+      case 'audioCompatUnavailable':
+        // 後端無 ffprobe → 退回「零音訊解碼位元組」啟發式
+        audioCompatProbeState = 'unknown';
+        scheduleAudioCompatCheck();
+        break;
+
+      case 'audioCompatReady': {
+        if (!message.filePath || !message.uri) break;
+        // 相容版本上線：更新清單 URI（後續縮圖／下一部都沿用），若正在播放則原地續播
+        allVideos.forEach((v) => { if (v.fullPath === message.filePath) v.uri = message.uri; });
+        filteredVideos.forEach((v) => { if (v.fullPath === message.filePath) v.uri = message.uri; });
+        const compatVideo = filteredVideos[currentIndex];
+        if (compatVideo && compatVideo.fullPath === message.filePath) {
+          const resumeAt = playerVideoEl.currentTime || 0;
+          const wasPlaying = !playerVideoEl.paused;
+          playerVideoEl.src = message.uri;
+          playerVideoEl.load();
+          if (resumeAt > 0) playerVideoEl.currentTime = resumeAt;
+          if (wasPlaying) playerVideoEl.play().catch(() => {});
+        }
+        audioCompatRequestedPath = null;
+        audioCompatAppliedPath = message.filePath;
+        notifyAudioCompatReady();
+        break;
+      }
+
+      case 'audioCompatFailed':
+        notifyAudioCompatFailed(message.message);
         break;
 
       case 'localeChanged':

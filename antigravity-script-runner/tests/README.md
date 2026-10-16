@@ -7,14 +7,15 @@
 ## 1. 如何執行
 
 ```powershell
-node tests/run-all.js          # 一次跑完三支（建議）
+node tests/run-all.js          # 一次跑完四支（建議）
 npm test                       # 同上（package.json 已設好）
 node tests/frontend.dom.js     # 只跑前端互動語意
 node tests/backend.smoke.js    # 只跑後端面板生命週期
+node tests/stream.smoke.js     # 只跑串流伺服器 HTTP 語意
 node tests/locales.check.js    # 只跑語系檢查
 ```
 
-- 全部通過 → 輸出 `ALL-SUITES-PASSED (3/3)`，退出碼 `0`。
+- 全部通過 → 輸出 `ALL-SUITES-PASSED (4/4)`，退出碼 `0`。
 - 任一失敗 → 該支輸出 `...-TEST-FAILED (checked=N, failed=M)`，退出碼非 `0`（可直接掛進 git hook / CI）。
 
 ---
@@ -41,16 +42,23 @@ node tests/locales.check.js    # 只跑語系檢查
 - `viewer.js` 與 `index.html` 實際引用的 i18n 鍵（`t('key')`、`data-i18n*`）在兩個語系都存在。
 - 防的是：新增按鈕卻忘記加翻譯、改了鍵名沒同步。
 
-### `frontend.dom.js`（61 項斷言）
+### `frontend.dom.js`（80 項斷言）
 - 三個檢視器（圖片／影片／音訊）的 **檔案分頁**：`Esc`／滑鼠右鍵／✕／`G`／工具列按鈕 → 送出 `expandToFolderGallery` 並帶出目標檔路徑，且**不**送 `closeCustomEditor`。
 - 三個檢視器的 **畫廊分頁**：`Esc` 只退出放大檢視、不送任何分頁訊息、不顯示展開按鈕、`revealInGallery` 只定位不放大。
 - 音訊專屬：刪除播放中檔案時的行為、`Esc` 優先序。
+- 影片專屬：**Autoplay 保底靜音下的音量語意**（喇叭鈕不得被同一次手勢反誤判為靜音、滾輪調音量須解除保底、持久化只能記「使用者意圖」）。
+- 影片／音訊專屬：**音訊相容模式**（開檔即送出 ffprobe 判定、判定為可解碼時不得轉檔、判定不可解碼或無 ffprobe 時才轉檔、切換後保留播放位置、解除保底靜音後須立即重新評估）。
+- 影片專屬：**提示整合**（同一流程只留一則、完成時就地更新、Autoplay 提示會被合併收掉、快取命中完全不顯示）。
 
 ### `backend.smoke.js`（63 項斷言）
 - 開檔（自訂編輯器）**沿用 VS Code 既有分頁**，`initData` 標記 `isCustomEditor` 並帶出 `targetFilePath`。
 - 展開後建立標題為「`類型: 資料夾名`」的畫廊分頁、原檔案分頁被關閉、新分頁 `initData` 帶出 `revealFilePath`。
 - 同資料夾已有畫廊分頁 → 不重複開分頁，改送 `revealInGallery`（可要求選取）。
 - `closeCustomEditor` 守門：畫廊分頁收到時**不得**被關閉。
+
+### `stream.smoke.js`（13 項斷言）
+- 影片／音訊串流伺服器的 HTTP 語意：`Range` 切片（含 `bytes=-N` 取檔案尾端）、206／416／403、`Content-Type`、以及影片的 4MB 單次回應上限。
+- 防的是：改動 Range 解析時把「取尾端」誤寫成「取開頭」，導致播放器讀到錯誤區段（`moov` 在尾端的容器會直接播放失敗）；以及白名單／Token 被繞過。
 
 ---
 
@@ -71,6 +79,17 @@ node tests/locales.check.js    # 只跑語系檢查
 ```
   FAIL  自動改播下一首 c.flac（修正前會停在已刪除的 b.wav）
 FRONTEND-TEST-FAILED  (checked=61, failed=1)
+```
+
+**實例（影片 Autoplay 保底靜音）**：Webview 首次開檔時，瀏覽器會擋「帶聲音的自動播放」，
+播放器因此降級為靜音自動播放，並在 document 的捕捉階段等待使用者的第一次手勢解除靜音。
+在修正前，先加入新測試並跑出（此即負對照；括號內為修正前後的差異）：
+
+```
+  FAIL  保底靜音時按喇叭鈕 → 開啟聲音（修正前會被同一次手勢誤判為「靜音」，音量歸 0 而無聲）
+  FAIL  保底靜音時以滾輪調音量 → 出聲（滾輪不在首次手勢清單內，修正前保底靜音不會被解除）
+  FAIL  只改排序不會把「保底靜音」寫成使用者靜音（修正前會污染持久化狀態，之後每次開檔都預設無聲）
+FRONTEND-TEST-FAILED  (checked=68, failed=5)
 ```
 
 若當時沒有做這個動作，就無法區分「測試有效」與「測試剛好沒測到」。

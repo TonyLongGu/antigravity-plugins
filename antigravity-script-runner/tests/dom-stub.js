@@ -104,7 +104,14 @@ function createElement(id, tag = 'div') {
     },
     click() { el._fire('click'); },
     focus() {}, blur() {}, select() {}, scrollIntoView() {},
-    appendChild() {}, removeChild() {}, remove() {}, insertAdjacentHTML() {},
+    appendChild(child) { el.children.push(child); if (child) child.parentNode = el; return child; },
+    removeChild(child) {
+      const i = el.children.indexOf(child);
+      if (i >= 0) el.children.splice(i, 1);
+      return child;
+    },
+    remove() { el._removed = true; el.parentNode = null; },
+    insertAdjacentHTML() {},
     setAttribute() {}, getAttribute() { return null; }, removeAttribute() {}, hasAttribute() { return false; },
     closest() { return null; }, contains() { return false; },
     querySelector() { return createElement('query-result'); },
@@ -133,6 +140,8 @@ function createContext() {
   const documentListeners = new Map();
   const storage = new Map();
   const posted = [];
+  /** 由 document.createElement 動態建立的元素（供測試觀察，例如 toast 提示） */
+  const created = [];
 
   const getEl = (id, tag) => {
     if (!elements.has(id)) elements.set(id, createElement(id, tag));
@@ -147,7 +156,11 @@ function createContext() {
     visibilityState: 'visible',
     readyState: 'complete',
     getElementById: (id) => getEl(id),
-    createElement: (tag) => createElement('created-' + tag, tag),
+    createElement: (tag) => {
+      const el = createElement('created-' + tag, tag);
+      created.push(el);
+      return el;
+    },
     createElementNS: (ns, tag) => createElement('created-' + tag, tag),
     createDocumentFragment: () => createElement('fragment'),
     createRange: () => ({ selectNodeContents() {}, setStart() {}, setEnd() {}, collapse() {} }),
@@ -258,6 +271,7 @@ function createContext() {
     context,
     getEl,
     posted,
+    created,
     fireWindow,
     fireDocument,
     fireMessage: (data) => fireWindow('message', { data }),

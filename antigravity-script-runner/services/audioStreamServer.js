@@ -178,8 +178,12 @@ class AudioStreamServer {
       // 支援 HTTP 206 範圍請求
       if (range) {
         const parts = range.replace(/bytes=/, '').split('-');
-        const start = parseInt(parts[0], 10) || 0;
-        let requestedEnd = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        // 標準語意：`bytes=-N` 代表「檔案最後 N 個位元組」（suffix range），
+        // 不可當成 `0-N`，否則播放器在讀取 moov/尾端索引時會拿到錯誤區段。
+        const isSuffixRange = parts[0] === '' && !!parts[1];
+        let start = isSuffixRange ? fileSize - parseInt(parts[1], 10) : (parseInt(parts[0], 10) || 0);
+        if (start < 0) start = 0;
+        let requestedEnd = (isSuffixRange || !parts[1]) ? fileSize - 1 : parseInt(parts[1], 10);
 
         if (start >= fileSize || start < 0) {
           res.writeHead(416, {

@@ -58,6 +58,78 @@
   let lastTargetAudioPath = null;
   let isCustomEditor = false;
 
+  // ==========================================================================
+  // 音訊相容模式（IDE 內建 Chromium 缺 AAC 等專利解碼器：上游 microsoft/vscode#167685）
+  //
+  // 症狀：MP4/M4A 內的 AAC（及 AC-3 / E-AC-3 / Opus / ALAC）音軌「零音訊位元組、不報錯」，
+  //       造成「怎麼調音量都沒聲音」；PCM(WAV) / MP3 / FLAC / Vorbis 則正常。
+  // 判定（主要）：開啟曲目時即以 ffprobe 讀出音軌編碼 → 立即決定播放規則（不需等播放後才偵測）。
+  // 判定（備援）：後端回報 unknown（無 ffprobe）時才用啟發式——播放中且已解除靜音，1.5 秒後仍零解碼位元組。
+  // 處理：後端以本機 ffmpeg 將音軌轉為 MP3 暫存檔後無縫續播（原始檔永不修改）。
+  // ==========================================================================
+  let audioCompatRequestedPath = null;
+  let audioCompatAppliedPath = null;
+  let audioCompatTimer = null;
+  let audioCompatProbeTimer = null;
+  let audioCompatProbeState = 'unknown'; // 'probing' | 'needs-compat' | 'ok' | 'unknown'
+  let audioCompatHeuristicTries = 0;
+
+  function resetAudioCompatState() {
+    clearTimeout(audioCompatTimer);
+    clearTimeout(audioCompatProbeTimer);
+    audioCompatTimer = null;
+    audioCompatProbeTimer = null;
+    audioCompatRequestedPath = null;
+    audioCompatAppliedPath = null;
+    audioCompatProbeState = 'unknown';
+    audioCompatHeuristicTries = 0;
+  }
+
+  /** 播放曲目時即請後端以 ffprobe 判定音軌是否需相容處理 */
+  function requestAudioCompatProbe(audio) {
+    if (!audio) return;
+    audioCompatProbeState = 'probing';
+    if (vscode) {
+      vscode.postMessage({ type: 'probeAudioCompat', filePath: audio.fullPath });
+    }
+    clearTimeout(audioCompatProbeTimer);
+    audioCompatProbeTimer = setTimeout(() => {
+      if (audioCompatProbeState === 'probing') {
+        audioCompatProbeState = 'unknown';
+        scheduleAudioCompatCheck();
+      }
+    }, 3000);
+  }
+
+  function scheduleAudioCompatCheck() {
+    // 後端已用 ffprobe 給出確定答案（ok／needs-compat）→ 不做啟發式，避免無謂轉檔
+    if (audioCompatProbeState === 'ok' || audioCompatProbeState === 'needs-compat') return;
+    clearTimeout(audioCompatTimer);
+    audioCompatTimer = setTimeout(() => {
+      const a = filteredAudios[currentIndex];
+      if (!a) return;
+      if (playerAudioEl.muted || playerAudioEl.volume === 0 || playerAudioEl.paused) {
+        // 尚未真正有聲 → 稍後再試（避免必須手動暫停／播放才觸發）
+        if (audioCompatHeuristicTries < 4) {
+          audioCompatHeuristicTries++;
+          scheduleAudioCompatCheck();
+        }
+        return;
+      }
+      if (typeof playerAudioEl.webkitAudioDecodedByteCount !== 'number') return;
+      if (playerAudioEl.webkitAudioDecodedByteCount > 0) return; // 正常解碼中
+      if (audioCompatRequestedPath === a.fullPath || audioCompatAppliedPath === a.fullPath) return;
+      if (audioCompatHeuristicTries >= 4) return; // 上限，避免無限轉檔
+      audioCompatRequestedPath = a.fullPath;
+      audioCompatHeuristicTries++;
+      showToast(I18nModule.t('toast_audio_compat_start'), 'info');
+      if (vscode) {
+        // force：已實測零解碼位元組，直接轉檔
+        vscode.postMessage({ type: 'probeAudioCompat', filePath: a.fullPath, force: true });
+      }
+    }, 1500);
+  }
+
   // 3. DOM 節點引用 - 工具列與畫廊
   const playerAudioEl = document.getElementById('playerAudio');
   const folderNameEl = document.getElementById('folderName');
@@ -496,6 +568,10 @@
     currentIndex = index;
     const audio = filteredAudios[currentIndex];
     lastTargetAudioPath = audio.fullPath;
+    resetAudioCompatState();
+    // 開始播這首時即請後端以 ffprobe 判定音軌編碼（不依賴播放後的解碼位元組啟發式）
+    requestAudioCompatProbe(audio);
+
 
     // 更新底部常駐播控列資訊
     playerTitleEl.textContent = audio.fileName;
@@ -1264,6 +1340,14 @@
     // 原生音訊元件事件
     playerAudioEl.addEventListener('play', () => updatePlayPauseState(true));
     playerAudioEl.addEventListener('pause', () => updatePlayPauseState(false));
+    playerAudioEl.addEventListener('playing', () => scheduleAudioCompatCheck());
+    // 解除靜音（Autoplay 保底被解除或手動調整）後立刻重新評估，
+    // 避免「開檔時處於保底靜音 → 檢查被跳過 → 必須手動暫停再播放才會轉檔」
+    playerAudioEl.addEventListener('volumechange', () => {
+      if (!playerAudioEl.muted && playerAudioEl.volume > 0) {
+        scheduleAudioCompatCheck();
+      }
+    });
     playerAudioEl.addEventListener('error', () => {
       // 若播放器已關閉或 src 屬性已被移除/為空，視為正常卸載，直接忽略
       if (currentIndex === -1 || !playerAudioEl.getAttribute('src')) {
@@ -1617,6 +1701,49 @@
               playTrack(targetIdx);
             }
           }
+          break;
+
+        case 'audioCompatDetected':
+          // 後端以 ffprobe 判定此檔音軌無法由 IDE 內建解碼器解碼 → 已開始建立相容音軌
+          audioCompatProbeState = 'needs-compat';
+          showToast(I18nModule.t('toast_audio_compat_start'), 'info');
+          break;
+
+        case 'audioCompatNotNeeded':
+          // 已確認編碼可解碼（或此檔沒有音軌）→ 停用啟發式，避免無謂的 ffmpeg 轉檔
+          audioCompatProbeState = 'ok';
+          break;
+
+        case 'audioCompatUnavailable':
+          // 後端無 ffprobe → 退回「零音訊解碼位元組」啟發式
+          audioCompatProbeState = 'unknown';
+          scheduleAudioCompatCheck();
+          break;
+
+        case 'audioCompatReady': {
+          if (!msg.filePath || !msg.uri) break;
+          // 相容版本上線：更新清單 URI，若為正在播放的曲目則原地續播（保留播放位置）
+          allAudios.forEach((a) => { if (a.fullPath === msg.filePath) a.uri = msg.uri; });
+          filteredAudios.forEach((a) => { if (a.fullPath === msg.filePath) a.uri = msg.uri; });
+          const compatAudio = filteredAudios[currentIndex];
+          if (compatAudio && compatAudio.fullPath === msg.filePath) {
+            const resumeAt = playerAudioEl.currentTime || 0;
+            const wasPlaying = !playerAudioEl.paused;
+            playerAudioEl.src = msg.uri;
+            playerAudioEl.volume = isMuted ? 0 : currentVolume;
+            playerAudioEl.muted = isMuted;
+            playerAudioEl.load();
+            if (resumeAt > 0) playerAudioEl.currentTime = resumeAt;
+            if (wasPlaying) playerAudioEl.play().catch(handlePlayError);
+          }
+          audioCompatRequestedPath = null;
+          audioCompatAppliedPath = msg.filePath;
+          showToast(I18nModule.t('toast_audio_compat_ready'), 'success');
+          break;
+        }
+
+        case 'audioCompatFailed':
+          showToast(I18nModule.t('toast_audio_compat_failed', { reason: msg.message || '' }), 'error');
           break;
 
         case 'localeChanged':

@@ -6,6 +6,7 @@ const I18n = require('./i18n');
 const imageService = require('./services/imageService');
 const audioService = require('./services/audioService');
 const videoService = require('./services/videoService');
+const audioCompatService = require('./services/audioCompatService');
 const { audioStreamServer } = require('./services/audioStreamServer');
 const { videoStreamServer } = require('./services/videoStreamServer');
 
@@ -1177,6 +1178,60 @@ class VideoViewerPanel {
           await VideoViewerPanel.globalState.update('antigravity.videoViewer.loop', msg.loop);
         }
         break;
+      case 'probeAudioCompat': {
+        // 主要判定路徑：以檔案「實際音軌編碼」（ffprobe）決定播放規則——
+        //   ok           → 告知前端不需處理（前端停用啟發式，避免無謂轉檔）
+        //   needs-compat → 立即建立相容音軌（含快取與進行中去重），完成後回傳新串流 URL
+        //   unknown      → ffprobe 不可用 → 告知前端由其以「解碼位元組」啟發式補位
+        // force=true：前端已實測零音訊解碼位元組，直接轉檔（不依賴編碼白名單）。
+        const compatTarget = typeof msg.filePath === 'string' ? msg.filePath : null;
+        if (!compatTarget) break;
+        try {
+          const probe = msg.force
+            ? { status: 'needs-compat', codec: null }
+            : await audioCompatService.inspectAudioCompat(compatTarget);
+
+          if (probe.status === 'ok') {
+            this.panel.webview.postMessage({
+              type: 'audioCompatNotNeeded',
+              filePath: compatTarget,
+              codec: probe.codec
+            });
+            break;
+          }
+          if (probe.status === 'unknown') {
+            this.panel.webview.postMessage({ type: 'audioCompatUnavailable', filePath: compatTarget });
+            break;
+          }
+
+          // 僅在「真的開始轉檔」時才通知前端（快取命中＝瞬間完成，不打擾使用者）
+          const result = await audioCompatService.ensureAudioCompat(compatTarget, {
+            onProgress: () => {
+              this.panel.webview.postMessage({
+                type: 'audioCompatDetected',
+                filePath: compatTarget,
+                codec: probe.codec
+              });
+            }
+          });
+          const streamPort = await videoStreamServer.ensureServer();
+          const uri = `http://127.0.0.1:${streamPort}/video?token=${videoStreamServer.sessionToken}&path=${encodeURIComponent(result.filePath)}`;
+          this.panel.webview.postMessage({
+            type: 'audioCompatReady',
+            filePath: compatTarget,
+            uri,
+            codec: result.codec,
+            cached: result.cached
+          });
+        } catch (err) {
+          this.panel.webview.postMessage({
+            type: 'audioCompatFailed',
+            filePath: compatTarget,
+            message: (err && err.message) || String(err)
+          });
+        }
+        break;
+      }
       case 'deleteFiles':
         if (Array.isArray(msg.filePaths) && msg.filePaths.length > 0) {
           const count = msg.filePaths.length;
@@ -1573,6 +1628,56 @@ class AudioViewerPanel {
           await AudioViewerPanel.globalState.update('antigravity.audioViewer.loop', msg.loop);
         }
         break;
+      case 'probeAudioCompat': {
+        // 同影片檢視器：以 ffprobe 讀音軌編碼決定播放規則（ok／needs-compat／unknown）
+        const compatTarget = typeof msg.filePath === 'string' ? msg.filePath : null;
+        if (!compatTarget) break;
+        try {
+          const probe = msg.force
+            ? { status: 'needs-compat', codec: null }
+            : await audioCompatService.inspectAudioCompat(compatTarget);
+
+          if (probe.status === 'ok') {
+            this.panel.webview.postMessage({
+              type: 'audioCompatNotNeeded',
+              filePath: compatTarget,
+              codec: probe.codec
+            });
+            break;
+          }
+          if (probe.status === 'unknown') {
+            this.panel.webview.postMessage({ type: 'audioCompatUnavailable', filePath: compatTarget });
+            break;
+          }
+
+          // 僅在「真的開始轉檔」時才通知前端（快取命中＝瞬間完成，不打擾使用者）
+          const result = await audioCompatService.ensureAudioCompat(compatTarget, {
+            onProgress: () => {
+              this.panel.webview.postMessage({
+                type: 'audioCompatDetected',
+                filePath: compatTarget,
+                codec: probe.codec
+              });
+            }
+          });
+          const streamPort = await audioStreamServer.ensureServer();
+          const uri = `http://127.0.0.1:${streamPort}/audio?token=${audioStreamServer.sessionToken}&path=${encodeURIComponent(result.filePath)}`;
+          this.panel.webview.postMessage({
+            type: 'audioCompatReady',
+            filePath: compatTarget,
+            uri,
+            codec: result.codec,
+            cached: result.cached
+          });
+        } catch (err) {
+          this.panel.webview.postMessage({
+            type: 'audioCompatFailed',
+            filePath: compatTarget,
+            message: (err && err.message) || String(err)
+          });
+        }
+        break;
+      }
       case 'deleteFiles':
         if (Array.isArray(msg.filePaths) && msg.filePaths.length > 0) {
           const count = msg.filePaths.length;
@@ -1748,6 +1853,12 @@ function deactivate() {
   try {
     const { audioStreamServer } = require('./services/audioStreamServer');
     audioStreamServer.dispose();
+  } catch (_) {}
+  try {
+    const audioCompatService = require('./services/audioCompatService');
+    audioCompatService.cleanupCompatCache().then((n) => {
+      if (n > 0) console.log(`[AudioCompat] 已清除 ${n} 個過期相容音軌暫存檔`);
+    });
   } catch (_) {}
 }
 
