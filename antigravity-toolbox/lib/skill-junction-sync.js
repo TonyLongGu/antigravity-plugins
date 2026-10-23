@@ -325,10 +325,62 @@ function syncWorkspaceSkills(enabledFolders, wsDir, options = {}) {
   };
 }
 
+/**
+ * 解除全域 Skills 目錄下所有由本功能建立的連結（Junction / Symlink）
+ * 僅處理 reparse point（本功能建立的連結），全域目錄內的實體資料夾與檔案一律保留。
+ * @param {{ dryRun?: boolean, globalDir?: string }} [options]
+ * @returns {{ removed: number, kept: number, failed: number, globalDir: string, removedNames: string[] }}
+ */
+function clearGlobalSkillLinks(options = {}) {
+  const dryRun = !!options.dryRun;
+  const globalDir = options.globalDir
+    ? resolveFullPath(options.globalDir)
+    : getDefaultGlobalSkillsDir();
+
+  let globalEntries = [];
+  try {
+    globalEntries = fs.readdirSync(globalDir, { withFileTypes: true });
+  } catch {
+    globalEntries = [];
+  }
+
+  let kept = 0;
+  let failed = 0;
+  const removedNames = [];
+
+  for (const entry of globalEntries) {
+    const full = path.join(globalDir, entry.name);
+    if (!isReparsePoint(full)) {
+      kept += 1;
+      continue;
+    }
+
+    if (dryRun) {
+      removedNames.push(entry.name);
+      continue;
+    }
+
+    if (removeJunction(full)) {
+      removedNames.push(entry.name);
+    } else {
+      failed += 1;
+    }
+  }
+
+  return {
+    removed: removedNames.length,
+    kept,
+    failed,
+    globalDir,
+    removedNames,
+  };
+}
+
 module.exports = {
   SKILL_SUB_PATHS,
   getDefaultGlobalSkillsDir,
   resolveFullPath,
   collectSourceSkills,
   syncWorkspaceSkills,
+  clearGlobalSkillLinks,
 };

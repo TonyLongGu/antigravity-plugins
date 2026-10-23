@@ -463,7 +463,7 @@ function activate(context) {
         e.affectsConfiguration('antigravity.syncSkillsOnFolderToggle')
         && !skillSyncService.isSyncWriteInFlight()
       ) {
-        skillSyncService.syncWatchersToSetting();
+        skillSyncService.applySyncSettingChange(provider);
         provider.pushStatus(50);
       }
       if (

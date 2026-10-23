@@ -2,7 +2,7 @@ const vscode = require('vscode');
 const fs = require('node:fs');
 const path = require('node:path');
 const { getCanonicalPath } = require('./systemService');
-const { SKILL_SUB_PATHS, getDefaultGlobalSkillsDir, syncWorkspaceSkills } = require('../lib/skill-junction-sync');
+const { SKILL_SUB_PATHS, getDefaultGlobalSkillsDir, syncWorkspaceSkills, clearGlobalSkillLinks } = require('../lib/skill-junction-sync');
 
 const SETTING_KEY = 'syncSkillsOnFolderToggle';
 const EXCLUDE_FIRST_SETTING_KEY = 'skillSyncExcludeFirstProject';
@@ -140,6 +140,50 @@ function syncEnabledProjectSkills(enabledFolders, wsDir, provider = null, option
   return result;
 }
 
+/**
+ * 解除全域 Skills 目錄下所有由同步建立的連結（Junction / Symlink）
+ * 僅移除連結本身，實體資料夾（使用者自建技能）一律保留。
+ * @param {object} [provider]
+ * @param {{ notify?: boolean }} [options]
+ * @returns {{ removed: number, kept: number, failed: number, globalDir: string, removedNames: string[] }}
+ */
+function clearSyncedSkills(provider = null, options = {}) {
+  const { notify = false } = options;
+  lastProvider = provider || lastProvider;
+
+  const result = clearGlobalSkillLinks({ globalDir: getGlobalSkillsDir() });
+
+  if (notify && provider?.pushToast) {
+    if (result.failed > 0) {
+      provider.pushToast(
+        toastText(
+          `已解除 ${result.removed} 個全域 Skills 連結，${result.failed} 個解除失敗（實體資料夾未動）。`,
+          `Removed ${result.removed} global Skills links, ${result.failed} failed (real folders untouched).`
+        ),
+        'warning'
+      );
+    } else if (result.removed > 0) {
+      provider.pushToast(
+        toastText(
+          `已解除 ${result.removed} 個全域 Skills 連結（實體資料夾保留）。`,
+          `Removed ${result.removed} global Skills links (real folders kept).`
+        ),
+        'success'
+      );
+    } else {
+      provider.pushToast(
+        toastText(
+          '全域 Skills 目錄沒有可解除的連結，已保持原狀。',
+          'No global Skills links to remove; nothing changed.'
+        ),
+        'info'
+      );
+    }
+  }
+
+  return result;
+}
+
 function disposeSkillWatchers() {
   if (watchDebounce) {
     clearTimeout(watchDebounce);
@@ -232,8 +276,24 @@ function refreshSkillSync(provider = null, enabledFolders = [], wsDir = '') {
 }
 
 /**
+ * 設定由外部變更（settings.json 或其他視窗）時套用新狀態：
+ * 開啟 → 重整監看；關閉 → 停止監看並解除所有全域連結。
+ * @param {object} [provider]
+ * @returns {object|null} 關閉時回傳解除結果
+ */
+function applySyncSettingChange(provider = null) {
+  lastProvider = provider || lastProvider;
+  if (isSyncEnabled()) {
+    syncWatchersToSetting();
+    return null;
+  }
+  disposeSkillWatchers();
+  return clearSyncedSkills(provider, { notify: true });
+}
+
+/**
  * 開啟：立即依啟用專案對齊並開始跟隨。
- * 關閉：停止跟隨，保留現有連結。
+ * 關閉：停止跟隨，並解除所有指向全域 Skills 目錄的連結（實體資料夾保留）。
  */
 async function setSyncEnabled(enabled, provider = null, enabledFolders = [], wsDir = '') {
   lastProvider = provider;
@@ -258,15 +318,7 @@ async function setSyncEnabled(enabled, provider = null, enabledFolders = [], wsD
   }
 
   disposeSkillWatchers();
-  if (provider?.pushToast) {
-    provider.pushToast(
-      toastText(
-        '已停止跟隨 Skills 變更，現有連結保留。',
-        'Stopped following Skills changes. Existing links are kept.'
-      ),
-      'info'
-    );
-  }
+  clearSyncedSkills(provider, { notify: true });
 }
 
 /**
@@ -322,6 +374,8 @@ module.exports = {
   isExcludeFirstProjectEnabled,
   isSyncWriteInFlight,
   syncEnabledProjectSkills,
+  clearSyncedSkills,
+  applySyncSettingChange,
   setSyncEnabled,
   setExcludeFirstProject,
   refreshSkillSync,

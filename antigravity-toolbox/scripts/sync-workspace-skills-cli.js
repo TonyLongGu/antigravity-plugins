@@ -5,6 +5,7 @@ const {
   getDefaultGlobalSkillsDir,
   resolveFullPath,
   syncWorkspaceSkills,
+  clearGlobalSkillLinks,
 } = require('../lib/skill-junction-sync');
 
 function parseArgs(argv) {
@@ -12,12 +13,15 @@ function parseArgs(argv) {
     workspace: '',
     globalDir: '',
     dryRun: false,
+    clear: false,
   };
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--dry-run' || arg === '-DryRun') {
       opts.dryRun = true;
+    } else if (arg === '--clear' || arg === '-Clear') {
+      opts.clear = true;
     } else if ((arg === '--workspace' || arg === '-WorkspaceFile') && argv[i + 1]) {
       opts.workspace = argv[i + 1];
       i += 1;
@@ -62,6 +66,27 @@ function main() {
   const opts = parseArgs(process.argv.slice(2));
   const scriptDir = __dirname;
   const searchFrom = process.cwd() || scriptDir;
+
+  if (opts.clear) {
+    const globalDir = opts.globalDir || getDefaultGlobalSkillsDir();
+    console.log('===============================================================');
+    console.log('         全域 Skills 連結解除工具                              ');
+    console.log('===============================================================');
+    if (opts.dryRun) {
+      console.log('[WARN] 目前為 [預覽模擬模式 (DryRun)]，不會對檔案系統進行實際修改！');
+    }
+    console.log(`[INFO] 全域 Skills 目標目錄: ${globalDir}`);
+
+    const cleared = clearGlobalSkillLinks({ dryRun: opts.dryRun, globalDir });
+    console.log(`[INFO] 已解除 ${cleared.removed}、保留實體項目 ${cleared.kept}、失敗 ${cleared.failed}`);
+    if (cleared.removedNames.length > 0) {
+      console.log(`[INFO] 解除清單: ${cleared.removedNames.join(', ')}`);
+    }
+    if (cleared.failed > 0) {
+      process.exit(1);
+    }
+    return;
+  }
 
   let wsPath = opts.workspace;
   if (!wsPath) {

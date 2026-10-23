@@ -46,7 +46,7 @@
 				"antigravity.syncSkillsOnFolderToggle": {
 					"type": "boolean",
 					"default": false,
-					"description": "開啟後立即依啟用專案對齊 ~/.agents/skills，並跟隨專案開關與 Skills 目錄變更；關閉則停止跟隨、保留現有連結（適用 Codex / Cline）"
+					"description": "開啟後立即依啟用專案對齊 ~/.agents/skills，並跟隨專案開關與 Skills 目錄變更；關閉則停止跟隨並解除所有指向全域資料夾的連結（僅移除連結，實體資料夾保留；適用 Codex / Cline）"
 				},
 				"antigravity.skillSyncExcludeFirstProject": {
 					"type": "boolean",

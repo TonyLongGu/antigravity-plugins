@@ -15,7 +15,7 @@ VS Code 相容 IDE 原生側邊欄擴充套件（Cursor、VS Code、VS Code Insi
    - 點擊專案項目可直接在 Windows 檔案總管開啟該專案目錄。
    - 🔗 **開關專案時同步全域 Skills（Codex / Cline）**：
      - **開啟**：立即依啟用專案對齊 `~/.agents/skills`，之後跟隨專案開關與專案內 Skills 目錄新增／刪除。
-     - **關閉**：停止跟隨，保留現有連結（不自動解除）。
+     - **關閉**：停止跟隨，並解除所有連到全域資料夾（`~/.agents/skills`）的連結；僅移除 Junction／Symlink，全域目錄內的實體資料夾一律保留。
      - 🔘 **排除首專案（排序第 1 個專案）**：開啟後，面板清單排序第 1 個專案（即「首項」）不列入同步來源，且其先前建立的 Junction 會一併解除；關閉則首專案照常同步。設定鍵：`antigravity.skillSyncExcludeFirstProject`（僅在同步開關開啟時生效）。
 
 2. **專案腳本執行器 (Project Script Runner)**：
