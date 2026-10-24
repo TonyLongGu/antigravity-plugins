@@ -736,7 +736,9 @@ async function showQuickMenu(provider) {
       };
 
       items.push({
-        label: `$(symbol-enum) ${I18n.t('menu_toggle_display_mode')}`,
+        // 圖示刻意不用 $(symbol-*) 系列：workbench 會套用 symbolIcon 主題色（橘／琥珀色），
+        // 與其他灰色選單項目不一致；$(filter) 為一般 Codicon，沿用前景色（灰）。
+        label: `$(filter) ${I18n.t('menu_toggle_display_mode')}`,
         description: `[${modeLabels[currentMode] || currentMode}]`,
         detail: I18n.t('menu_toggle_display_mode_desc', { name: nativeName }),
         action: 'toggleDisplayMode',

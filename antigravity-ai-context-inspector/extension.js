@@ -8,8 +8,14 @@ const TranscriptParserService = require('./services/transcriptParserService');
 const CursorTranscriptService = require('./services/cursorTranscriptService');
 const VsCodeChatSessionService = require('./services/vscodeChatSessionService');
 const McpDetectorService = require('./services/mcpDetectorService');
+const ClineSessionService = require('./services/clineSessionService');
 
 const SUPPORTED_LOCALES = ['zh-TW', 'zh-CN', 'en'];
+
+// 對話快照來源登錄表（順序即 UI chips 順序；native 會自動排到最前面）
+const SNAPSHOT_SOURCE_DEFS = ['antigravity', 'cursor', 'copilot', 'cline'];
+// 各來源對話清單快取，避免側邊欄高頻刷新時反覆掃描
+const SOURCE_LIST_TTL_MS = 4000;
 
 async function persistSharedLocale(locale) {
   if (!SUPPORTED_LOCALES.includes(locale)) return;
@@ -36,6 +42,136 @@ class AiContextViewProvider {
     this._isCursor = /cursor/i.test(appName);
     this._currentMode = context?.workspaceState?.get('aiContext.mode') || 'live';
     this._selectedConvId = context?.workspaceState?.get('aiContext.selectedConvId') || null;
+    this._selectedConvSource = context?.workspaceState?.get('aiContext.selectedConvSource') || null;
+    this._sourceListCache = new Map();
+  }
+
+  /** 目前宿主 IDE 的原生對話來源 */
+  _getNativeSourceId() {
+    if (this._isCursor) return 'cursor';
+    if (this._isVsCode) return 'copilot';
+    return 'antigravity';
+  }
+
+  _getConfig() {
+    const cfg = vscode.workspace.getConfiguration('antigravity');
+    const snapshotSources = cfg.get('aiContext.snapshotSources');
+    return {
+      clineDataDir: String(cfg.get('aiContext.clineDataDir') || '').trim(),
+      clineScope: cfg.get('aiContext.clineScope') === 'all' ? 'all' : 'workspace',
+      snapshotSources: Array.isArray(snapshotSources)
+        ? snapshotSources.filter(id => SNAPSHOT_SOURCE_DEFS.includes(id))
+        : []
+    };
+  }
+
+  _getScanOptions(extra = {}) {
+    const config = this._getConfig();
+    return {
+      isVsCode: this._isVsCode,
+      isCursor: this._isCursor,
+      cline: ClineSessionService.isAvailable(config.clineDataDir),
+      clineDataDir: config.clineDataDir,
+      appRoot: vscode.env.appRoot,
+      extensionSkillDirs: (this._isVsCode && !this._isCursor) ? this._listExtensionSkillDirs() : [],
+      ...extra
+    };
+  }
+
+  /** 來源是否在這台機器上有資料（純看檔案存在，與宿主 IDE 無關） */
+  _isSourceAvailable(sourceId, config = this._getConfig()) {
+    const userHome = process.env.USERPROFILE || require('node:os').homedir();
+    try {
+      switch (sourceId) {
+        case 'cline':
+          return ClineSessionService.isAvailable(config.clineDataDir);
+        case 'cursor':
+          return fs.existsSync(path.join(userHome, '.cursor', 'projects'));
+        case 'copilot':
+          return fs.existsSync(path.join(McpDetectorService.getVsCodeUserDir(), 'workspaceStorage'));
+        case 'antigravity':
+          return fs.existsSync(path.join(userHome, '.gemini', 'antigravity-ide', 'brain'));
+        default:
+          return false;
+      }
+    } catch {
+      return false;
+    }
+  }
+
+  /** 可用的快照來源（native 一律可用且排第一） */
+  _resolveSourceOrder(config = this._getConfig()) {
+    const native = this._getNativeSourceId();
+    const allowed = config.snapshotSources.length > 0 ? config.snapshotSources : SNAPSHOT_SOURCE_DEFS;
+    const ids = allowed.filter(id => id === native || this._isSourceAvailable(id, config));
+    if (!ids.includes(native)) ids.unshift(native);
+    return ids.sort((a, b) => (a === native ? -1 : (b === native ? 1 : 0)));
+  }
+
+  async _listConversationsFor(sourceId, workspaceFolders, config) {
+    const folderKey = workspaceFolders.map(f => f.uri?.fsPath || '').join(';');
+    const cacheKey = `${sourceId}|${config.clineScope}|${folderKey}`;
+    const cached = this._sourceListCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < SOURCE_LIST_TTL_MS) return cached.items;
+
+    let items = [];
+    try {
+      if (sourceId === 'cline') {
+        items = await ClineSessionService.getConversationsList(workspaceFolders, {
+          scope: config.clineScope,
+          clineDataDir: config.clineDataDir
+        });
+      } else if (sourceId === 'cursor') {
+        items = await CursorTranscriptService.getConversationsList(workspaceFolders);
+      } else if (sourceId === 'copilot') {
+        const extraUris = vscode.workspace.workspaceFile ? [vscode.workspace.workspaceFile.fsPath] : [];
+        items = await VsCodeChatSessionService.getConversationsList(workspaceFolders, extraUris);
+      } else {
+        items = await TranscriptParserService.getConversationsList();
+      }
+    } catch (err) {
+      console.error(`Error listing ${sourceId} conversations:`, err);
+      items = [];
+    }
+
+    const normalized = (items || []).map(item => ({
+      id: String(item.id),
+      source: sourceId,
+      title: item.title,
+      workspace: item.workspace,
+      mtime: item.mtime,
+      mtimeStr: item.mtimeStr,
+      model: item.model || '',
+      status: item.status || ''
+    }));
+
+    if (this._sourceListCache.size > 12) this._sourceListCache.clear();
+    this._sourceListCache.set(cacheKey, { at: Date.now(), items: normalized });
+    return normalized;
+  }
+
+  async _parseSnapshotFor(sourceId, workspaceFolders, config, scanOptions) {
+    if (sourceId === 'cline') {
+      return ClineSessionService.parseConversationSnapshot(this._selectedConvId, workspaceFolders, {
+        ...scanOptions,
+        scope: config.clineScope,
+        clineDataDir: config.clineDataDir
+      });
+    }
+    if (sourceId === 'cursor') {
+      const data = await CursorTranscriptService.parseConversationSnapshot(this._selectedConvId, workspaceFolders);
+      return { ...data, sourceId: 'cursor' };
+    }
+    if (sourceId === 'copilot') {
+      const extraUris = vscode.workspace.workspaceFile ? [vscode.workspace.workspaceFile.fsPath] : [];
+      const data = await VsCodeChatSessionService.parseConversationSnapshot(this._selectedConvId, workspaceFolders, {
+        ...scanOptions,
+        extraUris
+      });
+      return { ...data, sourceId: 'copilot' };
+    }
+    const data = await TranscriptParserService.parseConversationSnapshot(this._selectedConvId, workspaceFolders);
+    return { ...data, sourceId: 'antigravity' };
   }
 
   resolveWebviewView(webviewView) {
@@ -147,11 +283,15 @@ class AiContextViewProvider {
       case 'fetchData':
         this._currentMode = msg.payload?.mode || this._currentMode;
         this._selectedConvId = msg.payload?.conversationId || this._selectedConvId;
-        
+        if (msg.payload?.conversationSource) {
+          this._selectedConvSource = msg.payload.conversationSource;
+        }
+
         // 持久化記錄狀態
         if (this._context?.workspaceState) {
           this._context.workspaceState.update('aiContext.mode', this._currentMode);
           this._context.workspaceState.update('aiContext.selectedConvId', this._selectedConvId);
+          this._context.workspaceState.update('aiContext.selectedConvSource', this._selectedConvSource);
         }
 
         await this.pushData();
@@ -345,71 +485,55 @@ class AiContextViewProvider {
       if (!this._view && !this._panel) return;
 
       try {
-        let data;
         const workspaceFolders = vscode.workspace.workspaceFolders || [];
+        const config = this._getConfig();
+        const nativeSource = this._getNativeSourceId();
+        const availableSources = this._resolveSourceOrder(config);
+        const scanOptions = this._getScanOptions();
+        const isSnapshot = this._currentMode === 'snapshot';
 
-        if (this._isCursor) {
-          if (this._currentMode === 'snapshot') {
-            data = await CursorTranscriptService.parseConversationSnapshot(this._selectedConvId, workspaceFolders);
-          } else {
-            data = await ContextScannerService.scanLiveEnvironment(workspaceFolders, {
-              isVsCode: true,
-              isCursor: true
-            });
+        let data;
+        if (isSnapshot) {
+          // 來源由「選取對話所屬來源」決定；不可用時退回原生來源
+          const requested = (this._selectedConvSource && availableSources.includes(this._selectedConvSource))
+            ? this._selectedConvSource
+            : nativeSource;
+          data = await this._parseSnapshotFor(requested, workspaceFolders, config, scanOptions);
+
+          // 合併所有可用來源的對話清單（僅快照模式需要，即時模式不掃）
+          const conversations = [];
+          for (const sourceId of availableSources) {
+            const items = await this._listConversationsFor(sourceId, workspaceFolders, config);
+            conversations.push(...items);
           }
-          const convList = await CursorTranscriptService.getConversationsList(workspaceFolders);
-          data.conversationsList = convList.map(c => ({
-            id: c.id,
-            title: c.title,
-            workspace: c.workspace,
-            mtime: c.mtime,
-            mtimeStr: c.mtimeStr
+          conversations.sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
+          data.conversationsList = conversations;
+          data.snapshotSources = availableSources.map(sourceId => ({
+            id: sourceId,
+            count: conversations.filter(item => item.source === sourceId).length,
+            isNative: sourceId === nativeSource
           }));
-          data.isVsCode = true;
-          data.isCursor = true;
-        } else if (this._isVsCode) {
-          const extraUris = vscode.workspace.workspaceFile ? [vscode.workspace.workspaceFile.fsPath] : [];
-          const scanOptions = {
-            isVsCode: true,
-            isCursor: false,
-            appRoot: vscode.env.appRoot,
-            extensionSkillDirs: this._listExtensionSkillDirs(),
-            extraUris
-          };
-          if (this._currentMode === 'snapshot') {
-            data = await VsCodeChatSessionService.parseConversationSnapshot(this._selectedConvId, workspaceFolders, scanOptions);
-          } else {
-            data = await ContextScannerService.scanLiveEnvironment(workspaceFolders, scanOptions);
-          }
-          const convList = await VsCodeChatSessionService.getConversationsList(workspaceFolders, extraUris);
-          data.conversationsList = convList.map(c => ({
-            id: c.id,
-            title: c.title,
-            workspace: c.workspace,
-            mtime: c.mtime,
-            mtimeStr: c.mtimeStr
-          }));
-          data.isVsCode = true;
-          data.isCursor = false;
+          data.sourceId = data.sourceId || requested;
         } else {
-          if (this._currentMode === 'snapshot') {
-            data = await TranscriptParserService.parseConversationSnapshot(this._selectedConvId, workspaceFolders);
-          } else {
-            data = await ContextScannerService.scanLiveEnvironment(workspaceFolders, { isVsCode: false });
-          }
-
-          // 同時取得對話清單供前端下拉選單使用
-          const convList = await TranscriptParserService.getConversationsList();
-          data.conversationsList = convList.map(c => ({
-            id: c.id,
-            title: c.title,
-            workspace: c.workspace,
-            mtime: c.mtime,
-            mtimeStr: c.mtimeStr
+          data = await ContextScannerService.scanLiveEnvironment(workspaceFolders, scanOptions);
+          data.conversationsList = [];
+          data.snapshotSources = availableSources.map(sourceId => ({
+            id: sourceId,
+            count: -1,
+            isNative: sourceId === nativeSource
           }));
-          data.isVsCode = false;
-          data.isCursor = false;
+          // 即時模式只標注 Cline 開關狀態（不過濾），供 UI 淡化已關閉項目
+          if (scanOptions.cline) {
+            data.clineSettings = ClineSessionService.applyToggleState(
+              data,
+              ClineSessionService.readToggles({ clineDataDir: config.clineDataDir })
+            );
+          }
         }
+
+        data.nativeSource = nativeSource;
+        data.isVsCode = this._isVsCode;
+        data.isCursor = this._isCursor;
 
         const updatePayload = {
           type: 'updateData',
@@ -452,7 +576,7 @@ class AiContextViewProvider {
       .replace(/\{\{CSP_SOURCE\}\}/g, webview.cspSource)
       .replace(/href="style\.css"/g, `href="${styleUri}"`)
       .replace(/src="app\.js"/g, `src="${scriptUri}?v=${Date.now()}"`)
-      .replace(/<script src="locales\.js"><\/script>/g, `<script>window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)}; window.INITIAL_IS_VSCODE = ${this._isVsCode}; window.INITIAL_IS_CURSOR = ${this._isCursor};</script><script>${localesJs}</script>`)
+      .replace(/<script src="locales\.js"><\/script>/g, `<script>window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)}; window.INITIAL_IS_VSCODE = ${this._isVsCode}; window.INITIAL_IS_CURSOR = ${this._isCursor}; window.INITIAL_NATIVE_SOURCE = ${JSON.stringify(this._getNativeSourceId())};</script><script>${localesJs}</script>`)
       .replace(/\{\{LIVE_ACTIVE\}\}/g, isSnapshot ? '' : 'active')
       .replace(/\{\{SNAPSHOT_ACTIVE\}\}/g, isSnapshot ? 'active' : '')
       .replace(/\{\{CONV_WRAPPER_CLASS\}\}/g, isSnapshot ? '' : 'is-hidden');
@@ -505,6 +629,32 @@ function activate(context) {
     agentsWatcher.onDidCreate(onAgentsChange);
     agentsWatcher.onDidDelete(onAgentsChange);
     context.subscriptions.push(agentsWatcher);
+  } catch {}
+
+  // 3b. 監聽 Cline 規則（.clinerules 檔案或資料夾）與 Cline MCP 設定變更
+  try {
+    const clinerulesWatcher = vscode.workspace.createFileSystemWatcher('**/.clinerules{,/**}');
+    const onClineRulesChange = () => {
+      if (activeProvider) activeProvider.pushData(200);
+    };
+    clinerulesWatcher.onDidChange(onClineRulesChange);
+    clinerulesWatcher.onDidCreate(onClineRulesChange);
+    clinerulesWatcher.onDidDelete(onClineRulesChange);
+    context.subscriptions.push(clinerulesWatcher);
+  } catch {}
+
+  try {
+    const clineSettingsDir = path.join(ClineSessionService.getDataRoot(), 'settings');
+    const clineMcpWatcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(clineSettingsDir, 'cline_mcp_settings.json')
+    );
+    const onClineMcpChange = () => {
+      if (activeProvider) activeProvider.pushData(200);
+    };
+    clineMcpWatcher.onDidChange(onClineMcpChange);
+    clineMcpWatcher.onDidCreate(onClineMcpChange);
+    clineMcpWatcher.onDidDelete(onClineMcpChange);
+    context.subscriptions.push(clineMcpWatcher);
   } catch {}
 
   // 4b. Cursor / VS Code MCP 設定檔變更

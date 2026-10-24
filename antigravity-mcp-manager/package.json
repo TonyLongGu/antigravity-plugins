@@ -89,7 +89,7 @@
 				"command": "antigravity.mcp.toggleDisplayMode",
 				"title": "切換狀態列顯示方式",
 				"category": "MCP",
-				"icon": "$(symbol-enum)"
+				"icon": "$(filter)"
 			},
 			{
 				"command": "antigravity.mcp.viewClineMcp",

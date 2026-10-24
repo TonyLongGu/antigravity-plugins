@@ -32,6 +32,19 @@
       status_mode_live: '模式：環境即時掃描',
       status_mode_snapshot: '模式：對話已調用快照',
       status_mode_snapshot_cursor: '模式：對話足跡還原',
+      status_mode_snapshot_cline: '模式：Cline 對話足跡',
+      status_mode_snapshot_source: '模式：{source} 對話足跡',
+      source_all: '全部',
+      source_antigravity: 'Antigravity',
+      source_cursor: 'Cursor',
+      source_copilot: 'Copilot',
+      source_cline: 'Cline',
+      source_chip_title: '{source}：{count} 筆對話',
+      meta_provider_label: '提供者:',
+      meta_status_label: '狀態:',
+      meta_tokens_label: 'Token 進/出:',
+      meta_cost_label: '成本:',
+      item_disabled_title: '此項目在 Cline 設定中為關閉狀態',
 
       // 卡片 1：常駐規範
       card_rules_active_title: '常駐規範 (Always-Active)',
@@ -111,6 +124,7 @@
       summary_conversation: '對話任務',
       summary_model: '使用模型',
       summary_source_global: '全域',
+      summary_source: '來源',
 
       // 時間與雜項
       time_today: '今天 {time}',
@@ -140,6 +154,19 @@
       status_mode_live: '模式：环境实时扫描',
       status_mode_snapshot: '模式：对话已调用快照',
       status_mode_snapshot_cursor: '模式：对话足迹还原',
+      status_mode_snapshot_cline: '模式：Cline 对话足迹',
+      status_mode_snapshot_source: '模式：{source} 对话足迹',
+      source_all: '全部',
+      source_antigravity: 'Antigravity',
+      source_cursor: 'Cursor',
+      source_copilot: 'Copilot',
+      source_cline: 'Cline',
+      source_chip_title: '{source}：{count} 条对话',
+      meta_provider_label: '提供者:',
+      meta_status_label: '状态:',
+      meta_tokens_label: 'Token 进/出:',
+      meta_cost_label: '成本:',
+      item_disabled_title: '此项目在 Cline 设置中为关闭状态',
 
       card_rules_active_title: '常驻规范 (Always-Active)',
       btn_title_mode_title: '正文标题',
@@ -210,6 +237,7 @@
       summary_conversation: '对话任务',
       summary_model: '使用模型',
       summary_source_global: '全局',
+      summary_source: '来源',
 
       time_today: '今天 {time}',
       conv_snapshot_fallback: '对话快照 ({id})'
@@ -242,6 +270,19 @@
       status_mode_live: 'Mode: Live Environment Scan',
       status_mode_snapshot: 'Mode: Conversation Snapshot',
       status_mode_snapshot_cursor: 'Mode: Conversation Footprint',
+      status_mode_snapshot_cline: 'Mode: Cline Conversation Footprint',
+      status_mode_snapshot_source: 'Mode: {source} Conversation Footprint',
+      source_all: 'All',
+      source_antigravity: 'Antigravity',
+      source_cursor: 'Cursor',
+      source_copilot: 'Copilot',
+      source_cline: 'Cline',
+      source_chip_title: '{source}: {count} conversations',
+      meta_provider_label: 'Provider:',
+      meta_status_label: 'Status:',
+      meta_tokens_label: 'Tokens in/out:',
+      meta_cost_label: 'Cost:',
+      item_disabled_title: 'This item is disabled in Cline settings',
 
       // Card 1: Always-Active Rules
       card_rules_active_title: 'Always-Active Rules',
@@ -320,6 +361,7 @@
       summary_conversation: 'Conversation Task',
       summary_model: 'Model',
       summary_source_global: 'Global',
+      summary_source: 'Source',
 
       // Time & Misc
       time_today: 'Today {time}',

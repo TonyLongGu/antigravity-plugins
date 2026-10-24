@@ -66,6 +66,8 @@
   // 2. 主應用狀態
   const isVsCode = (typeof window !== 'undefined' && Boolean(window.INITIAL_IS_VSCODE)) || false;
   const isCursor = (typeof window !== 'undefined' && Boolean(window.INITIAL_IS_CURSOR)) || false;
+  const nativeSource = (typeof window !== 'undefined' && window.INITIAL_NATIVE_SOURCE)
+    || (isCursor ? 'cursor' : (isVsCode ? 'copilot' : 'antigravity'));
   if (isCursor) {
     document.body.classList.add('is-cursor');
     const btnOpenMcpDirEarly = document.getElementById('btn-open-mcp-dir');
@@ -87,6 +89,10 @@
   const savedConvLimit = parseInt(savedState.convLimit, 10);
   let currentConvLimit = CONV_LIMIT_OPTIONS.includes(savedConvLimit) ? savedConvLimit : CONV_LIMIT_DEFAULT;
   let selectedConvId = savedState.selectedConvId || null;
+  let selectedConvSource = savedState.selectedConvSource || null;
+  // 快照來源篩選（'all' 或 antigravity / cursor / copilot / cline）
+  let sourceFilter = savedState.sourceFilter || 'all';
+  let snapshotSources = [];
   let searchKeyword = '';
   let ruleActiveTitleMode = savedState.ruleActiveTitleMode || 'title'; // 'title' (內文標題) | 'name' (檔案名稱)
   let ruleCondTitleMode = savedState.ruleCondTitleMode || 'title'; // 'title' (內文標題) | 'name' (檔案名稱)
@@ -108,11 +114,13 @@
     triggerConvTitle: document.getElementById('trigger-conv-title'),
     triggerConvTime: document.getElementById('trigger-conv-time'),
     customConvPopover: document.getElementById('custom-conv-popover'),
+    sourceChips: document.getElementById('source-chips'),
     convSearchInput: document.getElementById('conv-search-input'),
     btnClearSearch: document.getElementById('btn-clear-search'),
     limitPillsContainer: document.getElementById('limit-pills-container'),
     customConvList: document.getElementById('custom-conv-list'),
     metaModel: document.getElementById('meta-model'),
+    metaExtra: document.getElementById('meta-extra'),
 
     btnCollapseAll: document.getElementById('btn-collapse-all'),
     btnExpandAll: document.getElementById('btn-expand-all'),
@@ -150,6 +158,8 @@
       mode: currentMode,
       convLimit: currentConvLimit,
       selectedConvId: selectedConvId,
+      selectedConvSource: selectedConvSource,
+      sourceFilter: sourceFilter,
       ruleActiveTitleMode: ruleActiveTitleMode,
       ruleCondTitleMode: ruleCondTitleMode,
       skillTitleMode: skillTitleMode,
@@ -317,7 +327,108 @@
     }
   };
 
+  // ── 對話來源（source）相關輔助 ─────────────────────────────────────────────
+  function sourceLabel(sourceId) {
+    if (!sourceId) return '';
+    return I18nModule.t(`source_${sourceId}`);
+  }
+
+  function getActiveSourceId() {
+    return selectedConvSource || currentData?.sourceId || nativeSource;
+  }
+
+  function getFilteredConversations() {
+    const list = allConversations || [];
+    if (sourceFilter === 'all') return list;
+    return list.filter(c => (c.source || nativeSource) === sourceFilter);
+  }
+
+  function formatTokens(value) {
+    const num = Number(value) || 0;
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(1)}k`;
+    return String(num);
+  }
+
+  function formatCost(value) {
+    const num = Number(value) || 0;
+    if (!num) return '0';
+    return num < 0.01 ? '<0.01' : num.toFixed(2);
+  }
+
+  // 來源篩選 chips（只在快照模式、且可用來源 > 1 時出現）
+  function renderSourceChips() {
+    if (!dom.sourceChips) return;
+    if (currentMode !== 'snapshot' || snapshotSources.length <= 1) {
+      dom.sourceChips.style.display = 'none';
+      dom.sourceChips.innerHTML = '';
+      return;
+    }
+
+    const total = snapshotSources.reduce((sum, item) => sum + Math.max(0, item.count || 0), 0);
+    const chips = [{ id: 'all', count: total }].concat(snapshotSources);
+
+    dom.sourceChips.style.display = 'flex';
+    dom.sourceChips.innerHTML = chips.map(item => {
+      const active = sourceFilter === item.id ? 'active' : '';
+      const countHtml = item.count >= 0
+        ? `<span class="source-chip-count">${item.count}</span>`
+        : '';
+      const label = item.id === 'all' ? I18nModule.t('source_all') : sourceLabel(item.id);
+      const title = I18nModule.t('source_chip_title', {
+        source: label,
+        count: item.count >= 0 ? item.count : 0
+      });
+      return `<button type="button" class="source-chip src-${escapeHtml(item.id)} ${active}" data-source="${escapeHtml(item.id)}" title="${escapeHtml(title)}">${escapeHtml(label)}${countHtml}</button>`;
+    }).join('');
+
+    dom.sourceChips.querySelectorAll('.source-chip').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setSourceFilter(btn.getAttribute('data-source'));
+      });
+    });
+  }
+
+  function selectConversation(item) {
+    if (!item) return;
+    selectedConvId = item.id;
+    if (item.source) selectedConvSource = item.source;
+    saveState();
+    updateTriggerDisplay();
+    closeConvPopover();
+    vscode.postMessage({
+      type: 'fetchData',
+      payload: { mode: 'snapshot', conversationId: item.id, conversationSource: item.source }
+    });
+  }
+
+  // 切換來源：只要該來源有任何對話，就直接載入最新一筆
+  function setSourceFilter(next) {
+    sourceFilter = next || 'all';
+    saveState();
+    renderSourceChips();
+
+    const visible = getFilteredConversations();
+    if (visible.length > 0 && !visible.some(c => c.id === selectedConvId)) {
+      selectConversation(visible[0]);
+      return;
+    }
+    updateTriggerDisplay();
+    if (dom.customConvPopover?.style.display === 'block') {
+      renderCustomConvList();
+    }
+  }
+
   function snapshotModeLabel() {
+    const activeSource = getActiveSourceId();
+    if (activeSource === 'cline') {
+      return I18nModule.t('status_mode_snapshot_cline');
+    }
+    if (activeSource && activeSource !== nativeSource) {
+      return I18nModule.t('status_mode_snapshot_source', { source: sourceLabel(activeSource) });
+    }
     return (isCursor || (isVsCode && !isCursor))
       ? I18nModule.t('status_mode_snapshot_cursor')
       : I18nModule.t('status_mode_snapshot');
@@ -350,6 +461,7 @@
         dom.modeLabel.textContent = snapshotModeLabel();
       }
     }
+    renderSourceChips();
   }
 
   function updateToggleButtons() {
@@ -408,11 +520,13 @@
       return;
     }
 
+    const visible = getFilteredConversations();
     const currentId = selectedConvId || currentData?.conversationId;
-    let target = allConversations.find(c => c.id === currentId);
+    let target = visible.find(c => c.id === currentId) || allConversations.find(c => c.id === currentId);
     if (!target) {
-      target = allConversations[0];
+      target = visible[0] || allConversations[0];
       selectedConvId = target.id;
+      if (target.source) selectedConvSource = target.source;
     }
 
     dom.triggerConvTitle.textContent = target.title || I18nModule.t('conv_snapshot_fallback', { id: target.id.slice(0, 8) });
@@ -442,15 +556,16 @@
     }
 
     const limit = Math.min(parseInt(currentConvLimit, 10) || CONV_LIMIT_DEFAULT, CONV_LIMIT_OPTIONS[CONV_LIMIT_OPTIONS.length - 1]);
-    let filtered = allConversations;
+    let filtered = getFilteredConversations();
 
     // 搜尋過濾
     if (searchKeyword.trim()) {
       const q = searchKeyword.trim().toLowerCase();
-      filtered = allConversations.filter(c =>
+      filtered = filtered.filter(c =>
         (c.title && c.title.toLowerCase().includes(q)) ||
         (c.id && c.id.toLowerCase().includes(q)) ||
-        (c.mtimeStr && c.mtimeStr.toLowerCase().includes(q))
+        (c.mtimeStr && c.mtimeStr.toLowerCase().includes(q)) ||
+        (c.source && sourceLabel(c.source).toLowerCase().includes(q))
       );
     }
 
@@ -466,6 +581,10 @@
     dom.customConvList.innerHTML = visibleList.map(item => {
       const isSelected = item.id === currentId;
       const displayTime = formatShortTime(item.mtimeStr, item.mtime);
+      const itemSource = item.source || nativeSource;
+      const badge = snapshotSources.length > 1
+        ? `<span class="conv-source-badge src-${escapeHtml(itemSource)}">${escapeHtml(sourceLabel(itemSource))}</span>`
+        : '';
 
       return `
         <div class="conv-item-card ${isSelected ? 'is-selected' : ''}" data-conv-id="${escapeHtml(item.id)}">
@@ -475,6 +594,7 @@
           </div>
           <div class="conv-item-meta">
             <span class="conv-item-time">${escapeHtml(displayTime)}</span>
+            ${badge}
           </div>
         </div>
       `;
@@ -484,7 +604,11 @@
     dom.customConvList.querySelectorAll('.conv-item-card').forEach(card => {
       card.addEventListener('click', () => {
         const convId = card.getAttribute('data-conv-id');
-        if (convId) {
+        if (!convId) return;
+        const target = (allConversations || []).find(c => c.id === convId);
+        if (target) {
+          selectConversation(target);
+        } else {
           selectedConvId = convId;
           saveState();
           updateTriggerDisplay();
@@ -538,6 +662,21 @@
   }
 
   // 渲染清單核心函式
+  function markDisabledItems(container, items) {
+    if (!container) return;
+    const disabledKeys = new Set(
+      (items || []).filter(item => item.isEnabled === false).map(item => item.filePath || item.name)
+    );
+    if (disabledKeys.size === 0) return;
+    container.querySelectorAll('.context-item-details').forEach(el => {
+      const key = el.getAttribute('data-item-key');
+      if (key && disabledKeys.has(key)) {
+        el.classList.add('is-disabled');
+        el.title = I18nModule.t('item_disabled_title');
+      }
+    });
+  }
+
   function renderAll() {
     if (!currentData) return;
 
@@ -615,6 +754,8 @@
       }).join('');
     }
 
+    markDisabledItems(dom.listRulesActive, activeRules);
+
     // 2. 條件式規範
     let rawCondRules = currentData.rules?.conditional || [];
     if (currentMode === 'snapshot') {
@@ -657,6 +798,8 @@
       }).join('');
     }
 
+    markDisabledItems(dom.listRulesConditional, condRules);
+
     // 3. 技能清單
     const isVsCodeEnv = Boolean(isVsCode || currentData.isVsCode);
     const isCursorEnv = Boolean(isCursor || currentData.isCursor);
@@ -681,7 +824,28 @@
       if (dom.metaModel) {
         dom.metaModel.textContent = currentData.model || (isCursor || isVsCode ? '—' : 'Gemini Flash');
       }
+      if (dom.metaExtra) {
+        const parts = [];
+        if (currentData.provider) {
+          parts.push(`${I18nModule.t('meta_provider_label')} ${currentData.provider}`);
+        }
+        if (currentData.status) {
+          parts.push(`${I18nModule.t('meta_status_label')} ${currentData.status}`);
+        }
+        const usage = currentData.usage;
+        if (usage && (usage.tokensIn || usage.tokensOut)) {
+          parts.push(`${I18nModule.t('meta_tokens_label')} ${formatTokens(usage.tokensIn)}/${formatTokens(usage.tokensOut)}`);
+        }
+        if (usage && usage.totalCost) {
+          parts.push(`${I18nModule.t('meta_cost_label')} ${formatCost(usage.totalCost)}`);
+        }
+        dom.metaExtra.textContent = parts.join(' · ');
+      }
+    } else if (dom.metaExtra) {
+      dom.metaExtra.textContent = '';
     }
+
+    renderSourceChips();
 
     if (allSkills.length === 0) {
       dom.listSkills.innerHTML = `<div class="empty-state">${currentMode === 'snapshot' ? I18nModule.t('empty_skills_snapshot') : I18nModule.t('empty_skills_live')}</div>`;
@@ -724,6 +888,7 @@
         `;
       }
       dom.listSkills.innerHTML = html;
+      markDisabledItems(dom.listSkills, allSkills);
     }
 
     // 4. MCP 伺服器與工具
@@ -860,6 +1025,9 @@
     }
     if (currentData.model) {
       lines.push(`- ${I18nModule.t('summary_model')}: ${currentData.model}`);
+    }
+    if (currentMode === 'snapshot' && currentData.sourceId) {
+      lines.push(`- ${I18nModule.t('summary_source')}: ${sourceLabel(currentData.sourceId)}`);
     }
     lines.push('');
 
@@ -1058,7 +1226,7 @@
       currentMode = 'snapshot';
       saveState();
       syncModeUI();
-      vscode.postMessage({ type: 'fetchData', payload: { mode: 'snapshot', conversationId: selectedConvId } });
+      vscode.postMessage({ type: 'fetchData', payload: { mode: 'snapshot', conversationId: selectedConvId, conversationSource: selectedConvSource } });
     });
 
     // 全部摺疊卡片（忽略技能子分組卡片 subgroup-details，維持其既有開關結構）
@@ -1082,7 +1250,10 @@
     // 重新整理
     if (dom.btnRefresh) {
       dom.btnRefresh.addEventListener('click', () => {
-        vscode.postMessage({ type: 'fetchData', payload: { mode: currentMode, conversationId: selectedConvId } });
+        vscode.postMessage({
+          type: 'fetchData',
+          payload: { mode: currentMode, conversationId: selectedConvId, conversationSource: currentMode === 'snapshot' ? selectedConvSource : undefined }
+        });
         Toast.show(I18nModule.t('toast_refreshed'), 'info');
       });
     }
@@ -1123,13 +1294,23 @@
         if (payload.conversationId) {
           selectedConvId = payload.conversationId;
         }
+        if (payload.sourceId && payload.mode === 'snapshot') {
+          selectedConvSource = payload.sourceId;
+        }
 
-        // 更新歷史對話清單快取並刷新自訂選單
+        // 更新來源 chips 與歷史對話清單快取
+        if (Array.isArray(payload.snapshotSources)) {
+          snapshotSources = payload.snapshotSources;
+          if (sourceFilter !== 'all' && !snapshotSources.some(s => s.id === sourceFilter)) {
+            sourceFilter = 'all';
+          }
+        }
         if (Array.isArray(payload.conversationsList)) {
           allConversations = payload.conversationsList;
           updateConvDropdown();
         }
 
+        saveState();
         renderAll();
       } else if (type === 'toast') {
         Toast.show(payload.message, payload.status || 'info');
@@ -1148,7 +1329,7 @@
     // 前端初始化就緒，自動向後端發送請求獲取最新上下文
     vscode.postMessage({
       type: 'fetchData',
-      payload: { mode: currentMode, conversationId: selectedConvId }
+      payload: { mode: currentMode, conversationId: selectedConvId, conversationSource: selectedConvSource }
     });
 
     // 啟動全域滑鼠右鍵拖曳滾動

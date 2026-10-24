@@ -124,7 +124,7 @@
   "mode_both_desc": "状态列同时显示 {name} 与 Cline 的启用统计",
   "mode_antigravity_label": "仅 {name}",
   "mode_antigravity_desc": "状态列仅显示 {name} 的启用统计",
-  "mode_cline_label": "cline (仅 Cline)",
+  "mode_cline_label": "仅 Cline",
   "mode_cline_desc": "状态列仅显示 Cline 的启用统计",
   "mode_placeholder": "选择状态列的 MCP 显示方式 (参考 aiQuota 规范)...",
   "status_mode_updated": "已更新状态列显示方式为：{mode}",

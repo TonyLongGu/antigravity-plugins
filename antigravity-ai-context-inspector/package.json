@@ -30,6 +30,38 @@
 						"English"
 					],
 					"description": "Antigravity 外掛全域介面語言 (Global Interface Language for Antigravity Plugins)"
+				},
+				"antigravity.aiContext.snapshotSources": {
+					"type": "array",
+					"default": [],
+					"items": {
+						"type": "string",
+						"enum": [
+							"antigravity",
+							"cursor",
+							"copilot",
+							"cline"
+						]
+					},
+					"description": "對話快照可顯示的來源；留空 = 自動（原生來源 + 本機偵測到的其他來源）"
+				},
+				"antigravity.aiContext.clineDataDir": {
+					"type": "string",
+					"default": "",
+					"description": "Cline 資料目錄（預設 ~/.cline/data）；留空用預設值，主要供測試或非標準安裝使用"
+				},
+				"antigravity.aiContext.clineScope": {
+					"type": "string",
+					"default": "workspace",
+					"enum": [
+						"workspace",
+						"all"
+					],
+					"enumDescriptions": [
+						"只列出目前工作區的 Cline 對話（建議）",
+						"列出所有 Cline 對話"
+					],
+					"description": "Cline 對話清單範圍"
 				}
 			}
 		},

@@ -319,7 +319,91 @@ class ContextScannerService {
       result.mcpServers = await McpDetectorService.scanVsCodeMcpServers(workspaceFolders);
     }
 
+    // 5. Cline 專屬來源：與宿主 IDE 無關，只要 ~/.cline 存在就適用
+    if (options.cline) {
+      await this.scanClineSources(result, options);
+      const clineServers = await McpDetectorService.scanClineMcpServers(workspaceFolders, options);
+      result.mcpServers = McpDetectorService.mergeMcpServers([result.mcpServers || [], clineServers]);
+    }
+
     return result;
+  }
+
+  /**
+   * Cline 規則與技能（與宿主 IDE 無關）
+   * - 工作區：`.clinerules`（可為檔案或資料夾）、`.clinerules/workflows/*.md`（條件式 slash command）
+   * - 全域：`~/Documents/Cline/Rules`（Cline 官方全域規則位置）
+   * - 全域技能：`~/.agents/skills`（Cline 與 Codex 共用）
+   * 這裡只負責「掃描並標記」，啟停狀態由 ClineSessionService.applyToggleState 依開關標注。
+   */
+  static async scanClineSources(result, options = {}) {
+    const userHome = this.getUserHome();
+
+    for (const ws of result.workspaces || []) {
+      const clinerulesPath = path.join(ws.path, '.clinerules');
+      let stat = null;
+      try {
+        stat = fs.existsSync(clinerulesPath) ? fs.statSync(clinerulesPath) : null;
+      } catch {
+        stat = null;
+      }
+      if (!stat) continue;
+
+      if (stat.isDirectory()) {
+        const rules = await this.scanRulesInDir(clinerulesPath, ws.name, false, ws.index);
+        for (const rule of rules) {
+          this._pushClineRule(result, {
+            ...rule,
+            isAlwaysActive: true,
+            trigger: 'always_on',
+            origin: 'cline'
+          });
+        }
+        const workflows = await this.scanRulesInDir(path.join(clinerulesPath, 'workflows'), ws.name, false, ws.index);
+        for (const workflow of workflows) {
+          this._pushClineRule(result, {
+            ...workflow,
+            isAlwaysActive: false,
+            trigger: 'workflow',
+            origin: 'cline'
+          });
+        }
+      } else {
+        const rule = await this.parseSingleRuleFile(clinerulesPath, ws.name, false, ws.index);
+        if (rule) {
+          this._pushClineRule(result, {
+            ...rule,
+            isAlwaysActive: true,
+            trigger: 'always_on',
+            origin: 'cline'
+          });
+        }
+      }
+    }
+
+    const globalRulesDir = path.join(userHome, 'Documents', 'Cline', 'Rules');
+    const globalRules = await this.scanRulesInDir(globalRulesDir, '全域設定 (Global)', true, 1000);
+    for (const rule of globalRules) {
+      this._pushClineRule(result, {
+        ...rule,
+        isAlwaysActive: true,
+        trigger: 'always_on',
+        origin: 'cline'
+      });
+    }
+
+    const globalSkills = await this.scanSkillsInDir(path.join(userHome, '.agents', 'skills'), '使用者', 'global', 1000);
+    this._mergeSkills(result.skills.global, globalSkills);
+  }
+
+  static _pushClineRule(result, rule) {
+    if (!rule || !rule.filePath) return;
+    const key = rule.filePath.toLowerCase();
+    const exists = [...result.rules.alwaysActive, ...result.rules.conditional]
+      .some((item) => (item.filePath || '').toLowerCase() === key);
+    if (exists) return;
+    if (rule.isAlwaysActive) result.rules.alwaysActive.push(rule);
+    else result.rules.conditional.push(rule);
   }
 
   static _mergeSkills(target, list) {

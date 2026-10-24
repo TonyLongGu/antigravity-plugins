@@ -56,6 +56,8 @@
 
     <!-- 歷史對話快照選擇器 (自訂美化 Dropdown Popover) -->
     <div id="conv-select-wrapper" class="conv-select-wrapper {{CONV_WRAPPER_CLASS}}">
+      <!-- 對話來源篩選（僅快照模式顯示；只有一種來源時自動隱藏） -->
+      <div id="source-chips" class="source-chips" style="display: none;"></div>
       <div class="custom-dropdown-container">
         <!-- 觸發按鈕列 -->
         <button id="custom-conv-trigger" class="custom-dropdown-trigger" type="button" data-i18n-title="custom_conv_trigger_title" title="點擊選擇歷史對話快照">
@@ -101,6 +103,7 @@
 
       <div id="snapshot-meta-box" class="snapshot-meta-box">
         <div class="meta-item"><span class="meta-lbl" data-i18n="meta_model_label">對話使用模型:</span> <span id="meta-model" class="meta-val">-</span></div>
+        <span id="meta-extra" class="meta-extra"></span>
       </div>
     </div>
 

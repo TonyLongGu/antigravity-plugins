@@ -165,6 +165,10 @@ class McpDetectorService {
   }
 
   /** 跨來源合併：同名（不分大小寫）時以先出現者為準 */
+  static mergeMcpServers(lists) {
+    return this._mergeMcpServers(lists);
+  }
+
   static _mergeMcpServers(lists) {
     const servers = [];
     const seen = new Set();
@@ -222,6 +226,81 @@ class McpDetectorService {
     }
 
     return servers;
+  }
+
+  /**
+   * Cline 資料根目錄。優先序：呼叫端指定（VS Code 設定）> 環境變數（測試）> ~/.cline/data
+   */
+  static getClineDataDir(override) {
+    if (typeof override === 'string' && override.trim()) return override.trim();
+    const env = process.env.CLINE_DATA_DIR;
+    if (typeof env === 'string' && env.trim()) return env.trim();
+    return path.join(this.getUserHome(), '.cline', 'data');
+  }
+
+  /**
+   * Cline MCP 設定檔（中央檔優先，其後為各 IDE 的舊版鏡像）。
+   * Cline 4.x 已把設定集中到 ~/.cline/data/settings，但舊安裝仍可能只存在 globalStorage。
+   */
+  static getClineMcpConfigPaths(override) {
+    const paths = [path.join(this.getClineDataDir(override), 'settings', 'cline_mcp_settings.json')];
+    const appData = process.env.APPDATA;
+    if (appData) {
+      for (const ideDir of ['Code', 'Code - Insiders', 'Cursor', 'Antigravity', 'Antigravity IDE', 'Windsurf']) {
+        paths.push(path.join(appData, ideDir, 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings', 'cline_mcp_settings.json'));
+      }
+    }
+    return paths;
+  }
+
+  /**
+   * 掃描 Cline 已註冊的 MCP 伺服器（與宿主 IDE 無關）。
+   * 純檢視：只讀 command / args / url / disabled，**不讀 env**（避免把權杖帶進 UI）。
+   * Cline 的 `tools` 欄位是自動核准白名單（多為 ["*"]），不是工具清單，故不計數。
+   */
+  static async scanClineMcpServers(workspaceFolders = [], options = {}) {
+    const configPaths = this.getClineMcpConfigPaths(options?.clineDataDir);
+    const lists = [];
+
+    for (const configPath of configPaths) {
+      if (!fs.existsSync(configPath)) continue;
+      let parsed = null;
+      try {
+        parsed = this.parseJsonText(await fsPromises.readFile(configPath, 'utf-8'));
+      } catch (err) {
+        console.error(`Error reading Cline MCP config at ${configPath}:`, err);
+        continue;
+      }
+
+      const mcpServers = parsed?.mcpServers || {};
+      const serverKeys = Object.keys(mcpServers).sort((a, b) => this.naturalCompare(a, b));
+      const servers = [];
+      for (const sName of serverKeys) {
+        const sCfg = mcpServers[sName] || {};
+        const url = typeof sCfg.url === 'string' ? sCfg.url : '';
+        const command = typeof sCfg.command === 'string' ? sCfg.command : '';
+        const args = Array.isArray(sCfg.args) ? sCfg.args.filter(a => typeof a === 'string') : [];
+        const type = typeof sCfg.type === 'string' ? sCfg.type.toLowerCase() : '';
+        servers.push({
+          name: sName,
+          scope: 'Cline',
+          path: configPath,
+          toolCount: 0,
+          tools: [],
+          hasInstructions: false,
+          instructionsPath: null,
+          transport: (type === 'http' || type === 'sse' || url) ? 'http' : 'stdio',
+          command,
+          args,
+          url,
+          // 只保留「已關閉」旗標供足跡標注；欄位名與 VS Code 的 disabled 區隔
+          isDisabled: sCfg.disabled === true,
+        });
+      }
+      lists.push(servers);
+    }
+
+    return this.mergeMcpServers(lists);
   }
 
   static async _scanJsonMcpServers(userConfigPath, workspaceRelParts, workspaceFolders = []) {

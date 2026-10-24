@@ -124,7 +124,7 @@
   "mode_both_desc": "Status bar displays both {name} and Cline enablement counts",
   "mode_antigravity_label": "{name} only",
   "mode_antigravity_desc": "Status bar displays {name} enablement count only",
-  "mode_cline_label": "cline (Cline Only)",
+  "mode_cline_label": "Cline Only",
   "mode_cline_desc": "Status bar displays Cline enablement count only",
   "mode_placeholder": "Select MCP display mode for status bar...",
   "status_mode_updated": "Status bar display mode updated to: {mode}",

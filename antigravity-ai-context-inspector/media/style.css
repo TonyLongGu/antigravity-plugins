@@ -482,6 +482,115 @@ body {
   font-weight: 500;
 }
 
+/* ── 對話來源（source）篩選 chips 與標籤 ───────────────────────────────── */
+.source-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: var(--space-xs);
+}
+
+.source-chip {
+  height: 21px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-weight: 550;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.source-chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.source-chip.active {
+  background: rgba(78, 201, 176, 0.18);
+  border-color: rgba(78, 201, 176, 0.5);
+  color: var(--accent-cyan);
+}
+
+.source-chip.src-cline.active {
+  background: rgba(197, 134, 192, 0.2);
+  border-color: rgba(197, 134, 192, 0.55);
+  color: #c586c0;
+}
+
+.source-chip.src-cursor.active {
+  background: rgba(169, 220, 118, 0.18);
+  border-color: rgba(169, 220, 118, 0.5);
+  color: #a9dc76;
+}
+
+.source-chip.src-copilot.active {
+  background: rgba(156, 220, 254, 0.16);
+  border-color: rgba(156, 220, 254, 0.45);
+  color: #9cdcfe;
+}
+
+.source-chip-count {
+  font-size: 9px;
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+/* 對話清單中的來源徽章 */
+.conv-source-badge {
+  padding: 0 5px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  font-size: 8.5px;
+  font-weight: 600;
+  line-height: 1.6;
+  letter-spacing: 0.2px;
+  text-transform: none;
+}
+
+.conv-source-badge.src-antigravity {
+  color: #4ec9b0;
+  background: rgba(78, 201, 176, 0.14);
+  border-color: rgba(78, 201, 176, 0.3);
+}
+
+.conv-source-badge.src-cursor {
+  color: #a9dc76;
+  background: rgba(169, 220, 118, 0.14);
+  border-color: rgba(169, 220, 118, 0.3);
+}
+
+.conv-source-badge.src-copilot {
+  color: #9cdcfe;
+  background: rgba(156, 220, 254, 0.14);
+  border-color: rgba(156, 220, 254, 0.3);
+}
+
+.conv-source-badge.src-cline {
+  color: #c586c0;
+  background: rgba(197, 134, 192, 0.16);
+  border-color: rgba(197, 134, 192, 0.34);
+}
+
+/* 快照第二列：提供者 / 狀態 / Token / 成本 */
+.meta-extra {
+  color: var(--text-muted);
+  font-size: 9.5px;
+  font-weight: 500;
+}
+
+/* 在 Cline 設定中已關閉的規範 / 技能 */
+.context-item-details.is-disabled .item-name {
+  opacity: 0.55;
+  text-decoration: line-through dotted rgba(255, 255, 255, 0.35);
+}
+
 .conv-empty-hint {
   padding: 16px 8px;
   text-align: center;
@@ -493,6 +602,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 2px 8px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px dashed rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-sm);

@@ -1,0 +1,4 @@
+# Graphify 排除清單（gitignore 語法）
+# 用途：`graphify update .` 沒有 --code-only，要靠這裡排除文件，才能維持「純程式架構圖」。
+# 實測（2026-10-24，graphify 0.9.80）：不排除時 update 會把 .md 收成 document 節點，圖譜性質被靜默改變。
+*.md
