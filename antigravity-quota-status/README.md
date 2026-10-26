@@ -36,7 +36,7 @@
 
 ## 啟用方式
 
-1. 執行本目錄 `install-extension.ps1`，安裝至 Antigravity 與／或 Cursor。
+1. 執行本目錄 `install-extension.ps1`：預設一次安裝到本機所有已偵測的 Antigravity 與 Cursor（VS Code 沒有額度 API，腳本會自動略過）；要只裝單一 IDE 可加 `-Target Antigravity|Cursor`。
 2. 按快捷鍵 `Ctrl + Shift + P`。
 3. 輸入並執行 `Developer: Reload Window`（重新載入視窗）。
 4. 底部狀態列即會顯示極簡純文字 AI 額度狀態。

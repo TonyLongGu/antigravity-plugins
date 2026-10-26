@@ -43,7 +43,7 @@
 
 ## 安裝與卸載 (Cursor / Antigravity / VS Code)
 
-腳本具備智慧環境偵測，會辨識本機已安裝的 IDE（Cursor、VS Code、VS Code Insiders、Antigravity IDE）並按你選擇的目標掛載：
+腳本具備智慧環境偵測，會辨識本機已安裝的 IDE（Cursor、VS Code、VS Code Insiders、Antigravity IDE）並**預設全部掛載**（不再詢問目標）：
 
-- **安裝**：執行 `install-extension.ps1` 或雙擊 `install-extension.bat`，選擇安裝目標後建立 Junction。Antigravity / Cursor 完成後按 `Ctrl + Shift + P` 執行 `Developer: Reload Window`；VS Code 建議完整關閉後再重開。
+- **安裝**：執行 `install-extension.ps1` 或雙擊 `install-extension.bat`，自動偵測並對每個已安裝的 IDE 建立 Junction（要只裝單一 IDE 可加 `-Target Antigravity|VSCode|Cursor`）。Antigravity / Cursor 完成後按 `Ctrl + Shift + P` 執行 `Developer: Reload Window`；VS Code 建議完整關閉後再重開。
 - **卸載**：執行 `uninstall-extension.ps1` 或雙擊 `uninstall-extension.bat`，自動清理本機所有已部署環境的擴充連結與註冊紀錄。
