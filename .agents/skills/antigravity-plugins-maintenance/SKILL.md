@@ -18,6 +18,7 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 | **正例** | 「改 `scriptRunner.runBat` 這個 id 會壞什麼？」／「這個 repo 的圖譜過期了嗎？」 |
 | **負例** | 「幫我建一份知識圖譜」→ 走 `graphify-knowledge-graph`（本技能不含通用建圖步驟） |
 | **負例** | 「這台機器做個環境健檢」、「幫我刪掉這些暫存檔」→ 走 `health-check`／`safe-delete` |
+| **怎麼被叫用** | repo 根 `AGENTS.md` **只有派送句**（不再有知識副本）；使用者也可在開場直接引用 `/antigravity-plugins-maintenance` |
 
 > **何時不必用本技能**：只問「graphify 怎麼安裝／怎麼建圖」→ `graphify-knowledge-graph`；只問「外掛有沒有裝起來、環境對不對」→ `health-check`；處理的是**別的 repo** 的圖譜 → 該 repo 自己的 `AGENTS.md`／技能。本技能**不適用**於跨 repo 的通用圖譜問題。
 
@@ -143,9 +144,10 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 
 ## 11. 本技能維護
 
-- 本技能＝這個 repo 的**專案層常數＋授權＋耦合表**；通用圖譜流程不重複抄寫（指向 `graphify-knowledge-graph`）。
+- 本技能＝這個 repo 的**唯一真相**：常數、授權、耦合表、邊界、反模式全在這裡；根 `AGENTS.md` 只剩「叫用本技能」的派送句（約 470 字元），**不承載知識** → 要改規則只改本檔，不要改根檔。
+- 使用者可能在開場直接引用本技能（`/antigravity-plugins-maintenance`）。**取捨**：若沒被叫用，§5 的授權與 §6／§7 的鐵律都不在 context —— 這是刻意換掉「同一內容寫兩遍」的代價。
+- 通用圖譜流程不重複抄寫（指向 `graphify-knowledge-graph`）；本檔只管**這個 repo** 的常數與授權。
 - §3 與 §8 的數字會過期：**更新圖譜後順手更新並改日期**；無法確認就寫「查法」而不是寫死。
-- 常駐層的 `AGENTS.md`（repo 根）刻意只留「進場指引＋鐵律」，細節一律留在本檔——**兩份不要互相抄**。
 - 本檔刻意不含絕對磁碟路徑，repo 搬移或複製到別台機器後仍有效。
 
 ### 變更記錄
@@ -154,4 +156,5 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 | :--- | :--- | :--- |
 | 2026-10-26 | 由 repo 根 `AGENTS.md` 全文改寫成技能（內容等價，另修正 §3 舊值 13.6 KB → 15.2 KB）；根 `AGENTS.md` 瘦身為進場指引 | 使用者指示 |
 | 2026-10-26 | description 283 → 241 字元（過 260 硬線）；補 §1 負向邊界／何時不必、§10 反模式；新增 `references/vscodium-support-gap.md` | `skill-score-audit.ps1` 14/20 的缺口清單 |
+| 2026-10-26 | 知識 100% 收斂到本檔：刪掉根 `AGENTS.md` 的鐵律副本（1,186 → 約 470 字元，只剩派送句） | 使用者指示（同一內容不要寫兩遍） |
 
