@@ -91,7 +91,17 @@
   let selectedConvId = savedState.selectedConvId || null;
   let selectedConvSource = savedState.selectedConvSource || null;
   // 快照來源篩選（'all' 或 antigravity / cursor / copilot / cline）
-  let sourceFilter = savedState.sourceFilter || 'all';
+  // 未手動選擇前（sourceFilterTouched = false）一律跟隨宿主原生來源（裝在 Antigravity 就是
+  // Antigravity、Cursor 就是 Cursor），直到使用者點選任一個 chip；之後沿用最後一次選擇
+  // （含 'all' = 顯示全部來源）直到再次更改。
+  const injectedSourceFilter = (typeof window !== 'undefined' && typeof window.INITIAL_SOURCE_FILTER === 'string')
+    ? window.INITIAL_SOURCE_FILTER
+    : '';
+  let sourceFilterTouched = injectedSourceFilter !== ''
+    || (savedState.sourceFilterTouched === true && typeof savedState.sourceFilter === 'string');
+  let sourceFilter = sourceFilterTouched
+    ? (injectedSourceFilter || savedState.sourceFilter || nativeSource)
+    : nativeSource;
   let snapshotSources = [];
   let searchKeyword = '';
   let ruleActiveTitleMode = savedState.ruleActiveTitleMode || 'title'; // 'title' (內文標題) | 'name' (檔案名稱)
@@ -160,6 +170,7 @@
       selectedConvId: selectedConvId,
       selectedConvSource: selectedConvSource,
       sourceFilter: sourceFilter,
+      sourceFilterTouched: sourceFilterTouched,
       ruleActiveTitleMode: ruleActiveTitleMode,
       ruleCondTitleMode: ruleCondTitleMode,
       skillTitleMode: skillTitleMode,
@@ -405,8 +416,12 @@
   // 切換來源：只要該來源有任何對話，就直接載入最新一筆
   function setSourceFilter(next) {
     sourceFilter = next || 'all';
+    // 使用者一旦手動選擇（含再點一次取消篩選回「全部來源」）就不再跟隨宿主
+    sourceFilterTouched = true;
     saveState();
     renderSourceChips();
+    // 寫回 Extension 的 workspaceState，重開視窗／IDE 後仍沿用
+    vscode.postMessage({ type: 'saveSourceFilter', payload: { sourceFilter } });
 
     const visible = getFilteredConversations();
     if (visible.length > 0 && !visible.some(c => c.id === selectedConvId)) {
@@ -1300,7 +1315,10 @@
         if (Array.isArray(payload.snapshotSources)) {
           snapshotSources = payload.snapshotSources;
           if (sourceFilter !== 'all' && !snapshotSources.some(s => s.id === sourceFilter)) {
-            sourceFilter = 'all';
+            // 來源已不可用：未手動選擇時回到宿主原生來源，已手動選擇時退回全部來源
+            sourceFilter = (!sourceFilterTouched && snapshotSources.some(s => s.id === nativeSource))
+              ? nativeSource
+              : 'all';
           }
         }
         if (Array.isArray(payload.conversationsList)) {

@@ -39,8 +39,8 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 | 項目 | 值 |
 | :--- | :--- |
 | 圖譜位置 | `graphify-out/`（根 `.gitignore` 已排除，**勿 commit**） |
-| 規模 | **1620** nodes / **2949** edges / **101** communities |
-| 建圖 commit | `2037798b`（2026-10-26 薄殼化後 `graphify update .` 重算：節點 1595→1620、邊 2903→2949、社群 91→101，主因是 toolbox 功能成長＋12 支腳本縮成薄殼、符號數下降） |
+| 規模 | **1631** nodes / **2961** edges / **96** communities |
+| 建圖 commit | `5b154c8`（2026-10-26 同日兩次 `graphify update .`：inspector 1.2.3「chips 預設跟隨宿主」＋新增測試，以及 mcp-manager 1.9.3 移除「編輯說明」；節點 1618→1631、邊 2949→2961、社群 101→96；前一版為薄殼化 `2037798b`） |
 | 掃描範圍 | 純程式：66 `.js` ＋ 15 `.ps1` ＋ 18 `.json`（= 99 檔，含 6 個 `package.json`）；`extract` 3 秒、`cluster-only` 1 秒、**0 元** |
 | 產物大小 | `GRAPH_REPORT.md` **16.8 KB / 17,137 字元**（可整讀）、`graph.json` **1.9 MB**（禁整讀）、`graph.html` 1.6 MB |
 | 不進圖 | `*.css`、`*.html`、`locales/*.json`（實測 0 節點）、`*.md`（`.graphifyignore` 已排除） |
@@ -104,7 +104,7 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 | :--- | :--- | ---: | :--- | :--- | :--- |
 | `antigravity-script-runner` | 1.7.1 | 455 | `scriptRunner.*`（8 個 id × `.en`／`.cn`＝24） | 無 view（右鍵選單＋媒體檢視） | `extension.js`／6 services（audio／video／image／stream） |
 | `antigravity-ai-context-inspector` | 1.2.2 | 328 | `antigravity.aiContext.*`（3 ＋ `.en`） | `antigravity.aiContextView`／`antigravity-ai-context-container` | `extension.js`／6 services（cline·cursor·vscode chat／contextScanner／mcpDetector） |
-| `antigravity-mcp-manager` | 1.9.2 | 267 | `antigravity.mcp.*`（6 ＋ `.en`） | `antigravity.mcpManagerView`／`mcp-manager-container` | `extension.js`／9 services |
+| `antigravity-mcp-manager` | 1.9.3 | 265 | `antigravity.mcp.*`（6 ＋ `.en`） | `antigravity.mcpManagerView`／`mcp-manager-container` | `extension.js`／9 services |
 | `antigravity-toolbox` | 1.6.0 | 291 | `antigravity.toolbox.*`（7 ＋ 4 `.en`） | `antigravity.toolboxView`／`antigravity-toolbox-container` | `extension.js`／6 services（brain／copilotChat／skillSync／workspace…） |
 | `antigravity-quota-status` | 1.1.0 | 174 | `aiQuota.*`（7，無變體） | 無 view（狀態列） | `extension.js`／4 services（quota／cursorAuth…） |
 | `antigravity-quick-access` | 1.2.6 | 79 | `antigravity.quickAccess.*`（20 × 3＝60） | `antigravity.quickAccessView` | `extension.js`／無 `services/` 目錄 |
@@ -161,6 +161,8 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 
 | 日期 | 變更 | 來源 |
 | :--- | :--- | :--- |
+| 2026-10-26 | mcp-manager `1.9.2 → 1.9.3`＝**移除「編輯說明」**：卡片不再顯示用途說明與編輯器（`server-action-bar`／`server-desc-*`／`btn-edit-desc`、chevron 一併移除、summary 改 `cursor: default`），後端移除 `updateServerDescription`／`saveNotes` 與 `updateServerDescription` 訊息、fingerprint 不再納入 description，i18n 3 語系各刪 7 鍵；**既有 sidecar 備註改為唯讀相容**（`getNotes()` 保留，Cline 檢視器仍顯示） | 使用者指示：MCP 列表的「編輯說明」功能要移除 |
+| 2026-10-26 | inspector `1.2.2 → 1.2.3`＝快照來源 chips **預設選中宿主原生來源**：未手動選擇前一律跟隨宿主（`_sourceFilter = null`），點過 chip 後寫入 workspaceState `aiContext.sourceFilter` 並沿用（含再點一次＝顯示全部）；換來源時自動取該來源最新對話，避免 chip 與內容不一致 | 使用者指示：預設應選到已安裝的宿主 |
 | 2026-10-26 | 由 repo 根 `AGENTS.md` 全文改寫成技能（內容等價，另修正 §3 舊值 13.6 KB → 15.2 KB）；根 `AGENTS.md` 瘦身為進場指引 | 使用者指示 |
 | 2026-10-26 | description 283 → 241 字元（過 260 硬線）；補 §1 負向邊界／何時不必、§10 反模式；新增 `references/vscodium-support-gap.md` | `skill-score-audit.ps1` 14/20 的缺口清單 |
 | 2026-10-26 | 知識 100% 收斂到本檔：刪掉根 `AGENTS.md` 的鐵律副本（1,186 → 約 470 字元，只剩派送句） | 使用者指示（同一內容不要寫兩遍） |

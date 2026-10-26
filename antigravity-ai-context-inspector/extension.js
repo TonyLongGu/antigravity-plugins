@@ -43,6 +43,8 @@ class AiContextViewProvider {
     this._currentMode = context?.workspaceState?.get('aiContext.mode') || 'live';
     this._selectedConvId = context?.workspaceState?.get('aiContext.selectedConvId') || null;
     this._selectedConvSource = context?.workspaceState?.get('aiContext.selectedConvSource') || null;
+    // 來源篩選：null = 使用者尚未手動選擇（跟隨宿主原生來源）、'all' = 顯示全部來源、其餘為來源 id
+    this._sourceFilter = context?.workspaceState?.get('aiContext.sourceFilter') || null;
     this._sourceListCache = new Map();
   }
 
@@ -51,6 +53,40 @@ class AiContextViewProvider {
     if (this._isCursor) return 'cursor';
     if (this._isVsCode) return 'copilot';
     return 'antigravity';
+  }
+
+  /**
+   * 目前應載入哪個來源的對話
+   * - 未手動選擇（null）⇒ 宿主原生來源
+   * - 'all' ⇒ 沿用目前已選對話的來源（沒有就退回原生）
+   * - 指定來源 id ⇒ 該來源（不可用時退回原生）
+   */
+  _getRequestedSourceId(availableSources, nativeSource) {
+    if (!this._sourceFilter) return nativeSource;
+    if (this._sourceFilter === 'all') {
+      return (this._selectedConvSource && availableSources.includes(this._selectedConvSource))
+        ? this._selectedConvSource
+        : nativeSource;
+    }
+    return availableSources.includes(this._sourceFilter) ? this._sourceFilter : nativeSource;
+  }
+
+  /** 把目前選取狀態寫回 workspaceState（重開視窗／IDE 後仍沿用） */
+  _persistSelection() {
+    const state = this._context?.workspaceState;
+    if (!state) return;
+    if (state.get('aiContext.mode') !== this._currentMode) {
+      state.update('aiContext.mode', this._currentMode);
+    }
+    if (state.get('aiContext.selectedConvId') !== this._selectedConvId) {
+      state.update('aiContext.selectedConvId', this._selectedConvId);
+    }
+    if (state.get('aiContext.selectedConvSource') !== this._selectedConvSource) {
+      state.update('aiContext.selectedConvSource', this._selectedConvSource);
+    }
+    if (state.get('aiContext.sourceFilter') !== this._sourceFilter) {
+      state.update('aiContext.sourceFilter', this._sourceFilter);
+    }
   }
 
   _getConfig() {
@@ -150,27 +186,27 @@ class AiContextViewProvider {
     return normalized;
   }
 
-  async _parseSnapshotFor(sourceId, workspaceFolders, config, scanOptions) {
+  async _parseSnapshotFor(sourceId, workspaceFolders, config, scanOptions, conversationId = this._selectedConvId) {
     if (sourceId === 'cline') {
-      return ClineSessionService.parseConversationSnapshot(this._selectedConvId, workspaceFolders, {
+      return ClineSessionService.parseConversationSnapshot(conversationId, workspaceFolders, {
         ...scanOptions,
         scope: config.clineScope,
         clineDataDir: config.clineDataDir
       });
     }
     if (sourceId === 'cursor') {
-      const data = await CursorTranscriptService.parseConversationSnapshot(this._selectedConvId, workspaceFolders);
+      const data = await CursorTranscriptService.parseConversationSnapshot(conversationId, workspaceFolders);
       return { ...data, sourceId: 'cursor' };
     }
     if (sourceId === 'copilot') {
       const extraUris = vscode.workspace.workspaceFile ? [vscode.workspace.workspaceFile.fsPath] : [];
-      const data = await VsCodeChatSessionService.parseConversationSnapshot(this._selectedConvId, workspaceFolders, {
+      const data = await VsCodeChatSessionService.parseConversationSnapshot(conversationId, workspaceFolders, {
         ...scanOptions,
         extraUris
       });
       return { ...data, sourceId: 'copilot' };
     }
-    const data = await TranscriptParserService.parseConversationSnapshot(this._selectedConvId, workspaceFolders);
+    const data = await TranscriptParserService.parseConversationSnapshot(conversationId, workspaceFolders);
     return { ...data, sourceId: 'antigravity' };
   }
 
@@ -288,13 +324,21 @@ class AiContextViewProvider {
         }
 
         // 持久化記錄狀態
-        if (this._context?.workspaceState) {
-          this._context.workspaceState.update('aiContext.mode', this._currentMode);
-          this._context.workspaceState.update('aiContext.selectedConvId', this._selectedConvId);
-          this._context.workspaceState.update('aiContext.selectedConvSource', this._selectedConvSource);
-        }
+        this._persistSelection();
 
         await this.pushData();
+        break;
+
+      case 'saveSourceFilter':
+        // 使用者手動指定來源篩選（'' = 跟隨宿主、'all' = 顯示全部來源、其餘為來源 id）
+        this._sourceFilter = (typeof msg.payload?.sourceFilter === 'string' && msg.payload.sourceFilter)
+          ? msg.payload.sourceFilter
+          : null;
+        this._persistSelection();
+        // 篩選變更後重新計算應載入的來源（與 fetchData 共用 debounce，不會重複掃描）
+        if (this._currentMode === 'snapshot') {
+          await this.pushData(0);
+        }
         break;
 
       case 'openFile':
@@ -494,11 +538,11 @@ class AiContextViewProvider {
 
         let data;
         if (isSnapshot) {
-          // 來源由「選取對話所屬來源」決定；不可用時退回原生來源
-          const requested = (this._selectedConvSource && availableSources.includes(this._selectedConvSource))
-            ? this._selectedConvSource
-            : nativeSource;
-          data = await this._parseSnapshotFor(requested, workspaceFolders, config, scanOptions);
+          // 來源規則：未手動選擇 → 宿主原生；'all' → 沿用已選對話來源；指定 id → 該來源
+          const requested = this._getRequestedSourceId(availableSources, nativeSource);
+          // 換來源時丟掉舊對話 id，讓服務層自動取該來源的最新一筆
+          const conversationId = requested === this._selectedConvSource ? this._selectedConvId : null;
+          data = await this._parseSnapshotFor(requested, workspaceFolders, config, scanOptions, conversationId);
 
           // 合併所有可用來源的對話清單（僅快照模式需要，即時模式不掃）
           const conversations = [];
@@ -514,6 +558,10 @@ class AiContextViewProvider {
             isNative: sourceId === nativeSource
           }));
           data.sourceId = data.sourceId || requested;
+          // 後端選取狀態跟著實際載入的對話走，避免 chip 篩選與內容不一致
+          this._selectedConvSource = requested;
+          this._selectedConvId = data.conversationId || null;
+          this._persistSelection();
         } else {
           data = await ContextScannerService.scanLiveEnvironment(workspaceFolders, scanOptions);
           data.conversationsList = [];
@@ -576,7 +624,7 @@ class AiContextViewProvider {
       .replace(/\{\{CSP_SOURCE\}\}/g, webview.cspSource)
       .replace(/href="style\.css"/g, `href="${styleUri}"`)
       .replace(/src="app\.js"/g, `src="${scriptUri}?v=${Date.now()}"`)
-      .replace(/<script src="locales\.js"><\/script>/g, `<script>window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)}; window.INITIAL_IS_VSCODE = ${this._isVsCode}; window.INITIAL_IS_CURSOR = ${this._isCursor}; window.INITIAL_NATIVE_SOURCE = ${JSON.stringify(this._getNativeSourceId())};</script><script>${localesJs}</script>`)
+      .replace(/<script src="locales\.js"><\/script>/g, `<script>window.INITIAL_LOCALE = ${JSON.stringify(currentLocale)}; window.INITIAL_IS_VSCODE = ${this._isVsCode}; window.INITIAL_IS_CURSOR = ${this._isCursor}; window.INITIAL_NATIVE_SOURCE = ${JSON.stringify(this._getNativeSourceId())}; window.INITIAL_SOURCE_FILTER = ${JSON.stringify(this._sourceFilter || '')};</script><script>${localesJs}</script>`)
       .replace(/\{\{LIVE_ACTIVE\}\}/g, isSnapshot ? '' : 'active')
       .replace(/\{\{SNAPSHOT_ACTIVE\}\}/g, isSnapshot ? 'active' : '')
       .replace(/\{\{CONV_WRAPPER_CLASS\}\}/g, isSnapshot ? '' : 'is-hidden');

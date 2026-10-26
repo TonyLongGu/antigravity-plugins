@@ -22,7 +22,7 @@
      - **VS Code Copilot 對話足跡**：掃描 `%APPDATA%/Code/User/workspaceStorage/*/chatSessions/*.jsonl`，用官方 `customTitle` 列出對話，並還原實際讀過的 Rules / Skills 與 `mcp_*` 工具。這不是 Antigravity 那種 session prompt 注入快照。
    - 🟣 **Cline 對話來源（跨宿主，任何 IDE 都能看）**：
      - **資料位置**：`~/.cline/data/sessions/<sessionId>/`（user 層級，Antigravity / Cursor / VS Code 共用同一份，因此不必管目前開的是哪個 IDE）。
-     - **來源篩選 chips**：快照模式下可一鍵切換「Antigravity / Cursor / Copilot / Cline」（各來源一色，chip 只顯示來源名稱）。**不提供「全部」chip**——沒有任何 chip 作用中即代表顯示全部，再點一次作用中的 chip 即取消篩選。只有一種來源時自動隱藏。
+     - **來源篩選 chips**：快照模式下可一鍵切換「Antigravity / Cursor / Copilot / Cline」（各來源一色，chip 只顯示來源名稱）。**預設自動選中宿主原生來源**（裝在 Antigravity 就是 Antigravity、Cursor 是 Cursor、VS Code 是 Copilot），並記住最後一次選擇直到再次更改；**不提供「全部」chip**——再點一次作用中的 chip 即取消篩選（顯示全部來源）。只有一種來源時自動隱藏。
      - **足跡還原**：`skills` 工具呼叫 → 該技能標記為已調用；`<server>__<tool>` → 只留下真正被呼叫的 MCP 伺服器與工具；`read_files` / `editor` 觸及的 `.agents/rules`、`.clinerules` → 標記為已讀取的條件式規範。
      - **Cline 設定**：`.clinerules`（檔案或資料夾）、`.clinerules/workflows/*.md`、全域 `~/Documents/Cline/Rules`、`~/.agents/skills` 全都會納入掃描；`~/.cline/data/workspaces/*/workspaceState.json` 與 `globalState.json` 的 rules / skills 開關若為關閉，該項目會被淡化並排除在快照之外。
 2. **一鍵跳轉開啟**：點擊任一項目旁的 `📄 開啟` 按鈕，立即在編輯器開啟對應的 `.md` 檔案。
@@ -60,11 +60,13 @@
 ```powershell
 node tests/mcp-vscode-sources.test.js
 node tests/cline-snapshot.test.js
+node tests/snapshot-source-default.test.js
 ```
 
 - 離開碼 `0` = 全數通過、`1` = 有失敗（可直接接 CI 或 hook）。
 - `mcp-vscode-sources`：涵蓋 5 項斷言——三來源併列與同名時「VS Code 自身優先」、CLI 條目的 scope / transport / 白名單 `tools` 不計數、**不標注啟停狀態**（負對照：VS Code 兩層開關都標為停用時仍不得出現停用資訊）、以及缺少 CLI 設定檔時不中斷。
 - `cline-snapshot`：涵蓋 10 項斷言——清單只讀 meta（攔截 `*.messages.json` 讀取）、`clineScope` 工作區過濾、`skills` 工具足跡、`<server>__<tool>` MCP 足跡與只保留實際呼叫的工具、設定檔已移除但確實呼叫過的 MCP 仍會列出、`workspaceState.json` 開關對映（關閉的常駐規範不得出現在快照）、條件式規範只留被讀取者、對話 meta、缺少資料目錄不拋錯，以及 **> 20 MB 走串流降級路徑**。
+- `snapshot-source-default`：涵蓋 7 項斷言——**未手動選擇時一律載入宿主原生來源**（Antigravity／Cursor 各驗一次）、Webview 注入空的 `INITIAL_SOURCE_FILTER`、點過 chip 後寫回 `workspaceState` 並沿用（重開視窗仍生效）、取消篩選（`all`）沿用已選對話來源、來源不可用時退回宿主，以及空字串清回「跟隨宿主」。以 `Module._load` 攔截 `require('vscode')`，不需要真實 IDE。
 
 ---
 

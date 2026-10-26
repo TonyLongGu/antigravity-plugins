@@ -154,18 +154,6 @@ class MCPManagerViewProvider {
         break;
       }
 
-      case 'updateServerDescription': {
-        const { name, description } = message;
-        try {
-          await McpConfigService.updateServerDescription(name, description);
-          await this.refreshWebviewData();
-          this.pushToast(I18n.t('toast_desc_updated', { name }), 'success');
-        } catch (err) {
-          this.pushToast(I18n.t('toast_desc_failed', { msg: err.message }), 'danger');
-        }
-        break;
-      }
-
       case 'batchToggleGlobal': {
         const { action } = message;
         try {
@@ -314,7 +302,6 @@ class MCPManagerViewProvider {
               servers[name].disabled === true,
               servers[name].effectiveDisabled === true,
               servers[name].workspaceOverride || 'inherit',
-              servers[name].description || '',
             ]),
         });
         const hasTarget = !!(this._view || this._panel);
@@ -522,7 +509,7 @@ class MCPManagerViewProvider {
     const jsonSafeString = JSON.stringify(initData).replace(/</g, '\\u003c');
 
     return html
-      .replace(/href="style\.css"/g, `href="${styleUri}"`)
+      .replace(/href="style\.css"/g, `href="${styleUri}?v=${Date.now()}"`)
       .replace(/src="app\.js"/g, `src="${scriptUri}?v=${Date.now()}"`)
       .replace(
         /<script id="i18n-locales-data" type="application\/json">\{\}<\/script>/g,

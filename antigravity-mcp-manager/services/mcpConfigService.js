@@ -292,13 +292,13 @@ class McpConfigService {
     }
   }
 
+  /**
+   * 讀取既有備註（唯讀相容）
+   * 1.9.3 起不再提供「編輯說明」寫入，此處僅保留讀取舊資料的能力
+   * （Cline 檢視器的 MCP 詳情仍會顯示既有說明）。
+   */
   static async getNotes() {
     return await this.safeReadJson(this.notesFilePath, {});
-  }
-
-  static async saveNotes(notesObj) {
-    await this.safeSaveJson(this.notesFilePath, notesObj);
-    return notesObj;
   }
 
   static calculateStats(servers = {}) {
@@ -554,8 +554,7 @@ class McpConfigService {
    * @param {string} name 設定檔中的原始名稱（顯示用）
    */
   static normalizeCopilotCliServer(key, name, server, notes) {
-    // 備註以內部鍵為優先，其次才是原始名稱：
-    // 前端編輯說明時送出的是 data-name（= 內部鍵），兩種鍵都必須對得上
+    // 備註（唯讀相容）以內部鍵為優先，其次才是原始名稱
     const note = notes[key] || notes[name] || {};
     const disabled = server.disabled === true;
 
@@ -766,48 +765,6 @@ class McpConfigService {
 
     await this.safeSaveJson(configPath, rawConfig);
     return { changes: [{ name: serverName, disabled: !!disabled, sourceType: 'antigravity' }] };
-  }
-
-  /**
-   * 更新伺服器用途說明
-   * 說明一律寫入本套件自有的 sidecar 檔（不污染官方 schema 的 mcp.json）。
-   * Cline 為純檢視，不提供寫入；其既有 sidecar 內容仍會被讀取並顯示。
-   */
-  static async updateServerDescription(serverName, description) {
-    this.assertSupportedHost();
-    const notes = await this.getNotes();
-    const trimmed = typeof description === 'string' ? description.trim() : '';
-
-    if (trimmed) {
-      notes[serverName] = { ...(notes[serverName] || {}), description: trimmed };
-    } else if (notes[serverName]) {
-      delete notes[serverName].description;
-      if (Object.keys(notes[serverName]).length === 0) {
-        delete notes[serverName];
-      }
-    }
-
-    await this.saveNotes(notes);
-
-    // 僅 Antigravity 的 mcp_config.json 支援自訂 description 欄位；
-    // Cursor 與 VS Code 的 mcp.json 皆有官方 schema，備註只寫 sidecar，避免汙染設定檔
-    if (this.hostKind !== 'antigravity') return;
-
-    try {
-      const configPath = this.globalConfigPath;
-      const rawConfig = await this.safeReadJson(configPath, { mcpServers: {} }, { throwOnError: true });
-      const servers = rawConfig[this.serversKey];
-      if (servers && servers[serverName]) {
-        if (trimmed) {
-          servers[serverName].description = trimmed;
-        } else {
-          delete servers[serverName].description;
-        }
-        await this.safeSaveJson(configPath, rawConfig);
-      }
-    } catch (err) {
-      console.warn('同步更新 MCP 設定檔備註失敗:', err.message);
-    }
   }
 
   /**

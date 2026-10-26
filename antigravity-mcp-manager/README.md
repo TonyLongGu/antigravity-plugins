@@ -1,6 +1,6 @@
 # MCP 管理儀表板
 
-Antigravity 提供完整儀表板（清單、連線探測、備註與原生開關），並常駐左側活動列。Cursor 與 VS Code 只在底部狀態列顯示 `MCP: 啟用數/總數`，不開啟左側活動列，也不在編輯器分頁打開儀表板。
+Antigravity 提供完整儀表板（清單、連線探測與原生開關），並常駐左側活動列。Cursor 與 VS Code 只在底部狀態列顯示 `MCP: 啟用數/總數`，不開啟左側活動列，也不在編輯器分頁打開儀表板。
 
 三種宿主只在**目前這個 IDE 已安裝且啟用 Cline** 時，狀態列才會並列 Cline 的 MCP 統計（`… · Cline 啟用數/總數`），懸停視窗另列兩端伺服器清單。沒安裝、或曾經安裝但已停用時，狀態列只顯示本 IDE 的 MCP，不出現 Cline。殘留的 `cline_mcp_settings.json` 不會被當成已安裝。Cline 一律為**純檢視**：本套件在服務層就沒有寫入 Cline 設定的能力，開關請用 Cline 自身的 MCP 面板。
 
@@ -11,7 +11,7 @@ Antigravity 提供完整儀表板（清單、連線探測、備註與原生開�
 1. **Antigravity 原生開關**：讀寫 `~/.gemini/config/mcp_config.json`（`mcpServers`，以 `disabled` 欄位開關）。
 2. **VS Code 檢視模式**：讀取 `<User>/mcp.json`、工作區 `.vscode/mcp.json` 與工作區根 `.mcp.json`，並從 `state.vscdb` 的 `mcp.enablement` 顯示真實啟停狀態（含工作區覆寫）。開關請用 **VS Code 原生 UI**。面板另併入 Copilot CLI 的 `~/.copilot/mcp-config.json`（唯讀、以徽章區分來源，詳見「Copilot CLI 整合」）。
 3. **Cursor 檢視模式**：讀取 `~/.cursor/mcp.json`，並從 Cursor 的 Customize 停用清單顯示側邊高光與啟用數。開關仍請用 **Customize**。
-4. **外部 Sidecar 註解分離**：Antigravity 用 `~/.gemini/config/antigravity_mcp_notes.json`；Cursor 用 `~/.cursor/mcp_notes.json`；VS Code 用 `<User>/mcp_notes.json`。
+4. **既有備註（唯讀相容）**：1.9.3 起移除「編輯說明」入口，本套件不再寫入 sidecar（`antigravity_mcp_notes.json` / `mcp_notes.json`）；舊資料仍會讀取，Cline 檢視器的 MCP 詳情可持續顯示既有說明。
 5. **Antigravity 左側活動列**：可在此面板直接開關 MCP。
 6. **狀態列即時指示**：三種環境都顯示 `MCP: 啟用數/總數`；目前 IDE 已啟用 Cline 時才並列 `· Cline 啟用數/總數`（未安裝或已停用則不顯示），可用「切換狀態列顯示方式」決定只顯示本 IDE、只顯示 Cline 或兩者。Cursor 與 VS Code 只有這條狀態列，不開啟左側活動列，也不在編輯器分頁打開儀表板。
 7. **Cline 純檢視（API 層保證）**：狀態列快捷選單提供「檢視 Cline MCP 伺服器狀態」，可看工具清單、啟停情形與開啟 `cline_mcp_settings.json`。Cline 服務只有讀取與統計能力，**不含任何寫入 API**，因此不論宿主、顯示範圍或批次操作都不會改動 Cline 的設定檔。
@@ -74,7 +74,7 @@ VS Code 的 MCP 伺服器與 Copilot CLI（Agent Host）的 MCP 伺服器是**�
 - 停用時卡片會標記 `disabledBy`：`agentHost`（agent host 關的）、`discovery`（本機 chat 清單關的）或 `config`（設定檔自身宣告），優先序同此；懸停視窗會列出各層關了幾顆。
 - 路徑推導：`COPILOT_HOME` 環境變數優先，否則 `~/.copilot/mcp-config.json`（與 VS Code 內建 MCP 遷移器的解析一致）。
 - 鍵名為 `mcpServers`（**不是** VS Code 的 `servers`）；型別為 `stdio` / `http`，舊檔案的 `local` 視同 `stdio`。
-- **同名衝突**：同名時以 VS Code 來源優先，CLI 條目改用內部鍵 `copilot-cli:<名稱>`，畫面仍顯示原始名稱；備註（`mcp_notes.json`）兩種鍵都對得上。
+- **同名衝突**：同名時以 VS Code 來源優先，CLI 條目改用內部鍵 `copilot-cli:<名稱>`，畫面仍顯示原始名稱；既有備註（`mcp_notes.json`，唯讀相容）兩種鍵都對得上。
 - **Copilot CLI 設定檔沒有停用欄位**，啟停一律由上面那兩層保管；面板只讀不寫（`getServers()` 未注入開關狀態時不猜測，一律視為啟用）。
 - 設定檔存在但無法解析時，懸停視窗會標示「設定檔無法解析」，而不是靜默顯示 0 個伺服器。
 - 此來源只在 VS Code 宿主顯示；Antigravity 與 Cursor 的面板維持原樣（主要來源仍為各自的 `mcp_config.json` / `mcp.json`）。

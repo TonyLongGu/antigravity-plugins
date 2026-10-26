@@ -35,9 +35,7 @@
    * 避免重複定義造成雙份來源。
    */
   const Icons = {
-    zap: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>',
-    chevronRight: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>',
-    edit: '<svg class="lucide-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>'
+    zap: '<svg class="lucide-icon" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></svg>'
   };
 
   /** 工作區覆寫狀態 → i18n 鍵 */
@@ -454,13 +452,6 @@
       if (openCards.length > 0) {
         openCards.forEach((el) => {
           el.open = false;
-          // 若卡片內處於編輯說明狀態，還原為檢視模式
-          const descDisplay = el.querySelector('.server-desc-display');
-          const descEditor = el.querySelector('.server-desc-editor');
-          if (descDisplay && descEditor && descEditor.style.display !== 'none') {
-            descEditor.style.display = 'none';
-            descDisplay.style.display = 'flex';
-          }
         });
       }
       this.openedServers.clear();
@@ -609,7 +600,7 @@
       if (this.dom.statEnabled) this.dom.statEnabled.textContent = enabledCount;
       if (this.dom.statDisabled) this.dom.statDisabled.textContent = serverKeys.length - enabledCount;
 
-      // 過濾項目（支援比對名稱、指令、URL 與用途說明 description）
+      // 過濾項目（支援比對名稱、指令與 URL）
       const filteredKeys = serverKeys.filter((key) => {
         const s = servers[key];
         const isEnabled = s.disabled !== true;
@@ -621,8 +612,7 @@
           const matchName = key.toLowerCase().includes(query);
           const matchCmd = s.command && s.command.toLowerCase().includes(query);
           const matchUrl = s.serverUrl && s.serverUrl.toLowerCase().includes(query);
-          const matchDesc = s.description && s.description.toLowerCase().includes(query);
-          return matchName || matchCmd || matchUrl || matchDesc;
+          return matchName || matchCmd || matchUrl;
         }
         return true;
       });
@@ -721,36 +711,7 @@
             btnTest.title = btnTestDynamicTitle;
           }
 
-          // 5. 就地更新用途說明文字 (若目前未處於開啟編輯狀態)
-          const descEditor = card.querySelector('.server-desc-editor');
-          const descText = card.querySelector('.server-desc-text');
-          if (descText && (!descEditor || descEditor.style.display !== 'flex')) {
-            const desc = server.description || '';
-            descText.textContent = desc || I18nModule.t('desc_empty_placeholder');
-            descText.classList.toggle('is-empty', !desc);
-          }
-
-          // 6. 就地更新卡片內部多國語言按鈕與提示 (防止語系切換時按鈕殘留舊語言)
-          const btnEditDesc = card.querySelector('.btn-edit-desc');
-          if (btnEditDesc) {
-            btnEditDesc.title = I18nModule.t('btn_edit_desc');
-            const span = btnEditDesc.querySelector('span');
-            if (span) span.textContent = I18nModule.t('btn_edit_desc');
-          }
-          const descDisplay = card.querySelector('.server-desc-display');
-          if (descDisplay) {
-            descDisplay.title = I18nModule.t('btn_edit_desc');
-          }
-          const descTextarea = card.querySelector('.desc-textarea');
-          if (descTextarea) {
-            descTextarea.placeholder = I18nModule.t('desc_input_placeholder');
-          }
-          const btnSaveDesc = card.querySelector('.btn-desc-save');
-          if (btnSaveDesc) btnSaveDesc.textContent = I18nModule.t('btn_save_desc');
-          const btnCancelDesc = card.querySelector('.btn-desc-cancel');
-          if (btnCancelDesc) btnCancelDesc.textContent = I18nModule.t('btn_cancel_desc');
-
-          // 7. 就地更新徽章與開關提示
+          // 5. 就地更新徽章與開關提示
           //    外部（VS Code 原生 UI）切換開關時同樣走這條路徑，故必須同步，
           //    否則會出現「開關變了、徽章沒變」的不一致。
           const badgesWrap = card.querySelector('.server-badges');
@@ -849,8 +810,6 @@
             btnTestDynamicTitle = `${displayMsg}`;
           }
         }
-        const editDescLabel = I18nModule.t('btn_edit_desc');
-
         // VS Code 專屬：來源與工作區覆寫徽章（純顯示，開關請用 VS Code 原生 UI）
         const isVscode = isVscodeHost();
         const badgesHtml = buildServerBadgesHtml(server, isVscode);
@@ -865,7 +824,6 @@
         card.innerHTML = `
           <summary class="server-card-summary">
             <div class="server-info-left">
-              <span class="server-chevron">${Icons.chevronRight}</span>
               <div class="server-title-wrap">
                 <span class="server-name">${escapeHtml(server.rawName || key)}</span>
                 <span class="server-badges">${badgesHtml}</span>
@@ -876,25 +834,6 @@
               ${switchHtml}
             </div>
           </summary>
-
-          <div class="server-detail-body">
-            <div class="server-action-bar">
-              <button class="action-btn btn-edit-desc" data-i18n-title="btn_edit_desc" title="${escapeHtml(editDescLabel)}">${Icons.edit} <span data-i18n="btn_edit_desc">${escapeHtml(editDescLabel)}</span></button>
-            </div>
-
-            <div class="server-desc-wrap">
-              <div class="server-desc-display" data-i18n-title="btn_edit_desc" title="${escapeHtml(editDescLabel)}">
-                <div class="server-desc-text ${server.description ? '' : 'is-empty'}">${escapeHtml(server.description || I18nModule.t('desc_empty_placeholder'))}</div>
-              </div>
-              <div class="server-desc-editor" style="display: none;">
-                <textarea class="desc-textarea" data-i18n-placeholder="desc_input_placeholder" placeholder="${escapeHtml(I18nModule.t('desc_input_placeholder'))}">${escapeHtml(server.description || '')}</textarea>
-                <div class="desc-editor-actions">
-                  <button class="btn-desc-save" data-i18n="btn_save_desc">${escapeHtml(I18nModule.t('btn_save_desc'))}</button>
-                  <button class="btn-desc-cancel" data-i18n="btn_cancel_desc">${escapeHtml(I18nModule.t('btn_cancel_desc'))}</button>
-                </div>
-              </div>
-            </div>
-          </div>
         `;
 
         // 監聽折疊狀態變化
@@ -956,69 +895,6 @@
           btnTest.addEventListener('click', (e) => {
             e.stopPropagation();
             ProbeModule.testServer(key);
-          });
-        }
-
-        // 行內說明編輯邏輯
-        const descDisplay = card.querySelector('.server-desc-display');
-        const descEditor = card.querySelector('.server-desc-editor');
-        const descTextarea = card.querySelector('.desc-textarea');
-        const btnEditDesc = card.querySelector('.btn-edit-desc');
-        const btnSaveDesc = card.querySelector('.btn-desc-save');
-        const btnCancelDesc = card.querySelector('.btn-desc-cancel');
-        const descText = card.querySelector('.server-desc-text');
-
-        const enterEditMode = (e) => {
-          e.stopPropagation();
-          if (!descDisplay || !descEditor || !descTextarea) return;
-          descDisplay.style.display = 'none';
-          descEditor.style.display = 'flex';
-          descTextarea.value = server.description || '';
-          descTextarea.focus();
-        };
-
-        const exitEditMode = (e) => {
-          if (e) e.stopPropagation();
-          if (!descDisplay || !descEditor) return;
-          descEditor.style.display = 'none';
-          descDisplay.style.display = 'flex';
-        };
-
-        if (btnEditDesc) btnEditDesc.addEventListener('click', enterEditMode);
-        if (descDisplay) descDisplay.addEventListener('click', enterEditMode);
-        if (descTextarea) {
-          descTextarea.addEventListener('click', (e) => e.stopPropagation());
-          descTextarea.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-              exitEditMode(e);
-            } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-              if (btnSaveDesc) btnSaveDesc.click();
-            }
-          });
-        }
-        if (btnCancelDesc) btnCancelDesc.addEventListener('click', exitEditMode);
-        if (btnSaveDesc) {
-          btnSaveDesc.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const newDesc = descTextarea ? descTextarea.value.trim() : '';
-            server.description = newDesc;
-            if (descText) {
-              if (newDesc) {
-                descText.textContent = newDesc;
-                descText.classList.remove('is-empty');
-              } else {
-                descText.textContent = I18nModule.t('desc_empty_placeholder');
-                descText.classList.add('is-empty');
-              }
-            }
-            exitEditMode();
-            vscode.postMessage({
-              type: 'updateServerDescription',
-              name: server.rawName || key,
-              displayKey: key,
-              sourceType: server.sourceType || 'antigravity',
-              description: newDesc,
-            });
           });
         }
 
