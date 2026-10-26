@@ -135,6 +135,13 @@ function main() {
     process.exit(0);
   }
 
+  if (result.skipped === 'empty-source') {
+    console.log('[WARN] 這份工作區掃不到任何技能來源，已略過同步（既有連結全數保留）。');
+    console.log(`[INFO] 目前全域仍有 ${result.kept} 個連結，未做任何變更。`);
+    console.log('[INFO] 若確定要清空全域連結，請明確執行：--clear');
+    process.exit(0);
+  }
+
   console.log(`[INFO] 保持 ${result.kept}、新增 ${result.added}、解除 ${result.removed}、失敗 ${result.failed}、受保護 ${result.protected}`);
   console.log('===============================================================');
   console.log('                       同步成果報告                            ');
@@ -143,6 +150,17 @@ function main() {
   console.log(`  - 保持既有有效連結       : ${result.kept} 個`);
   console.log(`  - 新建立 Junction 連結    : ${result.added} 個`);
   console.log(`  - 解除無效或過期連結     : ${result.removed} 個`);
+  if (Array.isArray(result.conflicts) && result.conflicts.length > 0) {
+    console.log(`  - 名稱衝突（未建立）     : ${result.conflicts.length} 個`);
+    for (const c of result.conflicts) {
+      console.log(`      * ${c.name} ← ${c.projectName}`);
+      console.log(`        來源: ${c.sourcePath}`);
+      if (c.existingTarget) {
+        console.log(`        已被占用: ${c.existingTarget}`);
+      }
+    }
+    console.log('[INFO] 撞名不會自動改名（避免 name 與資料夾名不一致而載入失敗），請重新命名其中一顆技能。');
+  }
   if (result.failed > 0) {
     console.log(`  - 失敗                   : ${result.failed} 個`);
     process.exit(1);

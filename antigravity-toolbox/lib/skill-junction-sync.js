@@ -184,7 +184,7 @@ function collectSourceSkills(enabledFolders, wsDir, options = {}) {
  * @param {string} wsDir 工作區目錄 (解析相對路徑用)
  * @param {{ dryRun?: boolean, globalDir?: string, excludePaths?: string[] }} [options]
  *   - excludePaths: 不納入同步來源的專案路徑 (例如首專案)；其既有連結會被一併解除
- * @returns {{ added: number, removed: number, kept: number, failed: number, protected: number, excludedProjects: string[], skipped?: string }}
+ * @returns {{ added: number, removed: number, kept: number, failed: number, protected: number, excludedProjects: string[], conflicts: Array<object>, skipped?: string }} skipped: 'empty-enabled'（無啟用專案）| 'empty-source'（來源技能 0 但全域仍有連結，已中止同步）
  */
 function syncWorkspaceSkills(enabledFolders, wsDir, options = {}) {
   const dryRun = !!options.dryRun;
@@ -242,6 +242,24 @@ function syncWorkspaceSkills(enabledFolders, wsDir, options = {}) {
     });
   }
 
+  // 安全網（2026-10-26）：來源技能為 0 但全域仍有連結時，代表「這份工作區沒有任何 skills」
+  // （開到純程式碼專案、或首專案被排除）。照原邏輯續跑會把所有連結當成過期而整批解除，
+  // 連帶讓其他工作區的技能消失。故直接跳過同步並回報，要清空請明確使用 --clear。
+  if (sourceSkills.length === 0 && existingLinks.length > 0) {
+    return {
+      added: 0,
+      removed: 0,
+      kept: existingLinks.length,
+      failed: 0,
+      protected: protectedNames.size,
+      excludedProjects: collectStats.excludedProjects,
+      plan: [],
+      conflicts: [],
+      globalDir,
+      skipped: 'empty-source',
+    };
+  }
+
   const reserved = new Set(protectedNames);
   const plan = sourceSkills.map((src) => ({
     ...src,
@@ -263,17 +281,28 @@ function syncWorkspaceSkills(enabledFolders, wsDir, options = {}) {
     }
   }
 
+  // 撞名一律視為衝突（2026-10-26 起）：舊行為會把連結命名成 `foo_2`，
+  // 但目標 SKILL.md 的 name 仍是 `foo`，破壞 Cline 與 .agents/README.md §3 共同要求的
+  // 「name 必須等於資料夾名」，而且失敗是靜默的。寧可少一顆技能並明確回報，
+  // 也不要造出一顆永遠載入不到的技能。
+  const conflicts = [];
   for (const src of plan) {
     if (src.action === 'keep') continue;
-    let candidate = src.baseName;
-    let serial = 1;
-    while (reserved.has(candidate.toLowerCase())) {
-      serial += 1;
-      candidate = `${src.baseName}_${serial}`;
+    if (reserved.has(src.baseName.toLowerCase())) {
+      const holder = existingLinks.find((link) => link.linkName.toLowerCase() === src.baseName.toLowerCase());
+      src.assignedName = null;
+      src.action = 'conflict';
+      conflicts.push({
+        name: src.baseName,
+        sourcePath: src.sourcePath,
+        projectName: src.projectName,
+        existingTarget: holder ? holder.resolvedTarget : '',
+      });
+      continue;
     }
-    src.assignedName = candidate;
+    src.assignedName = src.baseName;
     src.action = 'add';
-    reserved.add(candidate.toLowerCase());
+    reserved.add(src.baseName.toLowerCase());
   }
 
   let added = 0;
@@ -300,6 +329,11 @@ function syncWorkspaceSkills(enabledFolders, wsDir, options = {}) {
       continue;
     }
 
+    if (src.action === 'conflict') {
+      failed += 1;
+      continue;
+    }
+
     if (dryRun) {
       added += 1;
       continue;
@@ -321,6 +355,7 @@ function syncWorkspaceSkills(enabledFolders, wsDir, options = {}) {
     protected: protectedNames.size,
     excludedProjects: collectStats.excludedProjects,
     plan,
+    conflicts,
     globalDir,
   };
 }
