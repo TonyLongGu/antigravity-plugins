@@ -1,6 +1,6 @@
 # Antigravity 控制中心 (Antigravity Toolbox)
 
-VS Code 相容 IDE 原生側邊欄擴充套件（Cursor、VS Code、VS Code Insiders、VSCodium、Google Antigravity），支援環境智慧感應與按需掛載，並內建 GitHub Copilot 對話紀錄統計與清理。
+VS Code 相容 IDE 原生側邊欄擴充套件（Cursor、VS Code、VS Code Insiders、Google Antigravity），支援環境智慧感應與按需掛載，並內建 GitHub Copilot 對話紀錄統計與清理。
 
 ---
 
@@ -58,15 +58,16 @@ VS Code 相容 IDE 原生側邊欄擴充套件（Cursor、VS Code、VS Code Insi
 
 Cursor、VS Code 與 Antigravity 都實作 VS Code Extension API（`require('vscode')`），因此**同一份外掛可直接掛到 Cursor**，不必另打包。
 
-腳本會自動辨識本機已安裝的相容 IDE（Cursor、VS Code、VS Code Insiders、VSCodium、Antigravity IDE）並按需掛載到各自的 `extensions` 目錄：
+腳本會自動辨識本機已安裝的相容 IDE（Cursor、VS Code、VS Code Insiders、Antigravity IDE）並按需掛載到各自的 `extensions` 目錄：
 
 | IDE | 擴充套件目錄 | User 設定目錄 |
 | :--- | :--- | :--- |
 | Cursor | `~/.cursor/extensions` | `%APPDATA%\Cursor\User` |
 | VS Code | `~/.vscode/extensions` | `%APPDATA%\Code\User` |
 | VS Code Insiders | `~/.vscode-insiders/extensions` | `%APPDATA%\Code - Insiders\User` |
-| VSCodium | `~/.vscode-oss/extensions` | `%APPDATA%\VSCodium\User` |
 | Antigravity IDE | `~/.antigravity-ide/extensions` | `%APPDATA%\Antigravity IDE\User` |
+
+> ⚠️ **VSCodium 尚未支援自動掛載**：安裝腳本目前只涵蓋上表四種 IDE。VSCodium 同為 VS Code OSS 分支，但腳本沒有它的部署目標（只有「IDE 正在執行」的偵測會認得它），所以不會自動掛載。若你需要，請自行把外掛資料夾掛到 `~/.vscode-oss/extensions` 後重新載入視窗（此路徑未經本專案實機驗證）。
 
 1. **一鍵安裝**：在 PowerShell 執行 `.\install-extension.ps1`（或雙擊 `install-extension.bat`）。
 2. **一鍵卸載**：在 PowerShell 執行 `.\uninstall-extension.ps1`（或雙擊 `uninstall-extension.bat`）。

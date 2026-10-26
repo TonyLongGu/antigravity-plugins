@@ -22,12 +22,12 @@ Get-ChildItem -Recurse -Filter 'install*.ps1' |
 
 判準：命中若只出現在 `get-runningideforroot()` 區塊，就是「只偵測、不部署」。
 
-## 待決（二選一，未定案）
+## 決策（2026-10-26：採 ① 只修文件）
 
-| 選項 | 範圍 | 代價 |
-| :--- | :--- | :--- |
-| **① 只修文件** | `antigravity-toolbox/README.md` 改寫成「僅 VS Code 相容 IDE 支援，VSCodium 需自行側載 `.vsix`」 | **1 檔 / 3 處**；不動程式 |
-| **② 補實作** | 6 支 `install-extension.ps1` ＋ 6 支 `uninstall-extension.ps1` ＋ 根 `install-all.ps1`／`uninstall-all.ps1` 全加 VSCodium 候選 | **14 檔 × 約 5 個修改點**；六份是獨立複本，**必須同步**；改完依 §5 跑 `graphify update .` |
+| 選項 | 狀態 |
+| :--- | :--- |
+| **① 只修文件** | ✅ **已執行（2026-10-26）**：`antigravity-toolbox/README.md` L3 移除 VSCodium、L61 支援清單移除、原 L68 表格列刪除，改為「⚠️ VSCodium 尚未支援自動掛載」註記（含手動掛載方向＋未驗證警告）。<br>成本：**1 檔 / 3 處**，不動程式 → 文件與實作從此一致 |
+| **② 補實作** | ⬜ 未做；清單保留在下方，日後真要支援時照著改 |
 
 選 ② 前的必做：`graphify affected "get-runningideforroot" --depth 2` 先看影響半徑（實測 17 個節點）。
 
