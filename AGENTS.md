@@ -14,15 +14,15 @@
 
 ---
 
-## 2. 圖譜狀態（2026-10-24 實測，graphify 0.9.80）
+## 2. 圖譜狀態（2026-10-26 實測，graphify 0.9.80）
 
 | 項目 | 值 |
 | :--- | :--- |
 | 圖譜位置 | `graphify-out/`（根 `.gitignore` 已排除，**勿 commit**） |
 | 規模 | **1595** nodes / **2903** edges / **91** communities |
-| 建圖 commit | `75d24581`（= 當時 HEAD；工作區含未提交變更） |
+| 建圖 commit | `ea192ae6`（= HEAD；2026-10-26 `graphify update .` 後重算，節點／邊／社群不變） |
 | 掃描範圍 | 純程式：66 `.js` ＋ 15 `.ps1` ＋ 18 `.json`（= 99 檔，含 6 個 `package.json`）；`extract` 3 秒、`cluster-only` 1 秒、**0 元** |
-| 產物大小 | `GRAPH_REPORT.md` **13.6 KB**（可整讀）、`graph.json` **1.9 MB**（禁整讀）、`graph.html` 1.5 MB |
+| 產物大小 | `GRAPH_REPORT.md` **15.2 KB**（可整讀）、`graph.json` **1.9 MB**（禁整讀）、`graph.html` 1.5 MB |
 | 不進圖 | `*.css`、`*.html`、`locales/*.json`（實測 0 節點）、`*.md`（`.graphifyignore` 已排除） |
 
 ---
