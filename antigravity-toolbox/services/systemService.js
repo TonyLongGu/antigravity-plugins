@@ -82,6 +82,44 @@ function detectHostIde() {
   };
 }
 
+/**
+ * 控制中心可切換的資料來源類別（對應 antigravity.uiFlavor / 面板頂部類別切換鈕）
+ *
+ * cline 是「外掛」而非 IDE：它寄生在 VS Code / Cursor / Antigravity 內，
+ * 因此只能手動指定，auto 永遠不會判定成 cline（見 resolveFlavor）。
+ */
+const FLAVORS = ['antigravity', 'cursor', 'copilot', 'cline'];
+
+/**
+ * 讀取使用者手動指定的資料來源類別。
+ * @returns {'auto'|'antigravity'|'cursor'|'copilot'|'cline'} auto 代表依宿主自動判定
+ */
+function getFlavorOverride() {
+  try {
+    const value = vscode.workspace.getConfiguration('antigravity').get('uiFlavor', 'auto');
+    if (value === 'auto' || FLAVORS.includes(value)) return value;
+    return 'auto';
+  } catch {
+    return 'auto';
+  }
+}
+
+/**
+ * 解析目前應採用的資料來源類別。
+ *
+ * 手動指定（非 auto）時一律以指定值為準，讓同一套外掛在各 IDE 顯示一致；
+ * auto 時依宿主判定：Cursor → cursor、VS Code 家族 + Copilot → copilot、其餘 → antigravity。
+ * （cline 為寄生在 IDE 內的外掛，沒有自己的宿主，故 auto 不會回傳 cline。）
+ * @returns {'antigravity'|'cursor'|'copilot'|'cline'}
+ */
+function resolveFlavor() {
+  const override = getFlavorOverride();
+  if (override !== 'auto') return override;
+  if (detectHostIde().id === 'cursor') return 'cursor';
+  if (isCopilotEnvironment()) return 'copilot';
+  return 'antigravity';
+}
+
 /** @type {boolean | null} */
 let _copilotEnvironmentCache = null;
 
@@ -295,14 +333,75 @@ function getCursorRulesDir() {
   return path.join(getCursorHome(), 'rules');
 }
 
+/** Cline 家目錄：全域規則／技能／外掛／工作流與資料目錄都掛在這裡（`~/.cline`） */
+function getClineHome() {
+  return path.join(getHomeDir(), '.cline');
+}
+
 /**
- * 取得全域目錄路徑對應表（依目前 IDE 使用本環境路徑）
+ * 依序回傳第一個存在的候選目錄；全都不存在時回傳 fallback。
+ *
+ * Cline 的規則／外掛同時支援 `~/.cline/<x>`（官方主路徑）與 `~/Documents/Cline/<X>`
+ * （相容用的額外搜尋路徑，見官方 Config 文件），使用者通常只有其中一種，
+ * 因此優先指向實際存在的那一個，避免點開後看到空目錄。
  */
-function getGlobalPaths() {
+function firstExistingDir(candidates, fallback) {
+  for (const candidate of candidates) {
+    if (candidate && fs.existsSync(candidate)) return candidate;
+  }
+  return fallback;
+}
+
+/**
+ * Cline 對話目錄。
+ *
+ * 新版：`~/.cline/data/sessions/<sessionId>/`（IDE／CLI／SDK 共用，一個 session 一資料夾）
+ * 舊版：`<IDE User>/globalStorage/saoudrizwan.claude-dev/tasks/<taskId>/`
+ * 兩者都是「一個資料夾＝一筆對話」，因此可直接沿用 Brain 的資料夾統計與清理邏輯；
+ * 新版存在時優先採用，避免兩種格式並存時重複計算同一批對話。
+ * @returns {string}
+ */
+function resolveClineSessionsDir() {
+  const modern = path.join(getClineHome(), 'data', 'sessions');
+  if (fs.existsSync(modern)) return modern;
+  const legacy = path.join(
+    detectHostIde().userSettingsDir,
+    'globalStorage',
+    'saoudrizwan.claude-dev',
+    'tasks'
+  );
+  if (fs.existsSync(legacy)) return legacy;
+  return modern;
+}
+
+/**
+ * Cline MCP 設定檔路徑（新版位於 `~/.cline/data/settings`，舊版位於 globalStorage）。
+ * 兩者皆不存在時回傳新版路徑，供 handleOpenTarget 建立預設內容。
+ * @returns {string}
+ */
+function resolveClineMcpConfigPath() {
+  const modern = path.join(getClineHome(), 'data', 'settings', 'cline_mcp_settings.json');
+  if (fs.existsSync(modern)) return modern;
+  const legacy = path.join(
+    detectHostIde().userSettingsDir,
+    'globalStorage',
+    'saoudrizwan.claude-dev',
+    'settings',
+    'cline_mcp_settings.json'
+  );
+  if (fs.existsSync(legacy)) return legacy;
+  return modern;
+}
+
+/**
+ * 取得全域目錄路徑對應表（依指定或解析出的資料來源類別）
+ * @param {'antigravity'|'cursor'|'copilot'|'cline'} [flavor] 省略時依 antigravity.uiFlavor / 宿主自動判定
+ */
+function getGlobalPaths(flavor = resolveFlavor()) {
   const homeDir = getHomeDir();
   const host = detectHostIde();
 
-  if (host.id === 'cursor') {
+  if (flavor === 'cursor') {
     const cursorHome = getCursorHome();
     const cursorProject = resolveCursorProjectDir();
     const projectsRoot = path.join(cursorHome, 'projects');
@@ -325,7 +424,7 @@ function getGlobalPaths() {
     };
   }
 
-  if (isCopilotEnvironment()) {
+  if (flavor === 'copilot') {
     const userDir = host.userSettingsDir;
     const copilotHome = path.join(homeDir, '.copilot');
     const workspaceRoot = path.join(userDir, 'workspaceStorage');
@@ -343,6 +442,27 @@ function getGlobalPaths() {
       brain: workspaceRoot,
       brainScanRoot: workspaceRoot,
       userSettingsDir: userDir,
+      userSettingsPath: host.userSettingsPath,
+      ideExtensions: host.ideExtensionsDir,
+    };
+  }
+
+  if (flavor === 'cline') {
+    const clineHome = getClineHome();
+    const clineDocs = path.join(homeDir, 'Documents', 'Cline');
+    const clineSkills = path.join(clineHome, 'skills');
+
+    return {
+      globalConfig: clineHome,
+      // 官方全域技能目錄為 ~/.cline/skills；Cline 另外也會讀 ~/.agents/skills（本工具的同步集散地）
+      skills: firstExistingDir([clineSkills, path.join(homeDir, '.agents', 'skills')], clineSkills),
+      rules: firstExistingDir([path.join(clineHome, 'rules'), path.join(clineDocs, 'Rules')], path.join(clineHome, 'rules')),
+      plugins: firstExistingDir([path.join(clineHome, 'plugins'), path.join(clineDocs, 'Plugins')], path.join(clineHome, 'plugins')),
+      mcpConfig: resolveClineMcpConfigPath(),
+      appData: path.join(clineHome, 'data'),
+      brain: resolveClineSessionsDir(),
+      brainScanRoot: resolveClineSessionsDir(),
+      userSettingsDir: host.userSettingsDir,
       userSettingsPath: host.userSettingsPath,
       ideExtensions: host.ideExtensionsDir,
     };
@@ -367,19 +487,20 @@ function getGlobalPaths() {
 }
 
 /**
- * 收集對話紀錄資料夾（Cursor：各專案 agent-transcripts；Antigravity：brain）
+ * 收集對話紀錄資料夾
+ * （Antigravity：brain；Cursor：各專案 agent-transcripts；Cline：data/sessions）
+ * @param {'antigravity'|'cursor'|'copilot'|'cline'} [flavor] 省略時依 antigravity.uiFlavor / 宿主自動判定
  * @returns {string[]}
  */
-function collectBrainSessionDirs() {
-  const paths = getGlobalPaths();
-  const host = detectHostIde();
+function collectBrainSessionDirs(flavor = resolveFlavor()) {
+  const paths = getGlobalPaths(flavor);
   const sessions = [];
 
   // Copilot 的對話為「單檔 jsonl 分散於各工作區」，非資料夾結構，
   // 一律改由 copilotChatService 處理，此處不提供項目以免語意混淆。
-  if (isCopilotEnvironment()) return sessions;
+  if (flavor === 'copilot') return sessions;
 
-  if (host.id === 'cursor') {
+  if (flavor === 'cursor') {
     const projectsRoot = paths.brainScanRoot;
     if (!projectsRoot || !fs.existsSync(projectsRoot)) return sessions;
     let projects = [];
@@ -433,6 +554,8 @@ function getEnvironmentInfo() {
   const geminiExists = fs.existsSync(globalConfigRoot) || fs.existsSync(globalAppRoot) || fs.existsSync(antigravityAppData);
   const hasAntigravity = isAntigravityIDE || geminiExists;
   const cursorHomeExists = fs.existsSync(getCursorHome());
+  // Cline 是外掛而非 IDE：只要本機有 ~/.cline（IDE／CLI／SDK 共用）或其對話目錄即視為可用
+  const hasCline = fs.existsSync(getClineHome()) || fs.existsSync(resolveClineSessionsDir());
 
   const config = vscode.workspace.getConfiguration('antigravity');
   // 預設為 false：在純 VS Code 等外部 IDE 中預設不顯示 Antigravity 專屬卡片
@@ -447,25 +570,32 @@ function getEnvironmentInfo() {
   // 3. VS Code + 手動開啟設定且有 Antigravity → antigravity（尊重使用者明確設定）
   // 4. VS Code + Copilot → copilot（顯示 Copilot 對應路徑與 chatSessions 對話紀錄）
   // 5. 其餘               → 隱藏兩張主機相依卡片
-  let uiFlavor = 'antigravity';
-  let showHostModules = false;
+  // （cline 永遠不會是 auto 的結果：它是寄生在 IDE 內的外掛，只能由使用者手動指定）
+  let autoFlavor = 'antigravity';
+  let autoShowHostModules = false;
 
   if (host.isCursor) {
-    uiFlavor = 'cursor';
-    showHostModules = true;
+    autoFlavor = 'cursor';
+    autoShowHostModules = true;
   } else if (isAntigravityIDE) {
-    uiFlavor = 'antigravity';
-    showHostModules = true;
+    autoFlavor = 'antigravity';
+    autoShowHostModules = true;
   } else if (Boolean(showInVsCode) && hasAntigravity) {
-    uiFlavor = 'antigravity';
-    showHostModules = true;
+    autoFlavor = 'antigravity';
+    autoShowHostModules = true;
   } else if (isCopilot && showCopilotInVsCode) {
-    uiFlavor = 'copilot';
-    showHostModules = true;
+    autoFlavor = 'copilot';
+    autoShowHostModules = true;
   }
 
+  // 面板頂部「類別切換鈕」(antigravity.uiFlavor)：手動指定後即不再受宿主限制，
+  // 讓同一份外掛無論裝在哪個 IDE，都能切換檢視其他 IDE 的資料。
+  const flavorOverride = getFlavorOverride();
+  const uiFlavor = flavorOverride === 'auto' ? autoFlavor : flavorOverride;
+  const showHostModules = flavorOverride === 'auto' ? autoShowHostModules : true;
+
   // 實際目標路徑摘要（前端用於按鈕 tooltip，讓使用者點擊前就知道會開啟何處）
-  const paths = getGlobalPaths();
+  const paths = getGlobalPaths(uiFlavor);
 
   return {
     appName: host.appName,
@@ -476,10 +606,20 @@ function getEnvironmentInfo() {
     isCopilot,
     hasAntigravity,
     hasCursor: host.isCursor || cursorHomeExists,
+    hasCline,
     uiFlavor,
+    autoFlavor,
+    flavorOverride,
     hostMode: uiFlavor,
     showHostModules,
     showAntigravityCards: showHostModules,
+    // 各類別在本機是否具備可用資料（前端據此隱藏切換鈕，避免切到空資料）
+    flavors: {
+      antigravity: Boolean(hasAntigravity),
+      cursor: Boolean(host.isCursor || cursorHomeExists),
+      copilot: Boolean(isCopilot),
+      cline: Boolean(hasCline),
+    },
     paths: {
       globalConfig: paths.globalConfig,
       mcpConfig: paths.mcpConfig,
@@ -527,7 +667,8 @@ async function handleOpenTarget(target, provider) {
       const skillDir = path.join(getHomeDir(), '.agents', 'skills');
       await openFolderInside(skillDir);
     } else if (target === 'mcpConfig') {
-      ensureDirectory(paths.globalConfig);
+      // 用 mcpConfig 的所在目錄（各類別都等於 globalConfig，Cline 則在其 data/settings 之下）
+      ensureDirectory(path.dirname(paths.mcpConfig));
       if (fs.existsSync(paths.mcpConfig)) {
         const doc = await vscode.workspace.openTextDocument(paths.mcpConfig);
         await vscode.window.showTextDocument(doc);
@@ -629,6 +770,9 @@ async function toggleExplorerSetting(settingKey, provider) {
 module.exports = {
   bindExtensionContext,
   detectHostIde,
+  FLAVORS,
+  getFlavorOverride,
+  resolveFlavor,
   isCopilotEnvironment,
   resetCopilotEnvironmentCache,
   collectBrainSessionDirs,

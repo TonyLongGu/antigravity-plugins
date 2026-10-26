@@ -240,6 +240,23 @@ class ToolboxViewProvider {
         break;
       }
 
+      case 'setUiFlavor': {
+        const flavor = String(msg.flavor || 'auto');
+        // 白名單以 systemService.FLAVORS 為單一真相，新增類別時不必改這裡
+        if (!['auto', ...systemService.FLAVORS].includes(flavor)) break;
+        try {
+          await vscode.workspace
+            .getConfiguration('antigravity')
+            .update('uiFlavor', flavor, vscode.ConfigurationTarget.Global);
+          brainService.invalidateCache();
+          this.pushStatus(0);
+        } catch (err) {
+          console.error('Failed to update uiFlavor in toolbox:', err);
+          this.pushToast(`切換類別失敗：${err.message}`, 'error');
+        }
+        break;
+      }
+
       case 'showToast':
         this.pushToast(msg.message, msg.status || 'info');
         break;
@@ -458,6 +475,11 @@ function activate(context) {
       }
       if (e.affectsConfiguration('antigravity.showCopilotModulesInVsCode')) {
         provider.pushStatus(50);
+      }
+      if (e.affectsConfiguration('antigravity.uiFlavor')) {
+        // 資料來源類別切換：統計快取必須失效，並立即重繪（含路徑 tooltip、卡片文案與切換鈕狀態）
+        brainService.invalidateCache();
+        provider.pushStatus(0);
       }
       if (
         e.affectsConfiguration('antigravity.syncSkillsOnFolderToggle')

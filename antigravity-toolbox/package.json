@@ -1,8 +1,8 @@
 {
 	"name": "antigravity-toolbox",
 	"displayName": "Antigravity 控制中心 (Toolbox)",
-	"description": "VS Code 相容 IDE 側邊欄控制中心（Cursor / VS Code / VS Code Insiders / VSCodium / Antigravity）：整合多專案工作區同名修正、專案腳本執行器 (ps1/bat/cmd)、全域設定/技能/規範目錄直達、GitHub Copilot 對話紀錄統計與清理、Brain 對話歷史紀錄清理與 settings.json 快速編輯",
-	"version": "1.4.0",
+	"description": "VS Code 相容 IDE 側邊欄控制中心（Cursor / VS Code / VS Code Insiders / VSCodium / Antigravity）：整合多專案工作區同名修正、專案腳本執行器 (ps1/bat/cmd)、全域設定/技能/規範目錄直達、GitHub Copilot 與 Cline 對話紀錄統計與清理、Brain 對話歷史紀錄清理與 settings.json 快速編輯",
+	"version": "1.6.0",
 	"publisher": "antigravity-toolkit",
 	"engines": {
 		"vscode": "^1.80.0"
@@ -32,6 +32,25 @@
 						"English"
 					],
 					"description": "Antigravity 外掛全域介面語言 (Global Interface Language for Antigravity Plugins)"
+				},
+				"antigravity.uiFlavor": {
+					"type": "string",
+					"default": "auto",
+					"enum": [
+						"auto",
+						"antigravity",
+						"cursor",
+						"copilot",
+						"cline"
+					],
+					"enumDescriptions": [
+						"自動：依目前開啟的 IDE 判定 (Auto-detect)；面板上點「目前宿主」的類別即回到此值（面板已無獨立的自動鈕）",
+						"Antigravity：顯示 ~/.gemini 與 Brain 對話記憶庫",
+						"Cursor：顯示 ~/.cursor 與 agent-transcripts 對話紀錄",
+						"Copilot：顯示 VS Code Copilot 的 prompts 與 chatSessions",
+						"Cline：顯示 ~/.cline 的規則/技能/外掛與 data/sessions 對話紀錄（Cline 是外掛，只能手動選擇）"
+					],
+					"description": "控制中心要顯示哪一套 IDE／工具的專屬功能與資料路徑，對應面板頂部的「類別切換鈕」。auto 會依目前宿主 IDE 自動判定；手動指定後即使切換到其他 IDE 也會固定顯示所選類別。面板切換鈕為彩色 chips（各類別一色）"
 				},
 				"antigravity.showAntigravityModulesInVsCode": {
 					"type": "boolean",

@@ -22,7 +22,7 @@
      - **VS Code Copilot 對話足跡**：掃描 `%APPDATA%/Code/User/workspaceStorage/*/chatSessions/*.jsonl`，用官方 `customTitle` 列出對話，並還原實際讀過的 Rules / Skills 與 `mcp_*` 工具。這不是 Antigravity 那種 session prompt 注入快照。
    - 🟣 **Cline 對話來源（跨宿主，任何 IDE 都能看）**：
      - **資料位置**：`~/.cline/data/sessions/<sessionId>/`（user 層級，Antigravity / Cursor / VS Code 共用同一份，因此不必管目前開的是哪個 IDE）。
-     - **來源篩選 chips**：快照模式下可一鍵切換「全部 / Antigravity / Cursor / Copilot / Cline」；每個 chip 直接顯示該來源的對話筆數。只有一種來源時自動隱藏。
+     - **來源篩選 chips**：快照模式下可一鍵切換「Antigravity / Cursor / Copilot / Cline」（各來源一色，chip 只顯示來源名稱）。**不提供「全部」chip**——沒有任何 chip 作用中即代表顯示全部，再點一次作用中的 chip 即取消篩選。只有一種來源時自動隱藏。
      - **足跡還原**：`skills` 工具呼叫 → 該技能標記為已調用；`<server>__<tool>` → 只留下真正被呼叫的 MCP 伺服器與工具；`read_files` / `editor` 觸及的 `.agents/rules`、`.clinerules` → 標記為已讀取的條件式規範。
      - **Cline 設定**：`.clinerules`（檔案或資料夾）、`.clinerules/workflows/*.md`、全域 `~/Documents/Cline/Rules`、`~/.agents/skills` 全都會納入掃描；`~/.cline/data/workspaces/*/workspaceState.json` 與 `globalState.json` 的 rules / skills 開關若為關閉，該項目會被淡化並排除在快照之外。
 2. **一鍵跳轉開啟**：點擊任一項目旁的 `📄 開啟` 按鈕，立即在編輯器開啟對應的 `.md` 檔案。
@@ -34,7 +34,7 @@
 
 ## 🚀 一鍵安裝與啟用
 
-1. 雙擊執行 `install-extension.bat`（腳本會詢問安裝目標：Antigravity / VS Code / Cursor / 全部，並建立 Junction 連線）。
+1. 雙擊執行 `install-extension.bat`（預設自動偵測並安裝到本機全部 VS Code 相容 IDE，**不需選擇目標**，並建立 Junction 連線；要只裝單一 IDE 可加 `-Target Antigravity|VSCode|Cursor`）。
 2. 於 IDE 按快捷鍵 `Ctrl + Shift + P`，輸入並執行 `Developer: Reload Window`。
 3. 點擊左側活動列圖示 **🤖 (AI 上下文檢視器)** 即可開啟面板！
 

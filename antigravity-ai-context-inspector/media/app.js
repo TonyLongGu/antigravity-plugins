@@ -357,6 +357,8 @@
   }
 
   // 來源篩選 chips（只在快照模式、且可用來源 > 1 時出現）
+  // 刻意不提供「全部」chip：未篩選時沒有任何 chip 處於作用中即代表顯示全部，
+  // 點一下已作用中的 chip 即可取消篩選、回到全部來源。
   function renderSourceChips() {
     if (!dom.sourceChips) return;
     if (currentMode !== 'snapshot' || snapshotSources.length <= 1) {
@@ -365,28 +367,24 @@
       return;
     }
 
-    const total = snapshotSources.reduce((sum, item) => sum + Math.max(0, item.count || 0), 0);
-    const chips = [{ id: 'all', count: total }].concat(snapshotSources);
-
     dom.sourceChips.style.display = 'flex';
-    dom.sourceChips.innerHTML = chips.map(item => {
+    dom.sourceChips.innerHTML = snapshotSources.map(item => {
       const active = sourceFilter === item.id ? 'active' : '';
-      const countHtml = item.count >= 0
-        ? `<span class="source-chip-count">${item.count}</span>`
-        : '';
-      const label = item.id === 'all' ? I18nModule.t('source_all') : sourceLabel(item.id);
-      const title = I18nModule.t('source_chip_title', {
-        source: label,
-        count: item.count >= 0 ? item.count : 0
-      });
-      return `<button type="button" class="source-chip src-${escapeHtml(item.id)} ${active}" data-source="${escapeHtml(item.id)}" title="${escapeHtml(title)}">${escapeHtml(label)}${countHtml}</button>`;
+      const label = sourceLabel(item.id);
+      const baseTitle = I18nModule.t('source_chip_title', { source: label });
+      const title = active
+        ? `${baseTitle}\n${I18nModule.t('source_chip_toggle_hint')}`
+        : baseTitle;
+      return `<button type="button" class="source-chip src-${escapeHtml(item.id)} ${active}" data-source="${escapeHtml(item.id)}" title="${escapeHtml(title)}">${escapeHtml(label)}</button>`;
     }).join('');
 
     dom.sourceChips.querySelectorAll('.source-chip').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        setSourceFilter(btn.getAttribute('data-source'));
+        const id = btn.getAttribute('data-source');
+        // 再點一次作用中的來源 = 取消篩選（回到全部來源）
+        setSourceFilter(id === sourceFilter ? 'all' : id);
       });
     });
   }

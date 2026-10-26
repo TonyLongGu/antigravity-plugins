@@ -58,7 +58,7 @@ VS Code 相容 IDE 原生側邊欄擴充套件（Cursor、VS Code、VS Code Insi
 
 Cursor、VS Code 與 Antigravity 都實作 VS Code Extension API（`require('vscode')`），因此**同一份外掛可直接掛到 Cursor**，不必另打包。
 
-腳本會自動辨識本機已安裝的相容 IDE（Cursor、VS Code、VS Code Insiders、Antigravity IDE）並按需掛載到各自的 `extensions` 目錄：
+腳本會自動辨識本機已安裝的相容 IDE（Cursor、VS Code、VS Code Insiders、Antigravity IDE）並**預設全部掛載**到各自的 `extensions` 目錄（不再詢問目標，一次裝好）：
 
 | IDE | 擴充套件目錄 | User 設定目錄 |
 | :--- | :--- | :--- |
@@ -76,7 +76,14 @@ Cursor、VS Code 與 Antigravity 都實作 VS Code Extension API（`require('vsc
    - 點擊左側活動列的 **🛠️ (Antigravity 控制中心)** 圖示。
    - 或點擊右下角狀態列 **`$(tools) 控制中心`** 按鈕。
 
-> 💡 **環境感應**：在 Cursor 會顯示 Cursor 本機路徑（`~/.cursor`、agent-transcripts）；在 Antigravity 則顯示 `~/.gemini`；在 VS Code 偵測到 GitHub Copilot 時顯示 Copilot 專屬路徑與 `chatSessions` 對話紀錄。
+> 🔀 **類別切換鈕（面板頂部）**：`Antigravity / Cursor / Copilot / Cline` 彩色膠囊鈕（樣式對齊 inspector 的快照來源 chips，各類別一色），讓你**在同一個 IDE 內切換要檢視哪一套資料**——路徑卡片、對話記憶庫統計與卡片文案都會跟著換。
+> - 未手動指定（預設）＝依目前宿主 IDE 判定，行為與舊版完全相同；作用中的類別以該類別的顏色高亮。
+> - 手動指定會寫入 `antigravity.uiFlavor` 並記憶；即使人在 VS Code，也能直接查看 Cursor、Antigravity 或 Cline 的資料。
+> - 點一下「目前宿主」的類別＝回復跟隨宿主（等同 `auto`），因此不再需要「自動」鈕。
+> - 本機沒有資料的類別會自動隱藏；可用類別少於兩個時整列切換鈕隱藏。
+> - **Cline 只能手動選擇**：Cline 是安裝在 IDE 內的外掛，沒有自己的宿主，所以 `auto` 永遠不會判定成 Cline。
+
+> 💡 **環境感應**：在 Cursor 會顯示 Cursor 本機路徑（`~/.cursor`、agent-transcripts）；在 Antigravity 則顯示 `~/.gemini`；在 VS Code 偵測到 GitHub Copilot 時顯示 Copilot 專屬路徑與 `chatSessions` 對話紀錄（可用上方切換鈕覆寫）。
 
 ### 卡片顯示決策
 
@@ -89,6 +96,18 @@ Cursor、VS Code 與 Antigravity 都實作 VS Code Extension API（`require('vsc
 | 3 | VS Code ＋ 手動開啟 `showAntigravityModulesInVsCode` 且有 Antigravity | `~/.gemini`、`brain` |
 | 4 | VS Code ＋ 偵測到 GitHub Copilot | Copilot 路徑、`chatSessions` |
 | 5 | 其他 | 兩張卡片自動隱藏 |
+
+手動切換（`antigravity.uiFlavor`）時改為固定顯示該類別，不受上表限制。Cline 類別的路徑對照：
+
+| 卡片按鈕 | Cline 路徑 |
+| :--- | :--- |
+| Config 根目錄 | `~/.cline` |
+| `cline_mcp_settings.json` | `~/.cline/data/settings/cline_mcp_settings.json`（舊版退回 `<IDE User>/globalStorage/saoudrizwan.claude-dev/settings`） |
+| Skills / Rules / Plugins | `~/.cline/{skills,rules,plugins}`；不存在時退回 `~/Documents/Cline/{Rules,Plugins}`、`~/.agents/skills` |
+| AppData 核心 | `~/.cline/data` |
+| 對話記憶庫 | `~/.cline/data/sessions`（不存在時退回舊版 `.../saoudrizwan.claude-dev/tasks`） |
+
+> ⚠️ 清理 Cline 對話只刪除 `~/.cline/data/sessions/<sessionId>/` 資料夾，**不會**同步 `~/.cline/data/db/`（`sessions.db`／`session-search.db` 等 SQLite 索引）；清理後 Cline 介面可能仍列出已刪除的對話，確認視窗會提醒這件事。
 
 相關設定：
 

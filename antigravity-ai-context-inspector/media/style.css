@@ -536,12 +536,6 @@ body {
   color: #9cdcfe;
 }
 
-.source-chip-count {
-  font-size: 9px;
-  font-weight: 500;
-  opacity: 0.75;
-}
-
 /* 對話清單中的來源徽章 */
 .conv-source-badge {
   padding: 0 5px;

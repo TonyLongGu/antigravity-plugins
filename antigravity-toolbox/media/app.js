@@ -208,6 +208,13 @@
       if (typeof BrainModule !== 'undefined' && BrainModule.dom && BrainModule.dom.slider) {
         BrainModule.updateSliderUi(parseInt(BrainModule.dom.slider.value, 10));
       }
+
+      // 切換鈕的 tooltip 不是純 data-i18n（含「目前宿主」提示），需重繪一次
+      if (curState.envInfo
+        && typeof EnvironmentModule !== 'undefined'
+        && typeof EnvironmentModule.applyFlavorBar === 'function') {
+        EnvironmentModule.applyFlavorBar(curState.envInfo);
+      }
     },
   };
 
@@ -1497,6 +1504,8 @@
         I18nModule.applyLanguage(I18nModule.currentLang, false);
       }
 
+      this.applyFlavorBar(envInfo);
+
       if (configModule) {
         configModule.classList.toggle('hidden-by-env', !shouldShow);
       }
@@ -1514,6 +1523,62 @@
         const brainBtn = document.querySelector('#module-brain [data-target="brain"]');
         if (brainBtn && envInfo.paths.brain) brainBtn.title = envInfo.paths.brain;
       }
+    },
+
+    /**
+     * 更新頂部「資料來源類別」切換鈕 (IDE Flavor Switcher)
+     *
+     * 樣式與互動對齊 antigravity-ai-context-inspector 的「最近對話快照」來源 chips：
+     * 每個 IDE／工具一顆彩色膠囊；沒有「全部 / 自動」這種綜合選項——未手動指定時
+     * 即以目前宿主的類別為作用中，點一下目前宿主的類別即回復「跟隨宿主」。
+     * 僅顯示本機實際具備資料的類別（避免切到空目錄），可選項少於 2 個時整列隱藏，
+     * 因為此時「切換」沒有意義。點擊後僅改寫 antigravity.uiFlavor，實際重繪由後端推播。
+     */
+    applyFlavorBar(envInfo) {
+      const bar = document.getElementById('flavor-bar');
+      if (!bar) return;
+
+      const flavors = envInfo.flavors || {};
+      const hostFlavor = envInfo.autoFlavor || envInfo.uiFlavor || '';
+      const override = envInfo.flavorOverride || 'auto';
+      const activeFlavor = override === 'auto' ? hostFlavor : override;
+      const chips = Array.from(bar.querySelectorAll('.flavor-chip'));
+      let visibleCount = 0;
+
+      chips.forEach((chip) => {
+        const flavor = chip.getAttribute('data-flavor');
+        const available = flavors[flavor] === true;
+        chip.hidden = !available;
+        if (available) visibleCount += 1;
+
+        const active = available && flavor === activeFlavor;
+        chip.classList.toggle('is-active', active);
+        chip.setAttribute('aria-pressed', active ? 'true' : 'false');
+
+        const labelEl = chip.querySelector('.flavor-chip-label');
+        const labelText = (labelEl && labelEl.textContent) || flavor;
+        const baseTitle = I18nModule.t('flavor_chip_title', { flavor: labelText });
+        chip.title = flavor === hostFlavor
+          ? `${baseTitle}\n${I18nModule.t('flavor_chip_host_hint')}`
+          : baseTitle;
+      });
+
+      bar.hidden = visibleCount < 2;
+      // 點擊事件只綁一次，故把最新狀態掛在元素上（閉包會拿到第一次的舊值）
+      bar._flavorState = { hostFlavor, override };
+
+      if (bar.dataset.bound === '1') return;
+      bar.dataset.bound = '1';
+      bar.addEventListener('click', (e) => {
+        const chip = e.target.closest('.flavor-chip');
+        if (!chip || chip.hidden) return;
+        const flavor = chip.getAttribute('data-flavor');
+        const state = bar._flavorState || {};
+        // 點「目前宿主」的類別＝回到跟隨宿主（等同 auto），所以不需要額外的自動按鈕
+        const next = flavor === state.hostFlavor ? 'auto' : flavor;
+        if (next === (state.override || 'auto')) return;
+        vscode.postMessage({ type: 'setUiFlavor', flavor: next });
+      });
     },
   };
 

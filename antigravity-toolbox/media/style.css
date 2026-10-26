@@ -172,6 +172,85 @@ body {
   fill: none;
 }
 
+/* ==============================================================================
+   資料來源類別切換列 (IDE Flavor Switcher)
+   樣式對齊 antigravity-ai-context-inspector 的「最近對話快照」來源 chips：
+   膠囊外觀、啟用時才上色。各類別專屬色（與 inspector 的 .source-chip 同色）：
+     Antigravity → teal (#4ec9b0) / Cursor → 綠 (#a9dc76)
+     Copilot → 淺藍 (#9cdcfe) / Cline → 紫 (#c586c0)
+   ============================================================================== */
+.flavor-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 2px 0 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.flavor-bar[hidden] {
+  display: none;
+}
+
+.flavor-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.flavor-chip {
+  flex: 0 0 auto;
+  height: 21px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 550;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s ease;
+}
+
+.flavor-chip[hidden] {
+  display: none;
+}
+
+.flavor-chip:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.flavor-chip.is-active {
+  background: rgba(78, 201, 176, 0.18);
+  border-color: rgba(78, 201, 176, 0.5);
+  color: var(--accent-cyan);
+  font-weight: 600;
+}
+
+.flavor-chip[data-flavor="cursor"].is-active {
+  background: rgba(169, 220, 118, 0.18);
+  border-color: rgba(169, 220, 118, 0.5);
+  color: #a9dc76;
+}
+
+.flavor-chip[data-flavor="copilot"].is-active {
+  background: rgba(156, 220, 254, 0.16);
+  border-color: rgba(156, 220, 254, 0.45);
+  color: #9cdcfe;
+}
+
+.flavor-chip[data-flavor="cline"].is-active {
+  background: rgba(197, 134, 192, 0.18);
+  border-color: rgba(197, 134, 192, 0.5);
+  color: #c586c0;
+}
+
 .header-actions {
   display: flex;
   align-items: center;

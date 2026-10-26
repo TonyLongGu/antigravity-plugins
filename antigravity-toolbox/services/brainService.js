@@ -4,8 +4,7 @@ const {
   getGlobalPaths,
   getDirectorySizeBytesAsync,
   collectBrainSessionDirs,
-  detectHostIde,
-  isCopilotEnvironment,
+  resolveFlavor,
 } = require('./systemService');
 const copilotChatService = require('./copilotChatService');
 
@@ -13,11 +12,19 @@ let _cachedBrainStats = null;
 let _cachedBrainStatsTime = 0;
 
 function isCursorHost() {
-  return detectHostIde().id === 'cursor';
+  return resolveFlavor() === 'cursor';
+}
+
+/** 目前是否採用 Cline 資料類別（Cline 的對話為 ~/.cline/data/sessions/<id> 資料夾） */
+function isClineHost() {
+  return resolveFlavor() === 'cline';
 }
 
 /**
- * 是否為 VS Code + Copilot 環境
+ * 目前是否採用 Copilot 資料類別
+ *
+ * auto 時代表「VS Code 家族 + GitHub Copilot」環境；使用者亦可透過
+ * antigravity.uiFlavor 手動切換，此時一律以指定類別為準。
  *
  * Copilot 的對話儲存架構與 Antigravity / Cursor 完全不同
  * （單檔 jsonl 分散於各個 workspaceStorage/<hash>/chatSessions，而非單一 Brain 目錄），
@@ -25,7 +32,16 @@ function isCursorHost() {
  * @returns {boolean}
  */
 function isCopilotHost() {
-  return isCopilotEnvironment();
+  return resolveFlavor() === 'copilot';
+}
+
+/**
+ * 清除統計快取。
+ * 切換資料來源類別（antigravity.uiFlavor）後必須呼叫，否則 5 秒內會回放舊類別的數據。
+ */
+function invalidateCache() {
+  _cachedBrainStats = null;
+  _cachedBrainStatsTime = 0;
 }
 
 /**
@@ -95,7 +111,9 @@ async function cleanBrainHistory(months = 3, provider = null) {
   if (sessions.length === 0) {
     const msg = isCursorHost()
       ? '目前沒有 Cursor 對話紀錄（agent-transcripts）。'
-      : '目前無 Brain 對話紀錄目錄。';
+      : (isClineHost()
+        ? '目前沒有 Cline 對話紀錄（~/.cline/data/sessions）。'
+        : '目前無 Brain 對話紀錄目錄。');
     if (provider && typeof provider.pushToast === 'function') provider.pushToast(msg, 'info');
     else vscode.window.showInformationMessage(msg);
     return false;
@@ -128,11 +146,18 @@ async function cleanBrainHistory(months = 3, provider = null) {
 
     const totalTargetBytes = targets.reduce((sum, t) => sum + t.size, 0);
     const targetSizeMB = (totalTargetBytes / (1024 * 1024)).toFixed(1);
-    const kindHint = isCursorHost() ? 'Cursor 對話紀錄' : '對話紀錄';
+    const kindHint = isCursorHost()
+      ? 'Cursor 對話紀錄'
+      : (isClineHost() ? 'Cline 對話紀錄' : '對話紀錄');
+    // Cline 另有 SQLite 索引（data/db/sessions.db、session-search.db），本工具只刪資料夾、
+    // 不動資料庫，因此清理後 Cline 介面可能仍列出已刪除的項目——務必在確認視窗講清楚。
+    const clineDbNote = isClineHost()
+      ? '\n\n⚠️ 本工具只刪除 sessions 資料夾，不會同步 Cline 的 SQLite 索引（sessions.db／session-search.db），清理後 Cline 介面可能仍列出已刪除的對話。'
+      : '';
 
     const confirmButton = `確定清理 (${targets.length} 個紀錄)`;
     const selection = await vscode.window.showWarningMessage(
-      `確定要清理超過 ${safeMonths} 個月（約 ${days} 天）前的所有${kindHint}嗎？\n\n共 ${targets.length} 個對話資料夾（預估釋放約 ${targetSizeMB} MB 空間），此操作無法復原。`,
+      `確定要清理超過 ${safeMonths} 個月（約 ${days} 天）前的所有${kindHint}嗎？\n\n共 ${targets.length} 個對話資料夾（預估釋放約 ${targetSizeMB} MB 空間），此操作無法復原。${clineDbNote}`,
       { modal: true },
       confirmButton
     );
@@ -173,4 +198,5 @@ async function cleanBrainHistory(months = 3, provider = null) {
 module.exports = {
   getBrainStats,
   cleanBrainHistory,
+  invalidateCache,
 };
