@@ -19,6 +19,8 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 | **負例** | 「幫我建一份知識圖譜」→ 走 `graphify-knowledge-graph`（本技能不含通用建圖步驟） |
 | **負例** | 「這台機器做個環境健檢」、「幫我刪掉這些暫存檔」→ 走 `health-check`／`safe-delete` |
 
+> **何時不必用本技能**：只問「graphify 怎麼安裝／怎麼建圖」→ `graphify-knowledge-graph`；只問「外掛有沒有裝起來、環境對不對」→ `health-check`；處理的是**別的 repo** 的圖譜 → 該 repo 自己的 `AGENTS.md`／技能。本技能**不適用**於跨 repo 的通用圖譜問題。
+
 ---
 
 ## 2. 這個 repo 是什麼
@@ -123,7 +125,23 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 
 ---
 
-## 10. 本技能維護
+## 10. 反模式（踩過的坑）
+
+| 反模式 | 後果 | 正確做法 |
+| :--- | :--- | :--- |
+| 沒確認 `graphify-out/` 就 `graphify update .` | 生出只含變更檔的**部分圖譜**，報告還不警示 | 依 §9 先 `extract --code-only` ＋ `cluster-only` |
+| `explain "McpConfigService"` 不帶路徑 | 回 `Ambiguous`，被誤讀成「找不到」 | 用 `檔案::符號` 形式（§4 第一個 📌） |
+| 改完只跑一份 `install-extension.ps1` 就說「修好了」 | 只有 1／6 外掛生效（六份同名 helper 不會互相 import） | 同步 6 份並 grep 確認 |
+| 靠 `$LASTEXITCODE` 判斷 `explain`／`query` 成敗 | 成功也回 `-1`，會被誤判為失敗 | 看輸出內容（§4 第二個 📌） |
+| 把 `graphify-out/` commit 進版控 | 1.9 MB 產物、每次 `update` 都變動 | 保持 `.gitignore` 的排除 |
+
+> 這幾條都是**實際失敗過**才寫上來的（2026-10-24～26 的踩坑記錄），不是假設性風險。
+
+> 未結案的專案問題放 `references/`：VSCodium 支援的文件／實作落差 → [`references/vscodium-support-gap.md`](references/vscodium-support-gap.md)。
+
+---
+
+## 11. 本技能維護
 
 - 本技能＝這個 repo 的**專案層常數＋授權＋耦合表**；通用圖譜流程不重複抄寫（指向 `graphify-knowledge-graph`）。
 - §3 與 §8 的數字會過期：**更新圖譜後順手更新並改日期**；無法確認就寫「查法」而不是寫死。
@@ -135,4 +153,5 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 | 日期 | 變更 | 來源 |
 | :--- | :--- | :--- |
 | 2026-10-26 | 由 repo 根 `AGENTS.md` 全文改寫成技能（內容等價，另修正 §3 舊值 13.6 KB → 15.2 KB）；根 `AGENTS.md` 瘦身為進場指引 | 使用者指示 |
+| 2026-10-26 | description 283 → 241 字元（過 260 硬線）；補 §1 負向邊界／何時不必、§10 反模式；新增 `references/vscodium-support-gap.md` | `skill-score-audit.ps1` 14/20 的缺口清單 |
 
