@@ -1,12 +1,21 @@
 ﻿<#
 .SYNOPSIS
-    IDE 原生擴充套件 - 全套一鍵安裝程式
-    支援環境嚴格隔離、目標指定 (-Target)、Junction 免編譯掛載與 extensions.json 自動註冊
+    IDE 原生擴充套件 - 全套一鍵安裝程式（一鍵全裝，免選目標宿主）
+
+.DESCRIPTION
+    預設行為 (-Target All)：自動偵測本機已安裝的 IDE，一次全部安裝，使用者無需選擇目標宿主。
+    需要單獨指定時仍可用 -Target Antigravity / VSCode / Cursor；-Target Prompt 才會叫出互動選單。
+    支援環境嚴格隔離、Junction 免編譯掛載與 extensions.json 自動註冊。
 #>
 [CmdletBinding()]
 param (
     [ValidateSet("Antigravity", "VSCode", "Cursor", "All", "Prompt")]
-    [string]$Target = "Prompt"
+    [string]$Target = "All",
+
+    # 只處理指定外掛：可給資料夾名稱或 package.json 的 name（兩者可能不同，例：
+    # 資料夾 antigravity-quota-status 的 name 是 ai-quota-status），可多值／逗號分隔。
+    # 省略＝處理全部。各外掛資料夾內的 install-extension.ps1 就是帶入自己名稱的薄殼。
+    [string[]]$Plugin = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -74,6 +83,34 @@ $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 $rootDir = $PSScriptRoot
 $pluginsDir = if (Test-Path (Join-Path $rootDir "plugins")) { Join-Path $rootDir "plugins" } else { $rootDir }
 
+# ── 外掛範圍（-Plugin）────────────────────────────────────────────────
+# 解析 -Plugin：資料夾名稱或 package.json 的 name 皆可（兩者可能不同）。
+function Resolve-PluginFolders {
+    param(
+        [System.IO.DirectoryInfo[]]$Folders,
+        [string[]]$Names
+    )
+
+    $wanted = @($Names | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    if ($wanted.Count -eq 0) { return @($Folders) }
+
+    $matched = @()
+    foreach ($folder in @($Folders)) {
+        $pkgName = ""
+        $pkgPath = Join-Path $folder.FullName "package.json"
+        if (Test-Path -LiteralPath $pkgPath) {
+            try { $pkgName = [string](Get-Content -LiteralPath $pkgPath -Raw -Encoding UTF8 | ConvertFrom-Json).name } catch { $pkgName = "" }
+        }
+        foreach ($want in @($wanted)) {
+            if ($folder.Name -ieq $want -or ($pkgName -and $pkgName -ieq $want)) { $matched += $folder; break }
+        }
+    }
+
+    return @($matched)
+}
+
+$scopeLabel = if (@($Plugin).Count -gt 0) { "指定外掛 $(@($Plugin) -join ', ')" } else { "全部外掛" }
+
 # 互動模式提示
 if ($Target -eq "Prompt") {
     $isInteractive = [Environment]::UserInteractive -and -not [Console]::IsInputRedirected
@@ -82,20 +119,21 @@ if ($Target -eq "Prompt") {
         Write-Host "  IDE 原生擴充套件 - 全套一鍵安裝程式" -ForegroundColor Cyan
         Write-Host "============================================================" -ForegroundColor Cyan
         Write-Host "  請選擇安裝目標 IDE 環境 (環境嚴格隔離，互不干涉)：" -ForegroundColor Yellow
-        Write-Host "  [1] Google Antigravity IDE (預設推薦)" -ForegroundColor Green
-        Write-Host "  [2] Visual Studio Code" -ForegroundColor White
-        Write-Host "  [3] Cursor" -ForegroundColor White
-        Write-Host "  [4] 全部已安裝的 IDE (All)" -ForegroundColor Magenta
+        Write-Host "  [1] 全部已安裝的 IDE (All，預設)" -ForegroundColor Green
+        Write-Host "  [2] Google Antigravity IDE" -ForegroundColor White
+        Write-Host "  [3] Visual Studio Code" -ForegroundColor White
+        Write-Host "  [4] Cursor" -ForegroundColor White
         Write-Host "============================================================" -ForegroundColor Cyan
-        $choice = Read-Host "請輸入選項編號 [1-4] (直接按 Enter 為 1)"
+        $choice = Read-Host "請輸入選項編號 [1-4] (直接按 Enter 為 1：全部安裝)"
         switch ($choice.Trim()) {
-            "2" { $Target = "VSCode" }
-            "3" { $Target = "Cursor" }
-            "4" { $Target = "All" }
-            Default { $Target = "Antigravity" }
+            "2" { $Target = "Antigravity" }
+            "3" { $Target = "VSCode" }
+            "4" { $Target = "Cursor" }
+            Default { $Target = "All" }
         }
     } else {
-        $Target = "Antigravity"
+        # 非互動環境（由 .bat 或排程呼叫）一律安裝全部已偵測到的 IDE，避免默默只裝單一宿主
+        $Target = "All"
     }
 }
 
@@ -219,7 +257,7 @@ $environmentExclusions = @{
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "  IDE 原生擴充套件 - 全套一鍵安裝程式 ($Target 目標模式)" -ForegroundColor Cyan
+Write-Host "  IDE 原生擴充套件 - 安裝程式 ($Target 目標模式 / $scopeLabel)" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "安裝來源: $pluginsDir" -ForegroundColor Gray
 
@@ -238,9 +276,16 @@ if ($runningIdes.Count -gt 0) {
 }
 Write-Host "環境隔離: 生效中 (僅部署所選目標，絕不更動或刪除其他 IDE 之套件)" -ForegroundColor DarkGray
 
-$pluginFolders = Get-ChildItem -LiteralPath $pluginsDir -Directory
-if ($pluginFolders.Count -eq 0) {
+$allPluginFolders = @(Get-ChildItem -LiteralPath $pluginsDir -Directory)
+if ($allPluginFolders.Count -eq 0) {
     Write-Host "[錯誤] 未發現任何擴充套件資料夾！" -ForegroundColor Red
+    Exit 1
+}
+
+$pluginFolders = @(Resolve-PluginFolders -Folders $allPluginFolders -Names $Plugin)
+if ($pluginFolders.Count -eq 0) {
+    Write-Host "[錯誤] -Plugin 指定的外掛不存在：$(@($Plugin) -join ', ')" -ForegroundColor Red
+    Write-Host "       可用資料夾：$(($allPluginFolders | ForEach-Object { $_.Name }) -join ', ')" -ForegroundColor Gray
     Exit 1
 }
 
@@ -421,7 +466,7 @@ foreach ($folder in $pluginFolders) {
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "  🎉 全套擴充套件安裝作業完成！" -ForegroundColor Green
+Write-Host "  🎉 擴充套件安裝作業完成！($scopeLabel)" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Cyan
 if ($installedSummary.Count -gt 0) {
     $installedSummary | Format-Table -AutoSize

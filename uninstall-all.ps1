@@ -6,7 +6,12 @@
 [CmdletBinding()]
 param (
     [ValidateSet("Antigravity", "VSCode", "Cursor", "All", "Prompt")]
-    [string]$Target = "Prompt"
+    [string]$Target = "Prompt",
+
+    # 只處理指定外掛：可給資料夾名稱或 package.json 的 name（兩者可能不同，例：
+    # 資料夾 antigravity-quota-status 的 name 是 ai-quota-status），可多值／逗號分隔。
+    # 省略＝處理全部。各外掛資料夾內的 uninstall-extension.ps1 就是帶入自己名稱的薄殼。
+    [string[]]$Plugin = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -74,6 +79,34 @@ $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 $rootDir = $PSScriptRoot
 $pluginsDir = if (Test-Path (Join-Path $rootDir "plugins")) { Join-Path $rootDir "plugins" } else { $rootDir }
 
+# ── 外掛範圍（-Plugin）────────────────────────────────────────────────
+# 解析 -Plugin：資料夾名稱或 package.json 的 name 皆可（兩者可能不同）。
+function Resolve-PluginFolders {
+    param(
+        [System.IO.DirectoryInfo[]]$Folders,
+        [string[]]$Names
+    )
+
+    $wanted = @($Names | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    if ($wanted.Count -eq 0) { return @($Folders) }
+
+    $matched = @()
+    foreach ($folder in @($Folders)) {
+        $pkgName = ""
+        $pkgPath = Join-Path $folder.FullName "package.json"
+        if (Test-Path -LiteralPath $pkgPath) {
+            try { $pkgName = [string](Get-Content -LiteralPath $pkgPath -Raw -Encoding UTF8 | ConvertFrom-Json).name } catch { $pkgName = "" }
+        }
+        foreach ($want in @($wanted)) {
+            if ($folder.Name -ieq $want -or ($pkgName -and $pkgName -ieq $want)) { $matched += $folder; break }
+        }
+    }
+
+    return @($matched)
+}
+
+$scopeLabel = if (@($Plugin).Count -gt 0) { "指定外掛 $(@($Plugin) -join ', ')" } else { "全部外掛" }
+
 # 互動模式提示
 if ($Target -eq "Prompt") {
     $isInteractive = [Environment]::UserInteractive -and -not [Console]::IsInputRedirected
@@ -124,7 +157,7 @@ $candidateRoots = switch ($Target) {
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "  🗑️ IDE 原生擴充套件 - 全套一鍵解除安裝 ($Target 目標模式)" -ForegroundColor Cyan
+Write-Host "  🗑️ IDE 原生擴充套件 - 解除安裝 ($Target 目標模式 / $scopeLabel)" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 
 # 僅比對本機實體存在的擴充目錄
@@ -148,10 +181,13 @@ if ($runningIdes.Count -gt 0) {
 }
 Write-Host "環境隔離: 生效中 (僅清理所選目標，絕不更動其他 IDE 之擴充)" -ForegroundColor DarkGray
 
-$pluginFolders = if (Test-Path -LiteralPath $pluginsDir) {
-    Get-ChildItem -LiteralPath $pluginsDir -Directory
-} else {
-    @()
+$allPluginFolders = @(if (Test-Path -LiteralPath $pluginsDir) { Get-ChildItem -LiteralPath $pluginsDir -Directory } else { @() })
+
+$pluginFolders = @(Resolve-PluginFolders -Folders $allPluginFolders -Names $Plugin)
+if (@($Plugin).Count -gt 0 -and $pluginFolders.Count -eq 0) {
+    Write-Host "[錯誤] -Plugin 指定的外掛不存在：$(@($Plugin) -join ', ')" -ForegroundColor Red
+    Write-Host "       可用資料夾：$(($allPluginFolders | ForEach-Object { $_.Name }) -join ', ')" -ForegroundColor Gray
+    Exit 1
 }
 
 $uninstalledCount = 0
@@ -284,7 +320,7 @@ foreach ($folder in $pluginFolders) {
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "  🎉 全套擴充套件解除安裝完成！共清理 $uninstalledCount 個外掛項目" -ForegroundColor Green
+Write-Host "  🎉 擴充套件解除安裝完成！($scopeLabel) 共清理 $uninstalledCount 個外掛項目" -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Cyan
 if ($uninstalledSummary.Count -gt 0) {
     $uninstalledSummary | Format-Table -AutoSize

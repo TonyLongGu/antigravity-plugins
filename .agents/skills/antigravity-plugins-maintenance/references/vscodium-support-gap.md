@@ -6,10 +6,10 @@
 
 | 項目 | 實測結果 |
 | :--- | :--- |
-| 帶 `vscodium` 字樣的安裝腳本 | **7 支**：6 個外掛的 `install-extension.ps1` ＋ 根 `install-all.ps1` |
-| 每支的命中次數 | **各 1 次**，且全部落在 `get-runningideforroot()` 的**程序偵測**（判斷「跑的是 VSCodium 還是 VS Code」） |
+| 帶 `vscodium` 字樣的安裝腳本 | **1 支**：根 `install-all.ps1`（2026-10-26 薄殼化前為 7 支，現由 12 支薄殼轉呼叫根腳本） |
+| 每支的命中次數 | **1 次**，且落在 `get-runningideforroot()` 的**程序偵測**（判斷「跑的是 VSCodium 還是 VS Code」） |
 | 部署目標（`code`／`codium` CLI 路徑、擴充套件安裝目錄） | **0 個**——沒有任何腳本把 `.vsix` 裝進 VSCodium |
-| 卸載腳本 | 6 支 `uninstall-extension.ps1` ＋ 根 `uninstall-all.ps1`，同樣**無** VSCodium 分支 |
+| 卸載腳本 | **1 支**：根 `uninstall-all.ps1`（薄殼化前為 6 支），同樣**無** VSCodium 分支 |
 | 結論 | `README` 敘述的 VSCodium 支援**大於**實作；是文件與程式碼不一致，不是設定問題 |
 
 ## 查法（可重跑）
@@ -45,19 +45,21 @@ Get-ChildItem -Recurse -Filter 'install*.ps1' |
 
 ---
 
-## 選項 ②：實作要改的 14 檔
+## 選項 ②：實作要改的 **2 檔**（2026-10-26 薄殼化後）
 
-6 × `<plugin>/install-extension.ps1`、6 × `<plugin>/uninstall-extension.ps1`、根 `install-all.ps1`、`uninstall-all.ps1`。
+根 `install-all.ps1`、`uninstall-all.ps1`。12 支 `<plugin>/install-extension.ps1`、`uninstall-extension.ps1` 已改為薄殼（只把自己的資料夾名稱轉成 `-Plugin`），改根腳本後自動跟著生效——薄殼化前這裡列的是 14 檔。
 
-每支 install 腳本 **5 個修改點**（行號以 `antigravity-toolbox` 為準，各外掛一致）：
+> 下方行號已位移，一律以**錨點**定位（2026-10-26 實測：`install-all.ps1` `ValidateSet`＝L12、`$antigravityCandidates`＝L141、`$cursorCandidates`＝L188、`$candidatePool`＝L201、`$environmentExclusions`＝L249；`uninstall-all.ps1` `ValidateSet`＝L8、`$antigravityRoots`＝L136、`$cursorRoots`＝L146、`$candidateRoots`＝L150）。
 
-| # | 位置 | 現況 | 要改成 |
+每支根腳本的 install 側有 **5 個修改點**：
+
+| # | 位置（錨點） | 現況 | 要改成 |
 | ---: | :--- | :--- | :--- |
-| 1 | L8 `ValidateSet` | `"Antigravity","VSCode","Cursor","All","Prompt"` | 加 `"VSCodium"` |
-| 2 | L103–118 互動選單 | `[1]` Antigravity／`[2]` VSCode／`[3]` Cursor／`[4]` All | 加 `[5]` VSCodium（`All` 也要涵蓋） |
-| 3 | L160 之後（`$cursorCandidates` 後） | 只有 Antigravity／VS Code／Cursor 三組候選 | 新增 `$vscodiumCandidates`（片段見下） |
+| 1 | `param()` 的 `ValidateSet` | `"Antigravity","VSCode","Cursor","All","Prompt"` | 加 `"VSCodium"` |
+| 2 | `if ($Target -eq "Prompt")` 的互動選單 | `[1]` Antigravity／`[2]` VSCode／`[3]` Cursor／`[4]` All | 加 `[5]` VSCodium（`All` 也要涵蓋） |
+| 3 | `$cursorCandidates` 之後 | 只有 Antigravity／VS Code／Cursor 三組候選 | 新增 `$vscodiumCandidates`（片段見下） |
 | 4 | `$candidatePool = switch ($Target)` | 四個分支；`"All"` 只串三組 | 加 `"VSCodium" { $vscodiumCandidates }`，`"All"` 串上第四組 |
-| 5 | 排除表（根 L211–217 `$environmentExclusions`；外掛檔內另有同名表） | key 只有 Cursor／VS Code／Antigravity | 加 `"VSCodium"` key（`quota-status` 應比照 VS Code **排除**：沒有對應 API） |
+| 5 | `$environmentExclusions` | key 只有 Cursor／VS Code／Antigravity（薄殼化後**只剩根腳本這一份表**） | 加 `"VSCodium"` key（`quota-status` 應比照 VS Code **排除**：沒有對應 API） |
 
 ```powershell
 $vscodiumCandidates = @(
@@ -75,14 +77,14 @@ $vscodiumCandidates = @(
 )
 ```
 
-`uninstall-extension.ps1` 是 **4 點**（結構不同，別照抄 install 的片段）：
+根 `uninstall-all.ps1` 是 **4 點**（結構不同，別照抄 install 的片段）：
 
-| # | 位置 | 現況 | 要改成 |
+| # | 位置（錨點） | 現況 | 要改成 |
 | ---: | :--- | :--- | :--- |
-| 1 | L8 `ValidateSet` | 同 install | 加 `"VSCodium"` |
-| 2 | L102 互動選單（文案是「欲卸載的目標」） | 1／2／3／4 | 加 `[5]` VSCodium |
-| 3 | L122–132 候選（**hashtable** `@{ Name; Path }`，沒有 `CheckPaths`／`CheckCommands`） | Antigravity／VS Code／Insiders／Cursor | 加 `@{ Name = "VSCodium"; Path = (Join-Path $env:USERPROFILE ".vscode-oss\extensions") }` |
-| 4 | 候選池 switch | 四個分支 | 加 `"VSCodium"` 分支，`"All"` 串上 |
+| 1 | `param()` 的 `ValidateSet` | 同 install | 加 `"VSCodium"` |
+| 2 | `if ($Target -eq "Prompt")` 選單（文案是「欲卸載的目標」） | 1／2／3／4 | 加 `[5]` VSCodium |
+| 3 | `$cursorRoots`（**hashtable** `@{ Name; Path }`，沒有 `CheckPaths`／`CheckCommands`） | Antigravity×2／VS Code×2／Cursor | 加 `@{ Name = "VSCodium"; Path = (Join-Path $env:USERPROFILE ".vscode-oss\extensions") }` |
+| 4 | `$candidateRoots = switch ($Target)` | 四個分支 | 加 `"VSCodium"` 分支，`"All"` 串上 |
 
 > uninstall 沒有 `$environmentExclusions`（不需排除表，因為只是移除自己的產物）。
 
@@ -90,7 +92,7 @@ $vscodiumCandidates = @(
 
 ## 為什麼「一行偵測」騙人
 
-`Get-RunningIdeForRoot()` 的 `$processMap`（**每支腳本 L45–52**）第 48 行有 `.vscodium = "VSCodium"`，但它只做一件事：**警告「IDE 正在執行，關掉再裝」**。
+`Get-RunningIdeForRoot()` 的 `$processMap`（根 `install-all.ps1`／`uninstall-all.ps1` 各一份，薄殼不含）有一行 `.vscodium = "VSCodium"`，但它只做一件事：**警告「IDE 正在執行，關掉再裝」**。
 
 它不在任何 `ExtensionsRoot` 候選裡 → 腳本永遠不會把套件掛進 `~/.vscode-oss/extensions`。
 **「偵測得到」≠「裝得進去」**，這就是 README 與實作的落差來源。
