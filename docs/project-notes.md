@@ -12,7 +12,7 @@
 - **沒有程式碼共用**：實測 2,974 條邊只有 **1 條**「跨外掛」（且是 `node:sqlite` builtin 的誤判）。真正的耦合是 **VS Code command id 字串**，見 §7。
 - **安裝邏輯只有 2 支腳本**：各外掛的 `install-extension.ps1`／`uninstall-extension.ps1` 自 2026-10-26 起是**薄殼**（各 ~47 行，`.bat` 不動），只把自己的資料夾名稱當 `-Plugin` 轉呼叫根腳本 ⇒ 改一次 6 個外掛同時生效（改版前是 6 份各差 3～4 行的複本，得人工同步）。
 - **安裝政策（2026-10-26 起）＝一鍵全裝**：根 `install-all.ps1` 的 `-Target` 預設 `All`、`-Plugin` 省略＝全部外掛（可給資料夾名稱或 `package.json` 的 `name`，例：`-Plugin antigravity-quota-status` 或 `-Plugin ai-quota-status`）。目標 IDE 由腳本自動偵測，使用者改在控制中心頂部的「類別切換鈕」決定要看哪一套 IDE 的資料；不相容組合由根腳本的 `$environmentExclusions` 自動略過。
-- **測試**：各外掛 `tests/*.test.js`（零相依，直接 `node <檔案>` 跑，無框架）。現有 6 支：`antigravity-toolbox/tests/{environment-flavor,mcp-label}.test.js`、`antigravity-ai-context-inspector/tests/{cline-snapshot,mcp-vscode-sources,snapshot-source-default}.test.js`、`antigravity-mcp-manager/tests/agent-host-enablement.test.js`。動到 flavor 判定或 i18n 鍵一定要跑對應那支。
+- **測試**：各外掛 `tests/*.test.js`（零相依，直接 `node <檔案>` 跑，無框架）。現有 8 支：`antigravity-toolbox/tests/{environment-flavor,mcp-label,skill-junction-sync,skill-sync-service}.test.js`、`antigravity-ai-context-inspector/tests/{cline-snapshot,mcp-vscode-sources,snapshot-source-default}.test.js`、`antigravity-mcp-manager/tests/agent-host-enablement.test.js`。動到 flavor 判定或 i18n 鍵一定要跑對應那支；動到 Skills 連結同步（`lib/skill-junction-sync.js`／`skillSyncService`／`workspaceService.maybeSyncSkills`）跑 `skill-junction-sync` ＋ `skill-sync-service`。
 - **webview 前端**在 `media/`（inspector／mcp-manager／quick-access／script-runner／toolbox），**不進圖**。
 
 ---
@@ -41,7 +41,7 @@
 | 語料 | 102 files · ~132,830 words；30 檔未進圖（`.bat` 14、無副檔名 10、`.css` 6） |
 | 抽取品質 | 95% EXTRACTED／5% INFERRED（142 邊，平均信心 0.85）；**0 input/0 output token＝0 元** |
 | 產物大小 | `GRAPH_REPORT.md` **17.2 KB**（可整讀）、`graph.json` **2.0 MB**（禁整讀）、`graph.html` 約 1.6 MB |
-| 節點分佈 | script-runner 455／inspector 341／toolbox 301／mcp-manager 265／quota-status 174／quick-access 79／根目錄 17（＋2 支根腳本各 4）／`node:sqlite` 1 |
+| 節點分佈 | script-runner 455／inspector 342／toolbox 348／mcp-manager 265／quota-status 174／quick-access 79／根目錄 17（＋2 支根腳本各 4）／`node:sqlite` 1 |
 | 不進圖 | `*.css`、`*.html`、`locales/*.json`、`*.md`（`.graphifyignore` 已排除 `*.md`） |
 
 > ⚠️ 上表是**快照**。用前先驗兩件事：`GRAPH_REPORT.md` 的 `## Summary` 數字、以及 `Built from commit` 是否＝`git rev-parse --short=8 HEAD`；任一對不上就當「已過期」，依 §2 重跑。
@@ -89,8 +89,8 @@
 | 外掛 | 版本 | 節點 | 對外 id 家族 | view／container | 進入點／服務 |
 | :--- | :--- | ---: | :--- | :--- | :--- |
 | `antigravity-script-runner` | 1.7.1 | 455 | `scriptRunner.*`（8 個 id × `.en`／`.cn`＝24） | 無 view（右鍵選單＋媒體檢視） | `extension.js`／6 services（audio／video／image／stream） |
-| `antigravity-ai-context-inspector` | 1.2.6 | 341 | `antigravity.aiContext.*`（3 ＋ `.en`） | `antigravity.aiContextView`／`antigravity-ai-context-container` | `extension.js`／6 services（cline·cursor·vscode chat／contextScanner／mcpDetector） |
-| `antigravity-toolbox` | 1.6.0 | 301 | `antigravity.toolbox.*`（7 ＋ 4 `.en`） | `antigravity.toolboxView`／`antigravity-toolbox-container` | `extension.js`／6 services（brain／copilotChat／skillSync／workspace…） |
+| `antigravity-ai-context-inspector` | 1.2.6 | 342 | `antigravity.aiContext.*`（3 ＋ `.en`） | `antigravity.aiContextView`／`antigravity-ai-context-container` | `extension.js`／6 services（cline·cursor·vscode chat／contextScanner／mcpDetector） |
+| `antigravity-toolbox` | 1.6.1 | 348 | `antigravity.toolbox.*`（7 ＋ 4 `.en`） | `antigravity.toolboxView`／`antigravity-toolbox-container` | `extension.js`／6 services（brain／copilotChat／skillSync／workspace…） |
 | `antigravity-mcp-manager` | 1.9.3 | 265 | `antigravity.mcp.*`（6 ＋ `.en`） | `antigravity.mcpManagerView`／`mcp-manager-container` | `extension.js`／9 services |
 | `antigravity-quota-status` | 1.1.0（`name`＝`ai-quota-status`） | 174 | `aiQuota.*`（7，無變體） | 無 view（狀態列） | `extension.js`／4 services（quota／cursorAuth…） |
 | `antigravity-quick-access` | 1.2.6 | 79 | `antigravity.quickAccess.*`（20 × 3＝60） | `antigravity.quickAccessView` | `extension.js`／無 `services/` 目錄 |
@@ -105,6 +105,16 @@
 - **已無「自動」鈕**：未指定時以 `autoFlavor` 為作用中，點「目前宿主」那顆 chip 即回寫 `auto`。
 - `cline` 是**外掛而非宿主**（`auto` 永遠不會命中，只能手動點）。路徑見 `systemService.getGlobalPaths('cline')`：`~/.cline`，MCP 在 `data/settings`、對話在 `data/sessions`（舊版退回 `globalStorage/saoudrizwan.claude-dev/tasks`）。⚠️ 清理 Cline **只刪 session 資料夾**，不動 `data/db/*.db`（Cline 介面可能仍列出已刪項目）。
 - 樣式基準＝**toolbox** 的 `.flavor-chip`（`media/style.css`，2026-10-27 定案）；inspector 快照的 `.source-chip` 已對齊它（補 `font-family: inherit`／`white-space: nowrap`／`flex: 0 0 auto`，啟用態加 `font-weight: 600`，Cline 色值統一為 `.18`／`.5`）⇒ **改一邊必須同步改另一邊，以 toolbox 為準**。
+
+### 8.2 toolbox 的 Skills 連結同步（`~/.agents/skills`）
+
+- 流程：專案開關／批次操作 → `workspaceService.maybeSyncSkills()` → `skillSyncService.syncEnabledProjectSkills()` → `lib/skill-junction-sync.syncWorkspaceSkills()`；關閉**主開關**時走 `clearGlobalSkillLinks()`（**不分歸屬**、全部連結都解除，這是刻意的「關閉即收乾淨」）。
+- **連結歸屬（2026-10-27 起）**：同步只會解除「指向本工作區註冊專案（`folders` ＋ `disabledFolders`）」或「目標已失效」的連結；指向其他多專案工作區的連結一律保留（全域目錄是所有工作區共用的）。判定＝`syncWorkspaceSkills` 內每個連結的 `owned` 欄位，來源是 `options.workspacePaths`。
+- **`allowEmpty`**：`maybeSyncSkills` 一律傳 `true`（剛寫入的 `folders` 是權威狀態）⇒ 最後一個專案被關掉（`folders` 變空）時解除本工作區連結；沒有工作區設定檔的路徑（`refreshSkillSync` 等）由 `resolveSyncScope()` 自動查 `disabledFolders`，查不到就沿用舊行為（跳過、保留連結，避免單資料夾視窗誤刪）。CLI（`scripts/sync-workspace-skills-cli.js`）同樣傳 `workspacePaths`，`disabledFolders > 0` 時 `allowEmpty: true`。
+- `skipped` 只剩兩種：`empty-enabled`（無啟用專案且無歸屬資訊）、`empty-source`（0 來源**且沒有可回收的本工作區連結**）。
+- 解除連結一律走 `fs.rmdirSync` 快路徑（目標內容不動，S11 有驗證），失敗才落回 `cmd /c rmdir`：⛔ 不要改回「每顆連結 spawn 一個 `cmd.exe`」——`spawnSync` 會同步阻塞擴充主機，十幾顆連結就足以讓語言伺服器（Pylance）通訊被判定中斷。
+- 回歸測試：`node antigravity-toolbox/tests/skill-junction-sync.test.js`（工具層 S1–S11）＋ `node antigravity-toolbox/tests/skill-sync-service.test.js`（服務層 I1–I5，直接走 `maybeSyncSkills` 的真實呼叫鏈）；S3／I3 是「關掉最後一個專案」、S5／I4 是「只剩無 skills 專案」的殘留 bug。
+- 反模式：把 `empty-source`／`empty-enabled` 當成「一律跳過」→ 殘留連結（1.6.0 的 bug）；用「掃到就刪」判定歸屬 → 多工作區互刪。
 
 ## 9. 首次建圖／重建（`graphify-out/` 不存在時）
 
@@ -159,6 +169,8 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 
 | 日期 | 變更 | 來源 |
 | :--- | :--- | :--- |
+| 2026-10-27 | 圖譜更新：1642→**1689** 節點、2976→**3056** 邊、98→**103** 社群；`Built from commit` `fb64d432`（＝HEAD，收尾時尚未提交本次改動）；`graphify label` 未跑，8 個社群名以 hub 代替 | 收尾依 §2 執行 `graphify update .` |
+| 2026-10-27 | toolbox `1.6.0 → 1.6.1`＝**修正「關掉最後一個專案後 `~/.agents/skills` 仍有殘存 Skills」**：`syncWorkspaceSkills` 新增**連結歸屬**（`workspacePaths`＝本工作區 `folders`＋`disabledFolders`）與 `allowEmpty`；`maybeSyncSkills` 一律把剛寫入的 `folders` 當權威狀態 ⇒ `folders` 變空（最後一個專案被關）或只剩無 skills 專案時改為**解除本工作區連結**（舊版回 `skipped:'empty-enabled'`／`'empty-source'` 而全部保留）；其他工作區的連結、全域實體資料夾、目標失效連結的處理不變；CLI 同步支援「全部專案停用」的工作區；新增回歸測試 `antigravity-toolbox/tests/skill-junction-sync.test.js`（S1–S11）＋服務層 `skill-sync-service.test.js`（I1–I5，走 `maybeSyncSkills` 真實呼叫鏈）；解除連結改走 `fs.rmdirSync` 快路徑，不再每顆 spawn `cmd.exe`（避免同步阻塞擴充主機、造成語言伺服器「Channel closed」） | 使用者回報：最後一個關閉的專案沒有取消連結，導致 `~/.agents/skills` 殘存 |
 | 2026-10-27 | 圖譜更新：1641→**1642** 節點、2974→**2976** 邊、97→**98** 社群；`Built from commit` `57c7f7b4`（＝HEAD，收尾時尚未提交本次改動）；`graphify label` 未跑，23 個社群名以 hub 代替 | 收尾依 §2 執行 `graphify update .` |
 | 2026-10-27 | inspector `1.2.5 → 1.2.6`＝**Cline 快照的常駐規範改以「該對話自己的工作區」掃描**（新增 `_snapshotRoots()`，取 session meta 的 `workspace_root`／`cwd`；只有極舊格式沒有 root 時才退回目前視窗）：修正「開著 A 視窗看 B 對話」時列出無關 `AGENTS.md`／`.clinerules`，以及多根工作區把每一根規範全列進來的問題；測試 10 → **12** 項（新增 A10 工作區歸屬、A11 未被讀取不得標 `isInvoked`） | 使用者回報：Cline 最近對話快照的常駐規範判斷不正確 |
 | 2026-10-27 | inspector `1.2.4 → 1.2.5`＝快照來源 chips（`.source-chip`）**樣式對齊 toolbox** `.flavor-chip`：補 `font-family: inherit`／`white-space: nowrap`／`flex: 0 0 auto`／容器 `align-items: center`、啟用態加 `font-weight: 600`、Cline 色值統一 `.18`／`.5`；toolbox 註解改為「本區是樣式基準」 | 使用者指示：切換鈕樣式統一用 antigravity-toolbox |

@@ -25,11 +25,21 @@ function maybeSyncSkills(json, wsDir, provider = null, options = {}) {
   try {
     if (!options.force && !skillSyncService.isSyncEnabled()) return;
     const folders = Array.isArray(json?.folders) ? json.folders : [];
+    const disabledFolders = Array.isArray(json?.disabledFolders) ? json.disabledFolders : [];
+    // 這裡的 folders 是權威狀態（剛寫入工作區設定檔）：空陣列＝所有專案都被關掉，
+    // 應解除「本工作區註冊專案」的連結；workspacePaths 讓同步只動本工作區的連結。
     skillSyncService.syncEnabledProjectSkills(
       folders,
       wsDir,
       provider,
-      { notify: options.notify !== false, force: !!options.force }
+      {
+        notify: options.notify !== false,
+        force: !!options.force,
+        workspacePaths: [...folders, ...disabledFolders]
+          .map((f) => f?.path || '')
+          .filter(Boolean),
+        allowEmpty: true,
+      }
     );
     skillSyncService.refreshSkillWatchers(folders, wsDir);
   } catch (err) {

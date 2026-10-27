@@ -59,6 +59,57 @@ function resolveExcludedProjectPaths() {
 }
 
 /**
+ * 取得目前工作區「註冊過的所有專案路徑」（啟用 folders ＋ 停用 disabledFolders）
+ * 用來判定全域連結的歸屬；沒有開啟 .code-workspace 時回傳 null。
+ * @returns {string[]|null}
+ */
+function getWorkspaceOwnershipPaths() {
+  try {
+    const workspaceService = require('./workspaceService');
+    const ctx = workspaceService.loadWorkspaceContext();
+    if (!ctx?.json) return null;
+    const active = Array.isArray(ctx.json.folders) ? ctx.json.folders : [];
+    const disabled = Array.isArray(ctx.json.disabledFolders) ? ctx.json.disabledFolders : [];
+    return [...active, ...disabled].map((f) => f?.path || '').filter(Boolean);
+  } catch (err) {
+    console.error('解析工作區專案歸屬範圍失敗:', err);
+    return null;
+  }
+}
+
+/**
+ * 決定本次同步的「歸屬範圍」：
+ *  - workspacePaths：本工作區註冊過的所有專案（啟用＋停用），用於判斷全域連結是否屬於本工作區
+ *  - allowEmpty：folders 為空是否代表「所有專案都關掉了」的權威狀態（是 → 應解除本工作區的連結）
+ * 呼叫端可明確傳入；未傳時自動向目前的工作區設定檔查詢。
+ * @param {Array<{path?: string}>} enabledFolders
+ * @param {{ workspacePaths?: string[], allowEmpty?: boolean }} [options]
+ * @returns {{ workspacePaths?: string[], allowEmpty: boolean }}
+ */
+function resolveSyncScope(enabledFolders, options = {}) {
+  let workspacePaths = Array.isArray(options.workspacePaths) ? options.workspacePaths : null;
+  let allowEmpty = typeof options.allowEmpty === 'boolean' ? options.allowEmpty : null;
+
+  if (workspacePaths === null || allowEmpty === null) {
+    const ownershipPaths = getWorkspaceOwnershipPaths();
+    if (ownershipPaths) {
+      if (workspacePaths === null) workspacePaths = ownershipPaths;
+      if (allowEmpty === null) allowEmpty = true;
+    }
+  }
+
+  // 沒有工作區設定檔時，至少用目前傳入的啟用專案當歸屬範圍
+  if (workspacePaths === null && Array.isArray(enabledFolders) && enabledFolders.length > 0) {
+    workspacePaths = enabledFolders.map((f) => f?.path || '').filter(Boolean);
+  }
+
+  return {
+    ...(workspacePaths ? { workspacePaths } : {}),
+    allowEmpty: allowEmpty === true,
+  };
+}
+
+/**
  * 產生排除首專案的提示後綴文字
  * @param {object} result
  */
@@ -125,7 +176,8 @@ function notifySyncResult(result, provider, options = {}) {
  * @param {Array<{path?: string, name?: string}>} enabledFolders
  * @param {string} wsDir
  * @param {object} [provider]
- * @param {{ notify?: boolean, force?: boolean }} [options]
+ * @param {{ notify?: boolean, force?: boolean, workspacePaths?: string[], allowEmpty?: boolean }} [options]
+ *   - workspacePaths / allowEmpty：連結歸屬範圍（見 resolveSyncScope）；未提供時自動查詢目前工作區
  */
 function syncEnabledProjectSkills(enabledFolders, wsDir, provider = null, options = {}) {
   const { notify = false, force = false } = options;
@@ -135,6 +187,7 @@ function syncEnabledProjectSkills(enabledFolders, wsDir, provider = null, option
   const result = syncWorkspaceSkills(enabledFolders, wsDir, {
     globalDir: getGlobalSkillsDir(),
     excludePaths: resolveExcludedProjectPaths(),
+    ...resolveSyncScope(enabledFolders, options),
   });
   notifySyncResult(result, provider, { notify, force });
   return result;

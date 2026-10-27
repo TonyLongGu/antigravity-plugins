@@ -109,7 +109,8 @@ function main() {
   }
 
   const folders = Array.isArray(wsConfig.folders) ? wsConfig.folders : [];
-  if (folders.length === 0) {
+  const disabledFolders = Array.isArray(wsConfig.disabledFolders) ? wsConfig.disabledFolders : [];
+  if (folders.length === 0 && disabledFolders.length === 0) {
     console.error('[ERR] 工作區設定檔中未定義任何專案 folders！');
     process.exit(1);
   }
@@ -123,11 +124,14 @@ function main() {
   }
   console.log(`[INFO] 全域 Skills 目標目錄: ${globalDir}`);
   console.log(`[INFO] 使用工作區設定檔: ${wsPath}`);
-  console.log(`[INFO] 工作區共註冊 ${folders.length} 個啟用專案（全部納入 Skills 同步）`);
+  console.log(`[INFO] 工作區共註冊 ${folders.length + disabledFolders.length} 個專案（啟用 ${folders.length} 個納入同步、停用 ${disabledFolders.length} 個不納入）`);
 
   const result = syncWorkspaceSkills(folders, wsDir, {
     dryRun: opts.dryRun,
     globalDir,
+    // 停用的專案也算本工作區的歸屬範圍：其殘留連結會被解除，其他工作區的連結則保留
+    workspacePaths: [...folders, ...disabledFolders].map((f) => f?.path || '').filter(Boolean),
+    allowEmpty: disabledFolders.length > 0,
   });
 
   if (result.skipped === 'empty-enabled') {

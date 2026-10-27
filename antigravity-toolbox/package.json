@@ -2,7 +2,7 @@
 	"name": "antigravity-toolbox",
 	"displayName": "Antigravity 控制中心 (Toolbox)",
 	"description": "VS Code 相容 IDE 側邊欄控制中心（Cursor / VS Code / VS Code Insiders / Antigravity）：整合多專案工作區同名修正、專案腳本執行器 (ps1/bat/cmd)、全域設定/技能/規範目錄直達、GitHub Copilot 與 Cline 對話紀錄統計與清理、Brain 對話歷史紀錄清理與 settings.json 快速編輯",
-	"version": "1.6.0",
+	"version": "1.6.1",
 	"publisher": "antigravity-toolkit",
 	"engines": {
 		"vscode": "^1.80.0"
@@ -65,7 +65,7 @@
 				"antigravity.syncSkillsOnFolderToggle": {
 					"type": "boolean",
 					"default": false,
-					"description": "開啟後立即依啟用專案對齊 ~/.agents/skills，並跟隨專案開關與 Skills 目錄變更；關閉則停止跟隨並解除所有指向全域資料夾的連結（僅移除連結，實體資料夾保留；適用 Codex / Cline）"
+					"description": "開啟後立即依啟用專案對齊 ~/.agents/skills，並跟隨專案開關與 Skills 目錄變更；關閉則停止跟隨並解除所有指向全域資料夾的連結（僅移除連結，實體資料夾保留；適用 Codex / Cline）。所有專案都關閉時也會解除本工作區建立的連結，其他工作區的連結則保留"
 				},
 				"antigravity.skillSyncExcludeFirstProject": {
 					"type": "boolean",

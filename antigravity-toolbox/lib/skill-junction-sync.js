@@ -55,6 +55,22 @@ function isExistingDirectory(fullPath) {
   }
 }
 
+/**
+ * 判斷 childPath 是否位於 parentPath 之下（Windows 大小寫不敏感；兩端皆已正規化）
+ * 用於判定全域連結的「歸屬」：連結目標落在本工作區的專案目錄裡，才算本工作區建立的。
+ * @param {string} childPath
+ * @param {string} parentPath
+ * @returns {boolean}
+ */
+function isPathInside(childPath, parentPath) {
+  if (!childPath || !parentPath) return false;
+  const child = childPath.toLowerCase();
+  const parent = parentPath.toLowerCase();
+  if (child === parent) return true;
+  const prefix = parent.endsWith(path.sep) ? parent : parent + path.sep;
+  return child.startsWith(prefix);
+}
+
 function resolveLinkTarget(linkPath) {
   try {
     const raw = fs.readlinkSync(linkPath);
@@ -75,18 +91,21 @@ function ensureDir(dirPath) {
 function removeJunction(linkPath) {
   if (!isReparsePoint(linkPath)) return false;
 
+  // 快路徑（2026-10-27）：Windows Junction 用 fs.rmdirSync 就能拆掉 reparse point，目標內容不受影響；
+  // 舊做法一律 spawn 一個 cmd.exe，spawnSync 會同步阻塞擴充主機，連結一多（十幾顆）就會凍住
+  // 語言伺服器通訊，出現「Pylance: Channel closed」這類中斷。失敗才落回舊路徑。
   try {
-    if (process.platform === 'win32') {
-      spawnSync('cmd.exe', ['/c', 'rmdir', linkPath], {
-        windowsHide: true,
-        stdio: 'ignore',
-      });
-    } else {
-      fs.rmdirSync(linkPath);
-    }
+    fs.rmdirSync(linkPath);
   } catch {
     try {
-      fs.unlinkSync(linkPath);
+      if (process.platform === 'win32') {
+        spawnSync('cmd.exe', ['/c', 'rmdir', linkPath], {
+          windowsHide: true,
+          stdio: 'ignore',
+        });
+      } else {
+        fs.unlinkSync(linkPath);
+      }
     } catch {
       return false;
     }
@@ -182,12 +201,23 @@ function collectSourceSkills(enabledFolders, wsDir, options = {}) {
  * 依啟用專案比對全域 Skills Junction
  * @param {Array<{path?: string, name?: string}>} enabledFolders 啟用中的專案清單
  * @param {string} wsDir 工作區目錄 (解析相對路徑用)
- * @param {{ dryRun?: boolean, globalDir?: string, excludePaths?: string[] }} [options]
+ * @param {{ dryRun?: boolean, globalDir?: string, excludePaths?: string[], workspacePaths?: string[], allowEmpty?: boolean }} [options]
  *   - excludePaths: 不納入同步來源的專案路徑 (例如首專案)；其既有連結會被一併解除
- * @returns {{ added: number, removed: number, kept: number, failed: number, protected: number, excludedProjects: string[], conflicts: Array<object>, skipped?: string }} skipped: 'empty-enabled'（無啟用專案）| 'empty-source'（來源技能 0 但全域仍有連結，已中止同步）
+ *   - workspacePaths: 本工作區「註冊過」的所有專案（啟用 ＋ 停用）。提供後只會解除「指向這些專案」或
+ *     「目標已失效」的連結；指向其他多專案工作區的連結一律保留（全域目錄是所有工作區共用的）
+ *   - allowEmpty: enabledFolders 為空時，是否代表權威狀態（＝本工作區所有專案都關掉了）而解除本工作區的連結。
+ *     未提供（false）時沿用舊行為：略過同步並保留既有連結（例如沒有開啟 .code-workspace 的單資料夾視窗）
+ * @returns {{ added: number, removed: number, kept: number, failed: number, protected: number, excludedProjects: string[], conflicts: Array<object>, skipped?: string }} skipped: 'empty-enabled'（無啟用專案且無歸屬資訊，保留連結）| 'empty-source'（來源技能 0 且無可回收連結，已中止同步）
  */
 function syncWorkspaceSkills(enabledFolders, wsDir, options = {}) {
   const dryRun = !!options.dryRun;
+  const allowEmpty = options.allowEmpty === true;
+  const hasOwnershipInfo = Array.isArray(options.workspacePaths);
+  const ownershipRoots = hasOwnershipInfo
+    ? options.workspacePaths
+      .map((root) => resolveFullPath(root || '', wsDir).toLowerCase())
+      .filter(Boolean)
+    : [];
   const globalDir = options.globalDir
     ? resolveFullPath(options.globalDir)
     : getDefaultGlobalSkillsDir();
@@ -199,7 +229,8 @@ function syncWorkspaceSkills(enabledFolders, wsDir, options = {}) {
   );
   const collectStats = { excludedProjects: [] };
 
-  if (!Array.isArray(enabledFolders) || enabledFolders.length === 0) {
+  const hasEnabledFolders = Array.isArray(enabledFolders) && enabledFolders.length > 0;
+  if (!hasEnabledFolders && !allowEmpty) {
     return {
       added: 0,
       removed: 0,
@@ -234,30 +265,21 @@ function syncWorkspaceSkills(enabledFolders, wsDir, options = {}) {
       continue;
     }
 
+    const resolvedTarget = resolveLinkTarget(full);
+    // 歸屬判定（2026-10-27）：只有指向本工作區專案的連結（或目標已消失的殘缺連結）才算本工作區的；
+    // 其餘可能是另一個多專案工作區建立的，不可因為本工作區沒有對應來源就整批解除。
+    const owned = !hasOwnershipInfo
+      || !resolvedTarget
+      || !pathExists(resolvedTarget)
+      || ownershipRoots.some((root) => isPathInside(resolvedTarget, root));
+
     existingLinks.push({
       linkName: entry.name,
       linkFullPath: full,
-      resolvedTarget: resolveLinkTarget(full),
+      resolvedTarget,
+      owned,
       matched: false,
     });
-  }
-
-  // 安全網（2026-10-26）：來源技能為 0 但全域仍有連結時，代表「這份工作區沒有任何 skills」
-  // （開到純程式碼專案、或首專案被排除）。照原邏輯續跑會把所有連結當成過期而整批解除，
-  // 連帶讓其他工作區的技能消失。故直接跳過同步並回報，要清空請明確使用 --clear。
-  if (sourceSkills.length === 0 && existingLinks.length > 0) {
-    return {
-      added: 0,
-      removed: 0,
-      kept: existingLinks.length,
-      failed: 0,
-      protected: protectedNames.size,
-      excludedProjects: collectStats.excludedProjects,
-      plan: [],
-      conflicts: [],
-      globalDir,
-      skipped: 'empty-source',
-    };
   }
 
   const reserved = new Set(protectedNames);
@@ -279,6 +301,25 @@ function syncWorkspaceSkills(enabledFolders, wsDir, options = {}) {
       src.action = 'keep';
       reserved.add(matched.linkName.toLowerCase());
     }
+  }
+
+  // 安全網（2026-10-27 調整）：來源技能為 0 且「沒有任何本工作區的連結可回收」時，代表這份工作區
+  // 本來就沒有 skills（例如開到純程式碼專案）⇒ 跳過同步、保留其他工作區的連結。
+  // 反之，只要有本工作區的連結（專案被關掉、或首專案被排除）就照正常流程解除，避免殘留。
+  const removableLinks = existingLinks.filter((link) => !link.matched && link.owned);
+  if (sourceSkills.length === 0 && existingLinks.length > 0 && removableLinks.length === 0) {
+    return {
+      added: 0,
+      removed: 0,
+      kept: existingLinks.length,
+      failed: 0,
+      protected: protectedNames.size,
+      excludedProjects: collectStats.excludedProjects,
+      plan: [],
+      conflicts: [],
+      globalDir,
+      skipped: 'empty-source',
+    };
   }
 
   // 撞名一律視為衝突（2026-10-26 起）：舊行為會把連結命名成 `foo_2`，
@@ -312,6 +353,11 @@ function syncWorkspaceSkills(enabledFolders, wsDir, options = {}) {
 
   for (const link of existingLinks) {
     if (link.matched) continue;
+    if (!link.owned) {
+      // 不是本工作區建立的連結（可能屬於另一個多專案工作區）⇒ 保留，避免兩個工作區互相比對時互刪
+      kept += 1;
+      continue;
+    }
     if (dryRun) {
       removed += 1;
       continue;
