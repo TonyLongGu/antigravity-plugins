@@ -39,5 +39,4 @@
 | :--- | :--- |
 | 圖譜通用流程（安裝、旗標、驗證、成本） | skill `graphify-knowledge-graph` |
 | 本專案細節備忘（六外掛速查、flavor 切換、耦合表、圖譜邊界、反模式、快照數字） | [`docs/project-notes.md`](docs/project-notes.md) |
-| VSCodium 待辦 | [`docs/vscodium-support-gap.md`](docs/vscodium-support-gap.md) |
 | 安裝／功能說明（使用者向） | [`README.md`](README.md) |

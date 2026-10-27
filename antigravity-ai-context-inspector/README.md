@@ -22,7 +22,7 @@
      - **VS Code Copilot 對話足跡**：掃描 `%APPDATA%/Code/User/workspaceStorage/*/chatSessions/*.jsonl`，用官方 `customTitle` 列出對話，並還原實際讀過的 Rules / Skills 與 `mcp_*` 工具。這不是 Antigravity 那種 session prompt 注入快照。
    - 🟣 **Cline 對話來源（跨宿主，任何 IDE 都能看）**：
      - **資料位置**：`~/.cline/data/sessions/<sessionId>/`（user 層級，Antigravity / Cursor / VS Code 共用同一份，因此不必管目前開的是哪個 IDE）。
-     - **來源篩選 chips**：快照模式下可一鍵切換「Antigravity / Cursor / Copilot / Cline」（各來源一色，chip 只顯示來源名稱）。**預設自動選中宿主原生來源**（裝在 Antigravity 就是 Antigravity、Cursor 是 Cursor、VS Code 是 Copilot），並記住最後一次選擇直到再次更改；**不提供「全部」chip**——再點一次作用中的 chip 即取消篩選（顯示全部來源）。只有一種來源時自動隱藏。
+     - **來源篩選 chips**：快照模式下可一鍵切換「Antigravity / Cursor / Copilot / Cline」（各來源一色，chip 只顯示來源名稱）。**預設自動選中宿主原生來源**（裝在 Antigravity 就是 Antigravity、Cursor 是 Cursor、VS Code 是 Copilot），並記住最後一次選擇直到再次更改；**不提供「全部」chip**——再點一次作用中的 chip 即取消篩選（顯示全部來源）。只有一種來源時自動隱藏。對話清單項目**不再重複顯示來源徽章**（上方 chips 已表達類別），來源改放在項目 tooltip 供辨識。
      - **足跡還原**：`skills` 工具呼叫 → 該技能標記為已調用；`<server>__<tool>` → 只留下真正被呼叫的 MCP 伺服器與工具；`read_files` / `editor` 觸及的 `.agents/rules`、`.clinerules` → 標記為已讀取的條件式規範。
      - **Cline 設定**：`.clinerules`（檔案或資料夾）、`.clinerules/workflows/*.md`、全域 `~/Documents/Cline/Rules`、`~/.agents/skills` 全都會納入掃描；`~/.cline/data/workspaces/*/workspaceState.json` 與 `globalState.json` 的 rules / skills 開關若為關閉，該項目會被淡化並排除在快照之外。
 2. **一鍵跳轉開啟**：點擊任一項目旁的 `📄 開啟` 按鈕，立即在編輯器開啟對應的 `.md` 檔案。

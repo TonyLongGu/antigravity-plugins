@@ -25,7 +25,7 @@
 | 2 | `-Target` 預設 `All`；`Prompt` 在根腳本是**互動選單**，在 install 薄殼回溯相容為 `All`、uninstall 薄殼仍是選單 | 2026-10-26「一鍵全裝」定案 |
 | 3 | 新增／移除外掛要同步 4 處：根腳本 `$candidatePool`、`$environmentExclusions`、`-Plugin` 對照、本檔 §8＋根 `README.md` 支援表 | 漏一處就出現「裝了沒效果」或「選單有、實際不存在」 |
 | 4 | `quota-status` 不進 VS Code（`$environmentExclusions`） | VS Code 沒有額度 API |
-| 5 | **VSCodium 尚未支援**：根腳本只有 `Get-RunningIdeForRoot()` 的行程偵測，**沒有任何部署目標** ⇒ 不要對外宣稱支援（細節與待辦：§11） | 文件與實作不一致的既有落差 |
+| 5 | **VSCodium 不支援**（2026-10-27 定案）：根腳本只有 `Get-RunningIdeForRoot()` 的行程偵測，**沒有任何部署目標** ⇒ 對外一律不宣稱（README 警語與 `package.json` 描述均已移除） | 偵測碼保留給「手動掛載」情境用（抓對 User 路徑／IDE 執行警告），不等於已支援 |
 | 6 | 腳本不得寫死本機磁碟路徑；`install-all.ps1` 的 `.bat` 包裝只用 `-ExecutionPolicy Bypass` 呼叫 PS1 | 可遷移性；repo 要能搬機器 |
 
 ---
@@ -89,7 +89,7 @@
 | 外掛 | 版本 | 節點 | 對外 id 家族 | view／container | 進入點／服務 |
 | :--- | :--- | ---: | :--- | :--- | :--- |
 | `antigravity-script-runner` | 1.7.1 | 455 | `scriptRunner.*`（8 個 id × `.en`／`.cn`＝24） | 無 view（右鍵選單＋媒體檢視） | `extension.js`／6 services（audio／video／image／stream） |
-| `antigravity-ai-context-inspector` | 1.2.3 | 341 | `antigravity.aiContext.*`（3 ＋ `.en`） | `antigravity.aiContextView`／`antigravity-ai-context-container` | `extension.js`／6 services（cline·cursor·vscode chat／contextScanner／mcpDetector） |
+| `antigravity-ai-context-inspector` | 1.2.4 | 341 | `antigravity.aiContext.*`（3 ＋ `.en`） | `antigravity.aiContextView`／`antigravity-ai-context-container` | `extension.js`／6 services（cline·cursor·vscode chat／contextScanner／mcpDetector） |
 | `antigravity-toolbox` | 1.6.0 | 301 | `antigravity.toolbox.*`（7 ＋ 4 `.en`） | `antigravity.toolboxView`／`antigravity-toolbox-container` | `extension.js`／6 services（brain／copilotChat／skillSync／workspace…） |
 | `antigravity-mcp-manager` | 1.9.3 | 265 | `antigravity.mcp.*`（6 ＋ `.en`） | `antigravity.mcpManagerView`／`mcp-manager-container` | `extension.js`／9 services |
 | `antigravity-quota-status` | 1.1.0（`name`＝`ai-quota-status`） | 174 | `aiQuota.*`（7，無變體） | 無 view（狀態列） | `extension.js`／4 services（quota／cursorAuth…） |
@@ -134,7 +134,7 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 | 想在切換鈕加回「全部／自動」 | 1.6.0 起刻意移除：未指定即等於跟隨宿主，多一顆鈕反而兩個狀態指同一件事 | 要回 `auto` 就點「目前宿主」那顆 chip |
 | 改了 `.js`／`.ps1` 卻沒跑 `update`、或沒更新 §5 快照 | 下一輪照著舊圖做決策、數字互相矛盾 | 依 §2 收尾 |
 | 把知識寫回技能檔、或又建 `<repo>-maintenance` 技能 | 兩份真相，改一邊忘一邊（2026-10-26 就發生過一次） | 知識只放**本檔**；文件放 `docs/`，程式地圖放 §8 |
-| 對外宣稱支援 VSCodium | 實作只「偵測行程」、沒有部署目標 | 先照 §11 的待辦補實作，再改 README |
+| 對外宣稱支援 VSCodium | 實作只「偵測行程」、沒有部署目標 | 已定案不宣稱；要真支援得自行補根 2 支腳本（原待辦清單已刪，見 git `6e34e44`） |
 
 ---
 
@@ -142,7 +142,7 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 
 | 主題 | 現況 | 文件 |
 | :--- | :--- | :--- |
-| VSCodium 支援 | README 與實作的落差**已修文件**（2026-10-26 採「只修文件」）；要真正支援仍須改根 2 支腳本 | [`docs/vscodium-support-gap.md`](docs/vscodium-support-gap.md) |
+| ——（目前無未結案項目） | VSCodium 已於 2026-10-27 定案不支援，待辦文件同時移除；需要那份「9 個修改點」清單時從 git 取回：`git show 6e34e44:docs/vscodium-support-gap.md` | — |
 
 ---
 
@@ -160,6 +160,10 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 | :--- | :--- | :--- |
 | 2026-10-27 | **知識回歸本檔**：`.agents/skills/antigravity-plugins-maintenance/` 退役（含 `references/`），內容整併成 §1–§12；新增「動工前讀圖譜（§1）／動工後更新圖譜（§2）」兩個必做時點；VSCodium 待辦移至 `docs/vscodium-support-gap.md` | 使用者指示：不再用技能維護專案，統一用 `AGENTS.md` 描述架構與規範 |
 | 2026-10-27 | 圖譜更新：1631→**1641** 節點、2961→**2974** 邊、96→**97** 社群；`Built from commit` `5b154c85`→`1e823015`（＝HEAD） | 收尾依 §2 執行 `graphify update .` |
+| 2026-10-27 | inspector `1.2.3 → 1.2.4`＝快照對話清單**移除來源徽章**（`.conv-source-badge` 與 4 個 `src-*` 樣式一併刪除）：上方來源 chips 已表達類別，清單只留標題與時間；來源改放項目 tooltip 供辨識 | 使用者指示：清單不用再顯示 Cursor 等工具標籤 |
+| 2026-10-27 | VSCodium **定案不支援**：清除最後一處對外宣稱——toolbox `package.json` 的 `description` 移除 `VSCodium`（README 2026-10-26 已改為「尚未支援」警語）；**偵測碼保留不動**（`systemService` host 偵測／`clineMcpService` `ideNames`／根 2 支腳本 `$processMap`），否則手動掛載時面板會抓錯 User 路徑 | 使用者指示：外掛不支援就不要寫在描述裡 |
+| 2026-10-27 | VSCodium **收尾**：移除 `antigravity-toolbox/README.md` 的「⚠️ 尚未支援自動掛載」警語、刪除 `docs/vscodium-support-gap.md`（含 9 點實作清單，需時自 git `6e34e44` 取回）；`AGENTS.md` §4、本檔 §3／§10／§11 的引用同步移除 ⇒ repo 內只剩偵測碼含 `vscodium` | 使用者指示：不支援就刪掉相關描述與文件 |
+
 | 2026-10-26 | mcp-manager `1.9.2 → 1.9.3`＝**移除「編輯說明」**：卡片不再顯示用途說明與編輯器（`server-action-bar`／`server-desc-*`／`btn-edit-desc`、chevron 一併移除、summary 改 `cursor: default`），後端移除 `updateServerDescription`／`saveNotes` 與對應訊息、fingerprint 不再納入 description，i18n 3 語系各刪 7 鍵；既有 sidecar 備註改為唯讀相容（`getNotes()` 保留，Cline 檢視器仍顯示） | 使用者指示 |
 | 2026-10-26 | inspector `1.2.2 → 1.2.3`＝快照來源 chips **預設選中宿主原生來源**：未手動選擇前一律跟隨宿主（`_sourceFilter = null`），點過 chip 後寫入 workspaceState `aiContext.sourceFilter` 並沿用（含再點一次＝顯示全部）；換來源時自動取該來源最新對話 | 使用者指示 |
 | 2026-10-26 | 安裝政策改為「一鍵全裝」：7 份 PS1 的 `-Target` 預設 `Prompt` → `All`、`Prompt` 降為別名；toolbox 新增 `antigravity.uiFlavor` 與面板類別切換鈕（`resolveFlavor`／`getGlobalPaths(flavor)`／`invalidateCache`）；新增 `tests/environment-flavor.test.js` | 使用者需求：安裝檔整合為一、面板內切換 IDE 類別 |

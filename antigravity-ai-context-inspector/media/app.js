@@ -595,19 +595,17 @@
       const isSelected = item.id === currentId;
       const displayTime = formatShortTime(item.mtimeStr, item.mtime);
       const itemSource = item.source || nativeSource;
-      const badge = snapshotSources.length > 1
-        ? `<span class="conv-source-badge src-${escapeHtml(itemSource)}">${escapeHtml(sourceLabel(itemSource))}</span>`
-        : '';
+      // 來源不放進清單：上方來源 chips 已表達類別（可篩選），此處只留 tooltip 供辨識
+      const itemTitleAttr = `${item.title || ''}\n${sourceLabel(itemSource)}`;
 
       return `
         <div class="conv-item-card ${isSelected ? 'is-selected' : ''}" data-conv-id="${escapeHtml(item.id)}">
           <div class="conv-item-main">
-            <span class="conv-item-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</span>
+            <span class="conv-item-title" title="${escapeHtml(itemTitleAttr)}">${escapeHtml(item.title)}</span>
             ${isSelected ? `<span class="conv-item-check">${Icons.check}</span>` : ''}
           </div>
           <div class="conv-item-meta">
             <span class="conv-item-time">${escapeHtml(displayTime)}</span>
-            ${badge}
           </div>
         </div>
       `;

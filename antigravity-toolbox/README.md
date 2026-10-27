@@ -68,8 +68,6 @@ Cursor、VS Code 與 Antigravity 都實作 VS Code Extension API（`require('vsc
 | VS Code Insiders | `~/.vscode-insiders/extensions` | `%APPDATA%\Code - Insiders\User` |
 | Antigravity IDE | `~/.antigravity-ide/extensions` | `%APPDATA%\Antigravity IDE\User` |
 
-> ⚠️ **VSCodium 尚未支援自動掛載**：安裝腳本目前只涵蓋上表四種 IDE。VSCodium 同為 VS Code OSS 分支，但腳本沒有它的部署目標（只有「IDE 正在執行」的偵測會認得它），所以不會自動掛載。若你需要，請自行把外掛資料夾掛到 `~/.vscode-oss/extensions` 後重新載入視窗（此路徑未經本專案實機驗證）。
-
 1. **一鍵安裝**：在 PowerShell 執行 `.\install-extension.ps1`（或雙擊 `install-extension.bat`）。
 2. **一鍵卸載**：在 PowerShell 執行 `.\uninstall-extension.ps1`（或雙擊 `uninstall-extension.bat`）。
 3. **重載生效**：於目標 IDE 按 `Ctrl + Shift + P` -> 執行 `Developer: Reload Window`。

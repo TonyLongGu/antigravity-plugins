@@ -536,42 +536,6 @@ body {
   color: #9cdcfe;
 }
 
-/* 對話清單中的來源徽章 */
-.conv-source-badge {
-  padding: 0 5px;
-  border-radius: 3px;
-  border: 1px solid transparent;
-  font-size: 8.5px;
-  font-weight: 600;
-  line-height: 1.6;
-  letter-spacing: 0.2px;
-  text-transform: none;
-}
-
-.conv-source-badge.src-antigravity {
-  color: #4ec9b0;
-  background: rgba(78, 201, 176, 0.14);
-  border-color: rgba(78, 201, 176, 0.3);
-}
-
-.conv-source-badge.src-cursor {
-  color: #a9dc76;
-  background: rgba(169, 220, 118, 0.14);
-  border-color: rgba(169, 220, 118, 0.3);
-}
-
-.conv-source-badge.src-copilot {
-  color: #9cdcfe;
-  background: rgba(156, 220, 254, 0.14);
-  border-color: rgba(156, 220, 254, 0.3);
-}
-
-.conv-source-badge.src-cline {
-  color: #c586c0;
-  background: rgba(197, 134, 192, 0.16);
-  border-color: rgba(197, 134, 192, 0.34);
-}
-
 /* 快照第二列：提供者 / 狀態 / Token / 成本 */
 .meta-extra {
   color: var(--text-muted);
