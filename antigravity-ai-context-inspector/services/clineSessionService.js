@@ -292,6 +292,19 @@ class ClineSessionService {
   }
 
   /**
+   * 快照掃描用的工作區根目錄：以「該對話自己的工作區」為準。
+   * ⚠️ 不可直接用目前開著的 workspaceFolders：Cline 的常駐規範 / 技能是依 session
+   * 的 cwd 準備的，開著 A 視窗看 B 對話時會列出完全無關的規範；多根視窗更會把
+   * 每一根的 AGENTS.md / .clinerules 全部列進來。
+   * 只有在 meta 沒有 workspace_root / cwd 時（極舊格式）才退回目前工作區。
+   */
+  static _snapshotRoots(workspaceRoot, workspaceFolders = []) {
+    const root = typeof workspaceRoot === 'string' ? workspaceRoot.trim() : '';
+    if (!root) return workspaceFolders;
+    return [{ uri: { fsPath: root }, name: ContextScannerService.formatWorkspaceName(root) }];
+  }
+
+  /**
    * 解析單一對話的「Cline 足跡」
    * @param {string|null} conversationId Cline session id（不含來源前綴）
    */
@@ -327,7 +340,11 @@ class ClineSessionService {
     const target = (conversationId && list.find((item) => item.id === conversationId)) || list[0];
     const footprint = await this._readFootprint(target);
     const toggles = this.readToggles(options);
-    const baseEnv = await ContextScannerService.scanLiveEnvironment(workspaceFolders, scanOptions);
+    // 環境一律以「該對話自己的工作區」掃描（見 _snapshotRoots 的說明）
+    const baseEnv = await ContextScannerService.scanLiveEnvironment(
+      this._snapshotRoots(target.workspaceRoot, workspaceFolders),
+      scanOptions
+    );
     const stats = this.applyToggleState(baseEnv, toggles);
 
     const isPathInvoked = (filePath) => {

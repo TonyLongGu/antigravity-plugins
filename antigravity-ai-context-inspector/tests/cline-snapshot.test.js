@@ -261,6 +261,29 @@ async function main() {
     assert.deepStrictEqual(ghost.tools.map(t => t.name), ['do_thing']);
   });
 
+  // ── A10/A11：常駐規範的掃描範圍與「已調用」語意 ────────────────────────────
+  const otherSnapshot = await ClineSessionService.parseConversationSnapshot('sess-bbbb2222', folders(), {
+    scope: 'all'
+  });
+
+  check('A10 常駐規範以「對話自己的工作區」掃描（不看目前開著的視窗）', () => {
+    const names = otherSnapshot.rules.alwaysActive.map(r => r.name);
+    assert.ok(!names.includes('AGENTS.md'),
+      '不應列出目前視窗（WORKSPACE）的 AGENTS.md：' + names.join(','));
+    assert.ok(!names.includes('active.md'),
+      '不應列出目前視窗的 .clinerules：' + names.join(','));
+    assert.ok(names.includes('global-rule.md'), '全域 Cline 規則仍應列出：' + names.join(','));
+    assert.strictEqual(otherSnapshot.workspaces[0].path, OTHER_WORKSPACE,
+      '實際 ' + JSON.stringify(otherSnapshot.workspaces));
+  });
+
+  check('A11 常駐規範被列出但未被讀取時不標記 isInvoked（維持足跡語意）', () => {
+    const agents = snapshot.rules.alwaysActive.find(r => r.name === 'AGENTS.md');
+    assert.ok(agents, '找不到 AGENTS.md');
+    assert.strictEqual(agents.isEnabled, true);
+    assert.strictEqual(agents.isInvoked, false, '未被工具讀取者不得標記為已調用');
+  });
+
   await checkAsync('A8 缺少 Cline 資料目錄：available=false、清單空、解析不拋錯', async () => {
     const missing = path.join(ROOT, 'no-cline-data');
     assert.strictEqual(ClineSessionService.isAvailable(missing), false);

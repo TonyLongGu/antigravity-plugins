@@ -24,7 +24,7 @@
      - **資料位置**：`~/.cline/data/sessions/<sessionId>/`（user 層級，Antigravity / Cursor / VS Code 共用同一份，因此不必管目前開的是哪個 IDE）。
      - **來源篩選 chips**：快照模式下可一鍵切換「Antigravity / Copilot / Cursor / Cline」（順序固定不隨宿主變動；各來源一色：綠／藍／橘／紫，chip 只顯示來源名稱）。**預設自動選中宿主原生來源**（裝在 Antigravity 就是 Antigravity、Cursor 是 Cursor、VS Code 是 Copilot），並記住最後一次選擇直到再次更改；**不提供「全部」chip**——再點一次作用中的 chip 即取消篩選（顯示全部來源）。只有一種來源時自動隱藏。對話清單項目**不再重複顯示來源徽章**（上方 chips 已表達類別），來源改放在項目 tooltip 供辨識。
      - **足跡還原**：`skills` 工具呼叫 → 該技能標記為已調用；`<server>__<tool>` → 只留下真正被呼叫的 MCP 伺服器與工具；`read_files` / `editor` 觸及的 `.agents/rules`、`.clinerules` → 標記為已讀取的條件式規範。
-     - **Cline 設定**：`.clinerules`（檔案或資料夾）、`.clinerules/workflows/*.md`、全域 `~/Documents/Cline/Rules`、`~/.agents/skills` 全都會納入掃描；`~/.cline/data/workspaces/*/workspaceState.json` 與 `globalState.json` 的 rules / skills 開關若為關閉，該項目會被淡化並排除在快照之外。
+     - **Cline 設定**：`.clinerules`（檔案或資料夾）、`.clinerules/workflows/*.md`、全域 `~/Documents/Cline/Rules`、`~/.agents/skills` 全都會納入掃描；`~/.cline/data/workspaces/*/workspaceState.json` 與 `globalState.json` 的 rules / skills 開關若為關閉，該項目會被淡化並排除在快照之外。**規範 / 技能一律以「該對話自己的工作區」（session meta 的 `workspace_root`／`cwd`）為掃描範圍**，不是目前開著的視窗——用 `clineScope=all` 挑到其他工作區的對話時，不會再列出目前視窗的 `AGENTS.md` / `.clinerules`（多根視窗也不會全部列出）。
 2. **一鍵跳轉開啟**：點擊任一項目旁的 `📄 開啟` 按鈕，立即在編輯器開啟對應的 `.md` 檔案。
 3. **即時過濾與搜尋**：輸入關鍵字即時篩選 Rules / Skills / MCP 名稱與描述。
 4. **一鍵複製摘要**：點擊頂部 `📋` 按鈕，將整份生效上下文整理為 Markdown 格式並複製至剪貼簿。
@@ -42,7 +42,7 @@
 
 ## 🧭 Cline 對話足跡（語意與界線）
 
-- **這是「足跡」不是「注入快照」**：Cline 的 session 檔沒有保存「這一輪被塞進模型的完整 prompt」，因此本工具呈現的是可驗證的足跡——實際調用的技能、實際呼叫的 MCP 工具、實際讀過的規範，以及 Cline 目前啟用中的常駐規範（`.clinerules` / `AGENTS.md` / 全域規則）。若某條常駐規範是在該對話之後才新增，仍會列出，但不會標記為「已調用」。
+- **這是「足跡」不是「注入快照」**：Cline 的 session 檔沒有保存「這一輪被塞進模型的完整 prompt」，因此本工具呈現的是可驗證的足跡——實際調用的技能、實際呼叫的 MCP 工具、實際讀過的規範，以及**該對話自己的工作區**目前啟用中的常駐規範（`.clinerules` / `AGENTS.md` / 全域規則）。若某條常駐規範是在該對話之後才新增，仍會列出，但不會標記為「已調用」。
 - **與宿主 IDE 無關**：Cline 的資料在 `~/.cline/data`，所以在 Antigravity 裡也能看 Cline、Cursor、Copilot 的對話；chips 只列出這台機器實際有資料的來源。
 - **效能**：對話清單只讀 meta（1~3 KB）並以 mtime 快取；`messages.json` 只在選取時讀，且超過 20 MB 會改走逐行串流掃描（不做整份 `JSON.parse`），記憶體用量與檔案大小脫鉤（本機最大單檔約 71 MB）。
 - **隱私**：不讀 `~/.cline/data/secrets.json`；`cline_mcp_settings.json` 只取 `command` / `args` / `url` / `disabled`，**不讀 `env`**；`globalState.json` 只取白名單欄位（版本、provider/model、開關）。
@@ -65,7 +65,7 @@ node tests/snapshot-source-default.test.js
 
 - 離開碼 `0` = 全數通過、`1` = 有失敗（可直接接 CI 或 hook）。
 - `mcp-vscode-sources`：涵蓋 5 項斷言——三來源併列與同名時「VS Code 自身優先」、CLI 條目的 scope / transport / 白名單 `tools` 不計數、**不標注啟停狀態**（負對照：VS Code 兩層開關都標為停用時仍不得出現停用資訊）、以及缺少 CLI 設定檔時不中斷。
-- `cline-snapshot`：涵蓋 10 項斷言——清單只讀 meta（攔截 `*.messages.json` 讀取）、`clineScope` 工作區過濾、`skills` 工具足跡、`<server>__<tool>` MCP 足跡與只保留實際呼叫的工具、設定檔已移除但確實呼叫過的 MCP 仍會列出、`workspaceState.json` 開關對映（關閉的常駐規範不得出現在快照）、條件式規範只留被讀取者、對話 meta、缺少資料目錄不拋錯，以及 **> 20 MB 走串流降級路徑**。
+- `cline-snapshot`：涵蓋 12 項斷言——清單只讀 meta（攔截 `*.messages.json` 讀取）、`clineScope` 工作區過濾、`skills` 工具足跡、`<server>__<tool>` MCP 足跡與只保留實際呼叫的工具、設定檔已移除但確實呼叫過的 MCP 仍會列出、`workspaceState.json` 開關對映（關閉的常駐規範不得出現在快照）、條件式規範只留被讀取者、對話 meta、**常駐規範以對話自己的工作區掃描（不列目前視窗的）**、**常駐規範未被讀取時不得標記 isInvoked**、缺少資料目錄不拋錯，以及 **> 20 MB 走串流降級路徑**。
 - `snapshot-source-default`：涵蓋 7 項斷言——**未手動選擇時一律載入宿主原生來源**（Antigravity／Cursor 各驗一次）、Webview 注入空的 `INITIAL_SOURCE_FILTER`、點過 chip 後寫回 `workspaceState` 並沿用（重開視窗仍生效）、取消篩選（`all`）沿用已選對話來源、來源不可用時退回宿主，以及空字串清回「跟隨宿主」。以 `Module._load` 攔截 `require('vscode')`，不需要真實 IDE。
 
 ---
