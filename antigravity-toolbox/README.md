@@ -30,6 +30,7 @@ VS Code 相容 IDE 原生側邊欄擴充套件（Cursor、VS Code、VS Code Insi
    - **Antigravity**：`~/.gemini/config`、`mcp_config.json`、Skills / Rules / Plugins、`~/.gemini/antigravity-ide`
    - **VS Code + Copilot**：`%APPDATA%\Code\User`、`mcp.json`、Skills（`~/.agents/skills`）、個人規範（`User\prompts`）、Plugins（`~/.copilot/installed-plugins`）、`globalStorage`
    - 🖱️ **按鈕 tooltip 顯示實際目標路徑**：點擊前即可確認會開啟哪個目錄。
+   - 🏷️ **MCP 按鈕名稱統一為 `mcp.json`**：各宿主實際檔名不同（Cursor／Copilot `mcp.json`、Antigravity `mcp_config.json`、Cline `cline_mcp_settings.json`），卡片按鈕一律顯示 `mcp.json`，避免長檔名擠壓版面；實際開啟哪個檔案仍以 tooltip 的完整路徑為準（磁碟上的檔名不可改，改了宿主就讀不到設定）。
 
 4. **IDE 設定檔與檔案總管過濾開關**：
    - 📄 **開啟 settings.json** (直接在 IDE 編輯器分頁開啟)
@@ -102,7 +103,7 @@ Cursor、VS Code 與 Antigravity 都實作 VS Code Extension API（`require('vsc
 | 卡片按鈕 | Cline 路徑 |
 | :--- | :--- |
 | Config 根目錄 | `~/.cline` |
-| `cline_mcp_settings.json` | `~/.cline/data/settings/cline_mcp_settings.json`（舊版退回 `<IDE User>/globalStorage/saoudrizwan.claude-dev/settings`） |
+| `mcp.json`（按鈕統一顯示名稱） | 實際檔案 `~/.cline/data/settings/cline_mcp_settings.json`（舊版退回 `<IDE User>/globalStorage/saoudrizwan.claude-dev/settings`） |
 | Skills / Rules / Plugins | `~/.cline/{skills,rules,plugins}`；不存在時退回 `~/Documents/Cline/{Rules,Plugins}`、`~/.agents/skills` |
 | AppData 核心 | `~/.cline/data` |
 | 對話記憶庫 | `~/.cline/data/sessions`（不存在時退回舊版 `.../saoudrizwan.claude-dev/tasks`） |
