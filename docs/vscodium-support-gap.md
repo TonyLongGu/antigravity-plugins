@@ -1,6 +1,7 @@
 # 未結案：VSCodium 支援（README 與實作不一致）
 
 > 稽核日期：2026-10-26（`graphify` 0.9.80 建圖 commit `ea192ae6` 之後，純 grep ＋ 人工核對）
+> 位置沿革：原存於 `.agents/skills/antigravity-plugins-maintenance/references/`，2026-10-27 該技能退役後移到 `docs/`；對應規則見根 [`AGENTS.md`](../AGENTS.md) §4／§11。
 
 ## 事實
 
