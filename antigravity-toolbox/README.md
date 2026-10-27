@@ -75,7 +75,7 @@ Cursor、VS Code 與 Antigravity 都實作 VS Code Extension API（`require('vsc
    - 點擊左側活動列的 **🛠️ (Antigravity 控制中心)** 圖示。
    - 或點擊右下角狀態列 **`$(tools) 控制中心`** 按鈕。
 
-> 🔀 **類別切換鈕（面板頂部）**：`Antigravity / Cursor / Copilot / Cline` 彩色膠囊鈕（樣式對齊 inspector 的快照來源 chips，各類別一色），讓你**在同一個 IDE 內切換要檢視哪一套資料**——路徑卡片、對話記憶庫統計與卡片文案都會跟著換。
+> 🔀 **類別切換鈕（面板頂部）**：`Antigravity / Copilot / Cursor / Cline` 彩色膠囊鈕（順序固定；樣式對齊 inspector 的快照來源 chips，各類別一色：綠／藍／橘／紫），讓你**在同一個 IDE 內切換要檢視哪一套資料**——路徑卡片、對話記憶庫統計與卡片文案都會跟著換。
 > - 未手動指定（預設）＝依目前宿主 IDE 判定，行為與舊版完全相同；作用中的類別以該類別的顏色高亮。
 > - 手動指定會寫入 `antigravity.uiFlavor` 並記憶；即使人在 VS Code，也能直接查看 Cursor、Antigravity 或 Cline 的資料。
 > - 點一下「目前宿主」的類別＝回復跟隨宿主（等同 `auto`），因此不再需要「自動」鈕。

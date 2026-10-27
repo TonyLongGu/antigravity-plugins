@@ -12,8 +12,8 @@ const ClineSessionService = require('./services/clineSessionService');
 
 const SUPPORTED_LOCALES = ['zh-TW', 'zh-CN', 'en'];
 
-// 對話快照來源登錄表（順序即 UI chips 順序；native 會自動排到最前面）
-const SNAPSHOT_SOURCE_DEFS = ['antigravity', 'cursor', 'copilot', 'cline'];
+// 對話快照來源登錄表（順序即 UI chips 固定的顯示順序，任何宿主都一樣）
+const SNAPSHOT_SOURCE_DEFS = ['antigravity', 'copilot', 'cursor', 'cline'];
 // 各來源對話清單快取，避免側邊欄高頻刷新時反覆掃描
 const SOURCE_LIST_TTL_MS = 4000;
 
@@ -135,13 +135,17 @@ class AiContextViewProvider {
     }
   }
 
-  /** 可用的快照來源（native 一律可用且排第一） */
+  /**
+   * 可用的快照來源（native 一律可用，但不再排第一）。
+   * 顯示順序固定照 SNAPSHOT_SOURCE_DEFS：Antigravity → Copilot → Cursor → Cline，
+   * 這樣不管裝在哪個 IDE，chips 的位置都一致（只有作用中顏色不同）。
+   */
   _resolveSourceOrder(config = this._getConfig()) {
     const native = this._getNativeSourceId();
     const allowed = config.snapshotSources.length > 0 ? config.snapshotSources : SNAPSHOT_SOURCE_DEFS;
     const ids = allowed.filter(id => id === native || this._isSourceAvailable(id, config));
-    if (!ids.includes(native)) ids.unshift(native);
-    return ids.sort((a, b) => (a === native ? -1 : (b === native ? 1 : 0)));
+    if (!ids.includes(native)) ids.push(native);
+    return SNAPSHOT_SOURCE_DEFS.filter(id => ids.includes(id));
   }
 
   async _listConversationsFor(sourceId, workspaceFolders, config) {

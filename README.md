@@ -106,7 +106,7 @@
 
 #### 安裝後：在同一個面板切換 IDE 功能
 
-不論你在哪個 IDE，控制中心頂部都有 **Antigravity / Cursor / Copilot / Cline** 彩色類別切換鈕（各類別一色）：
+不論你在哪個 IDE，控制中心頂部都有 **Antigravity / Copilot / Cursor / Cline** 彩色類別切換鈕（順序固定；各類別一色：綠／藍／橘／紫）：
 
 - 未手動指定（預設）：依目前開啟的 IDE 顯示對應功能，行為與舊版完全相同；作用中的類別會以該類別的顏色高亮。
 - 點其他類別：即使人在 VS Code，也能直接檢視 Cursor、Antigravity 或 Cline 的資料路徑與對話紀錄（對應設定 `antigravity.uiFlavor`，會記憶選擇）。

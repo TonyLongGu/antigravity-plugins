@@ -524,10 +524,11 @@ body {
   color: #c586c0;
 }
 
+/* Cursor → 橘色（與控制中心 flavor-chip 同色）；排列固定 Antigravity / Copilot / Cursor / Cline */
 .source-chip.src-cursor.active {
-  background: rgba(169, 220, 118, 0.18);
-  border-color: rgba(169, 220, 118, 0.5);
-  color: #a9dc76;
+  background: rgba(206, 145, 120, 0.2);
+  border-color: rgba(206, 145, 120, 0.55);
+  color: var(--accent-orange);
 }
 
 .source-chip.src-copilot.active {

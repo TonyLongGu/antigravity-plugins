@@ -101,7 +101,7 @@
 
 - 判定集中在 `antigravity-toolbox/services/systemService.js`：`getFlavorOverride()`（讀 `antigravity.uiFlavor`）→ `resolveFlavor()` → `getGlobalPaths(flavor)`／`collectBrainSessionDirs(flavor)`；`brainService` 以 `resolveFlavor()` 決定走 Brain 或 Copilot 分支。**切換類別後必須呼叫 `invalidateCache()`**（5 秒快取，否則顯示舊類別）。
 - 回歸測試：`node antigravity-toolbox/tests/environment-flavor.test.js`；i18n 鍵改動跑 `node antigravity-toolbox/tests/mcp-label.test.js`。
-- 切換鈕（1.6.0 起）＝**彩色 chips**：`Antigravity`（teal `#4ec9b0`）／`Cursor`（綠 `#a9dc76`）／`Copilot`（淺藍 `#9cdcfe`）／`Cline`（紫 `#c586c0`）。只在啟用態上色、**不顯示對話筆數**（`flavorCounts`／`getFlavorSessionCounts` 已於 1.6.0 移除，勿再加回）。
+- 切換鈕（1.6.0 起）＝**彩色 chips**，順序固定 `Antigravity` → `Copilot` → `Cursor` → `Cline`（不隨宿主變動）：`Antigravity`（綠 `#4ec9b0`）／`Copilot`（藍 `#9cdcfe`）／`Cursor`（橘 `#ce9178`）／`Cline`（紫 `#c586c0`）。只在啟用態上色、**不顯示對話筆數**（`flavorCounts`／`getFlavorSessionCounts` 已於 1.6.0 移除，勿再加回）。
 - **已無「自動」鈕**：未指定時以 `autoFlavor` 為作用中，點「目前宿主」那顆 chip 即回寫 `auto`。
 - `cline` 是**外掛而非宿主**（`auto` 永遠不會命中，只能手動點）。路徑見 `systemService.getGlobalPaths('cline')`：`~/.cline`，MCP 在 `data/settings`、對話在 `data/sessions`（舊版退回 `globalStorage/saoudrizwan.claude-dev/tasks`）。⚠️ 清理 Cline **只刪 session 資料夾**，不動 `data/db/*.db`（Cline 介面可能仍列出已刪項目）。
 - 樣式來源＝inspector 快照的 `.source-chip`（`media/style.css`）⇒ 改一邊要同步看另一邊。
