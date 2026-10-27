@@ -176,7 +176,8 @@ body {
 
 /* ==============================================================================
    資料來源類別切換列 (IDE Flavor Switcher)
-   樣式對齊 antigravity-ai-context-inspector 的「最近對話快照」來源 chips：
+   ⚠️ 本區是切換鈕的**樣式基準**：antigravity-ai-context-inspector 快照的 `.source-chip`
+   已於 2026-10-27 對齊這裡 ⇒ 改一邊必須同步改另一邊（以本檔為準）。
    膠囊外觀、啟用時才上色。各類別專屬色（與 inspector 的 .source-chip 同色）：
      Antigravity → 綠 (#4ec9b0) / Copilot → 藍 (#9cdcfe)
      Cursor → 橘 (#ce9178) / Cline → 紫 (#c586c0)

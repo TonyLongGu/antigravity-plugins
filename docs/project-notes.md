@@ -89,7 +89,7 @@
 | 外掛 | 版本 | 節點 | 對外 id 家族 | view／container | 進入點／服務 |
 | :--- | :--- | ---: | :--- | :--- | :--- |
 | `antigravity-script-runner` | 1.7.1 | 455 | `scriptRunner.*`（8 個 id × `.en`／`.cn`＝24） | 無 view（右鍵選單＋媒體檢視） | `extension.js`／6 services（audio／video／image／stream） |
-| `antigravity-ai-context-inspector` | 1.2.4 | 341 | `antigravity.aiContext.*`（3 ＋ `.en`） | `antigravity.aiContextView`／`antigravity-ai-context-container` | `extension.js`／6 services（cline·cursor·vscode chat／contextScanner／mcpDetector） |
+| `antigravity-ai-context-inspector` | 1.2.5 | 341 | `antigravity.aiContext.*`（3 ＋ `.en`） | `antigravity.aiContextView`／`antigravity-ai-context-container` | `extension.js`／6 services（cline·cursor·vscode chat／contextScanner／mcpDetector） |
 | `antigravity-toolbox` | 1.6.0 | 301 | `antigravity.toolbox.*`（7 ＋ 4 `.en`） | `antigravity.toolboxView`／`antigravity-toolbox-container` | `extension.js`／6 services（brain／copilotChat／skillSync／workspace…） |
 | `antigravity-mcp-manager` | 1.9.3 | 265 | `antigravity.mcp.*`（6 ＋ `.en`） | `antigravity.mcpManagerView`／`mcp-manager-container` | `extension.js`／9 services |
 | `antigravity-quota-status` | 1.1.0（`name`＝`ai-quota-status`） | 174 | `aiQuota.*`（7，無變體） | 無 view（狀態列） | `extension.js`／4 services（quota／cursorAuth…） |
@@ -104,7 +104,7 @@
 - 切換鈕（1.6.0 起）＝**彩色 chips**，順序固定 `Antigravity` → `Copilot` → `Cursor` → `Cline`（不隨宿主變動）：`Antigravity`（綠 `#4ec9b0`）／`Copilot`（藍 `#9cdcfe`）／`Cursor`（橘 `#ce9178`）／`Cline`（紫 `#c586c0`）。只在啟用態上色、**不顯示對話筆數**（`flavorCounts`／`getFlavorSessionCounts` 已於 1.6.0 移除，勿再加回）。
 - **已無「自動」鈕**：未指定時以 `autoFlavor` 為作用中，點「目前宿主」那顆 chip 即回寫 `auto`。
 - `cline` 是**外掛而非宿主**（`auto` 永遠不會命中，只能手動點）。路徑見 `systemService.getGlobalPaths('cline')`：`~/.cline`，MCP 在 `data/settings`、對話在 `data/sessions`（舊版退回 `globalStorage/saoudrizwan.claude-dev/tasks`）。⚠️ 清理 Cline **只刪 session 資料夾**，不動 `data/db/*.db`（Cline 介面可能仍列出已刪項目）。
-- 樣式來源＝inspector 快照的 `.source-chip`（`media/style.css`）⇒ 改一邊要同步看另一邊。
+- 樣式基準＝**toolbox** 的 `.flavor-chip`（`media/style.css`，2026-10-27 定案）；inspector 快照的 `.source-chip` 已對齊它（補 `font-family: inherit`／`white-space: nowrap`／`flex: 0 0 auto`，啟用態加 `font-weight: 600`，Cline 色值統一為 `.18`／`.5`）⇒ **改一邊必須同步改另一邊，以 toolbox 為準**。
 
 ## 9. 首次建圖／重建（`graphify-out/` 不存在時）
 
@@ -158,6 +158,8 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 
 | 日期 | 變更 | 來源 |
 | :--- | :--- | :--- |
+| 2026-10-27 | inspector `1.2.4 → 1.2.5`＝快照來源 chips（`.source-chip`）**樣式對齊 toolbox** `.flavor-chip`：補 `font-family: inherit`／`white-space: nowrap`／`flex: 0 0 auto`／容器 `align-items: center`、啟用態加 `font-weight: 600`、Cline 色值統一 `.18`／`.5`；toolbox 註解改為「本區是樣式基準」 | 使用者指示：切換鈕樣式統一用 antigravity-toolbox |
+
 | 2026-10-27 | **知識回歸本檔**：`.agents/skills/antigravity-plugins-maintenance/` 退役（含 `references/`），內容整併成 §1–§12；新增「動工前讀圖譜（§1）／動工後更新圖譜（§2）」兩個必做時點；VSCodium 待辦移至 `docs/vscodium-support-gap.md` | 使用者指示：不再用技能維護專案，統一用 `AGENTS.md` 描述架構與規範 |
 | 2026-10-27 | 圖譜更新：1631→**1641** 節點、2961→**2974** 邊、96→**97** 社群；`Built from commit` `5b154c85`→`1e823015`（＝HEAD） | 收尾依 §2 執行 `graphify update .` |
 | 2026-10-27 | inspector `1.2.3 → 1.2.4`＝快照對話清單**移除來源徽章**（`.conv-source-badge` 與 4 個 `src-*` 樣式一併刪除）：上方來源 chips 已表達類別，清單只留標題與時間；來源改放項目 tooltip 供辨識 | 使用者指示：清單不用再顯示 Cursor 等工具標籤 |

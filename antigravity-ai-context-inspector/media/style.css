@@ -483,48 +483,53 @@ body {
 }
 
 /* ── 對話來源（source）篩選 chips 與標籤 ───────────────────────────────── */
+/* 樣式基準＝antigravity-toolbox 的 `.flavor-chip`（2026-10-27 統一，以工具箱為準）
+   膠囊外觀、啟用時才上色。各類別專屬色（與 toolbox 的 `.flavor-chip` 同色）：
+     Antigravity → 綠 (#4ec9b0) / Copilot → 藍 (#9cdcfe)
+     Cursor → 橘 (#ce9178) / Cline → 紫 (#c586c0)
+   排列順序固定：Antigravity → Copilot → Cursor → Cline（順序由資料決定） */
 .source-chips {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
   margin-bottom: var(--space-xs);
 }
 
 .source-chip {
+  flex: 0 0 auto;
   height: 21px;
   padding: 0 8px;
-  border-radius: 999px;
-  border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-secondary);
-  font-size: 10.5px;
-  font-weight: 550;
-  line-height: 1;
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 550;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
   cursor: pointer;
+  white-space: nowrap;
   transition: all 0.12s ease;
 }
 
 .source-chip:hover {
-  background: rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.1);
 }
 
+/* Antigravity → 綠 #4ec9b0（本外掛的 --accent-cyan 已是綠色，與 toolbox 同值）
+   ⚠️ 不可改成工具箱的 --accent-cyan (#06b6d4)：那是青色，會讓 Antigravity 看起來不是綠色 */
 .source-chip.active {
   background: rgba(78, 201, 176, 0.18);
   border-color: rgba(78, 201, 176, 0.5);
   color: var(--accent-cyan);
+  font-weight: 600;
 }
 
-.source-chip.src-cline.active {
-  background: rgba(197, 134, 192, 0.2);
-  border-color: rgba(197, 134, 192, 0.55);
-  color: #c586c0;
-}
-
-/* Cursor → 橘色（與控制中心 flavor-chip 同色）；排列固定 Antigravity / Copilot / Cursor / Cline */
 .source-chip.src-cursor.active {
   background: rgba(206, 145, 120, 0.2);
   border-color: rgba(206, 145, 120, 0.55);
@@ -535,6 +540,12 @@ body {
   background: rgba(156, 220, 254, 0.16);
   border-color: rgba(156, 220, 254, 0.45);
   color: #9cdcfe;
+}
+
+.source-chip.src-cline.active {
+  background: rgba(197, 134, 192, 0.18);
+  border-color: rgba(197, 134, 192, 0.5);
+  color: #c586c0;
 }
 
 /* 快照第二列：提供者 / 狀態 / Token / 成本 */
