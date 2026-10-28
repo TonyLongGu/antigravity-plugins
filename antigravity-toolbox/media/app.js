@@ -270,6 +270,7 @@
   let draggedFolderItem = null;
   let currentDropTarget = null;
   let currentDropDirection = null; // 'top' | 'bottom'
+  let activeCardDragCleanup = null; // 卡片拖曳手勢的強制收尾（防止事件遺失時卡住）
 
   function clearDropIndicators() {
     if (currentDropTarget) {
@@ -288,6 +289,42 @@
       targetItem.classList.add(direction === 'top' ? 'drag-over-top' : 'drag-over-bottom');
       currentDropTarget = targetItem;
       currentDropDirection = direction;
+    }
+  }
+
+  // ── 拖出面板邊界＝從多專案工作區移除（1.7.0）─────────────────────────────
+  // 判定容差：游標必須真的離開 webview 可視範圍；單純貼邊（例如拖到最上／最下
+  // 一項排序）不算，避免誤觸移除。離開用 2px、回到框內需 10px（滯環）防止邊界抖動。
+  const DRAG_OUT_EDGE_PX = 2;
+  const DRAG_BACK_EDGE_PX = 10;
+
+  function isPointerOutsideFrame(event, wasOutside = false) {
+    if (!event) return false;
+    const edge = wasOutside ? DRAG_BACK_EDGE_PX : DRAG_OUT_EDGE_PX;
+    const { clientX, clientY } = event;
+    return (
+      clientX < edge ||
+      clientY < edge ||
+      clientX > window.innerWidth - edge ||
+      clientY > window.innerHeight - edge
+    );
+  }
+
+  /**
+   * 切換「放開即移除」提示遮罩
+   * @param {boolean} active
+   * @param {string} [name] 專案名稱
+   */
+  function setDropRemoveState(active, name = '') {
+    document.body.classList.toggle('is-drop-removing', active);
+    const overlay = document.getElementById('drag-remove-overlay');
+    if (!overlay) return;
+    overlay.classList.toggle('hidden', !active);
+    if (active) {
+      const textEl = document.getElementById('drag-remove-text');
+      if (textEl) {
+        textEl.textContent = I18nModule.t('drag_remove_hint', { name });
+      }
     }
   }
 
@@ -531,6 +568,9 @@
 
   /**
    * 全卡片專注拖曳排序引擎（位置快取防強制重排，右側開關完全解耦）
+   * 手勢二：拖出工具面板邊界後放開 ⇒ 從多專案工作區移除該專案（1.7.0）
+   *   - 只在 `.code-workspace` 多專案工作區生效（單資料夾視窗僅排序）
+   *   - 專案資料夾本體不動，使用者仍可用「將資料夾加入工作區」加回
    */
   function startCardPointerInteraction(item, folderData, startEvent) {
     if (startEvent.button !== 0) return; // 僅限滑鼠左鍵
@@ -538,11 +578,38 @@
       return; // 點擊右側開關時直接略過拖曳判定
     }
 
+    // 前一個手勢若因事件遺失而未收尾，先強制取消，避免狀態疊加
+    if (activeCardDragCleanup) activeCardDragCleanup();
+
     const startY = startEvent.clientY;
+    const startPath = item.getAttribute('data-path') || folderData?.path || '';
+    const itemName = folderData?.name || item.querySelector('.folder-name')?.textContent || '';
+    const workspaceState = (vscode.getState() || {}).workspace;
+    const canRemoveFromWorkspace = Boolean(workspaceState && workspaceState.hasMultiRoot);
     let isDragging = false;
+    let isOutsideFrame = false;
     let cachedItemCenters = [];
 
+    /**
+     * 更新「已拖出邊界」狀態並同步遮罩；非多專案工作區一律視為未拖出
+     * @param {boolean} next
+     */
+    const setOutsideFrame = (next) => {
+      const value = canRemoveFromWorkspace ? next : false;
+      if (value === isOutsideFrame) return;
+      isOutsideFrame = value;
+      setDropRemoveState(value, itemName);
+      if (value) clearDropIndicators();
+    };
+
     const onPointerMove = (moveEvent) => {
+      // 邊界外放開時 webview 可能收不到 pointerup；游標再進入時 buttons 已為 0
+      // ⇒ 視為手勢結束，避免卡片卡在拖曳狀態（此時仍依 isOutsideFrame 決定是否移除）
+      if (isDragging && (moveEvent.buttons & 1) === 0) {
+        finish(true);
+        return;
+      }
+
       const deltaY = moveEvent.clientY - startY;
 
       // 只要開始滑動超過 2px 即啟動流暢拖曳
@@ -562,23 +629,39 @@
         });
       }
 
-      if (isDragging && draggedFolderItem && cachedItemCenters.length > 0) {
+      if (!isDragging) return;
+
+      // 1. 已拖出面板邊界 ⇒ 進入「放開即移除」模式，停止排序判定
+      setOutsideFrame(isPointerOutsideFrame(moveEvent, isOutsideFrame));
+      if (isOutsideFrame) {
+        moveEvent.preventDefault();
+        return;
+      }
+
+      if (draggedFolderItem && cachedItemCenters.length > 0) {
         moveEvent.preventDefault();
         const y = moveEvent.clientY;
 
-        // 1. 游標在第一項中心點之上 -> 第一項頂部
+        // 2. 邊界微幅自動滾動
+        if (y < 35) {
+          window.scrollBy({ top: -10, behavior: 'auto' });
+        } else if (y > window.innerHeight - 35) {
+          window.scrollBy({ top: 10, behavior: 'auto' });
+        }
+
+        // 3. 游標在第一項中心點之上 -> 第一項頂部
         if (y <= cachedItemCenters[0].center) {
           updateDropIndicator(cachedItemCenters[0].el, 'top');
           return;
         }
 
-        // 2. 游標在最後一項中心點之下 -> 最後一項底部
+        // 4. 游標在最後一項中心點之下 -> 最後一項底部
         if (y >= cachedItemCenters[cachedItemCenters.length - 1].center) {
           updateDropIndicator(cachedItemCenters[cachedItemCenters.length - 1].el, 'bottom');
           return;
         }
 
-        // 3. 連續無死角區間投影（消除任何控件間隙與 margin 盲區）
+        // 5. 連續無死角區間投影（消除任何控件間隙與 margin 盲區）
         for (let i = 0; i < cachedItemCenters.length - 1; i++) {
           const cur = cachedItemCenters[i];
           const next = cachedItemCenters[i + 1];
@@ -592,31 +675,81 @@
       }
     };
 
-    const onPointerUp = () => {
+    /**
+     * 收尾手勢
+     * @param {boolean} removeIfOutside 是否允許「在邊界外放開 ⇒ 移除」
+     */
+    const finish = (removeIfOutside) => {
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('pointercancel', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerCancel);
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('blur', onBlur, true);
+      document.removeEventListener('pointerout', onLeaveFrame, true);
+      document.removeEventListener('mouseleave', onLeaveFrame, true);
+      activeCardDragCleanup = null;
 
-      if (isDragging) {
-        document.body.classList.remove('is-pointer-dragging');
-        item.classList.remove('is-dragging');
-
-        if (draggedFolderItem && currentDropTarget && currentDropTarget !== draggedFolderItem) {
-          const targetSibling = currentDropDirection === 'top' ? currentDropTarget : currentDropTarget.nextSibling;
-          WorkspaceModule.dom.folderList.insertBefore(draggedFolderItem, targetSibling);
-          WorkspaceModule.commitFolderReorder();
-        }
-
+      if (!isDragging) {
+        setOutsideFrame(false);
         clearDropIndicators();
-        draggedFolderItem = null;
-        isDragging = false;
-        cachedItemCenters = [];
+        return;
       }
+
+      document.body.classList.remove('is-pointer-dragging');
+      item.classList.remove('is-dragging');
+
+      if (removeIfOutside && isOutsideFrame && canRemoveFromWorkspace && startPath) {
+        // 樂觀：先淡出卡片，後端立即寫入工作區檔並回推最新清單
+        item.classList.add('is-removing');
+        vscode.postMessage({ type: 'removeWorkspaceFolder', path: startPath });
+      } else if (draggedFolderItem && currentDropTarget && currentDropTarget !== draggedFolderItem) {
+        const targetSibling = currentDropDirection === 'top' ? currentDropTarget : currentDropTarget.nextSibling;
+        WorkspaceModule.dom.folderList.insertBefore(draggedFolderItem, targetSibling);
+        WorkspaceModule.commitFolderReorder();
+      }
+
+      clearDropIndicators();
+      setDropRemoveState(false);
+      draggedFolderItem = null;
+      isOutsideFrame = false;
+      isDragging = false;
+      cachedItemCenters = [];
     };
+
+    const onPointerUp = () => finish(true);
+    const onPointerCancel = () => finish(false);
+
+    // Esc 中途放棄（不移除、不排序）
+    const onKeyDown = (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      finish(false);
+    };
+
+    // 視窗失焦（例如切到其他應用程式）一律視為取消，保留原清單；
+    // 只認真正的視窗失焦，忽略頁面內元素冒泡到 window 的 blur（capture 攔截）
+    const onBlur = (e) => {
+      if (e && e.target && e.target !== window && e.target !== document) return;
+      finish(false);
+    };
+
+    // 游標離開 webview（含側邊欄 webview 的 iframe 邊界）⇒ 預告「放開即移除」
+    const onLeaveFrame = (e) => {
+      if (!isDragging) return;
+      if (e && e.relatedTarget) return; // 只是移到文件內其他元素
+      setOutsideFrame(true);
+    };
+
+    activeCardDragCleanup = () => finish(false);
 
     window.addEventListener('pointermove', onPointerMove, { passive: false });
     window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('pointercancel', onPointerUp);
+    window.addEventListener('pointercancel', onPointerCancel);
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    window.addEventListener('blur', onBlur, { capture: true });
+    document.addEventListener('pointerout', onLeaveFrame, { capture: true });
+    document.addEventListener('mouseleave', onLeaveFrame, { capture: true });
   }
 
   const WorkspaceModule = {

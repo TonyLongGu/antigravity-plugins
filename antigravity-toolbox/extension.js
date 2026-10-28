@@ -196,6 +196,12 @@ class ToolboxViewProvider {
         this.pushStatus();
         break;
 
+      case 'removeWorkspaceFolder':
+        // 拖曳出面板邊界後放開：從 .code-workspace 移除該專案（專案資料夾本身不動）
+        workspaceService.removeWorkspaceFolder(msg.path, this);
+        this.pushStatus(0);
+        break;
+
       case 'revealPath':
         if (msg.path && fs.existsSync(msg.path)) {
           systemService.openFolderInside(msg.path);

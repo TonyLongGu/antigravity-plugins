@@ -1076,6 +1076,13 @@ body.is-switch-dragging * {
   outline: 1px dashed var(--accent-cyan);
 }
 
+/* 已放開於面板外：等待後端移除（淡出，避免卡片回彈） */
+.folder-item.is-removing {
+  opacity: 0 !important;
+  transform: scale(0.98);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
 /* 拖曳目標指示線 (使用 box-shadow 零版面重排與抖動) */
 .folder-item.drag-over-top {
   box-shadow: 0 -2px 0 0 var(--accent-cyan) !important;
@@ -1472,6 +1479,66 @@ body.is-switch-dragging * {
   font-family: var(--font-mono);
 }
 
+
+/* ==============================================================================
+   拖曳出面板邊界：放開即從多專案工作區移除（1.7.0）
+   ============================================================================== */
+body.is-drop-removing,
+body.is-drop-removing * {
+  cursor: no-drop !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.drag-remove-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md);
+  background: var(--accent-red-soft);
+  border: 2px dashed var(--accent-red);
+  pointer-events: none;
+  animation: drag-remove-pulse 1.2s ease-in-out infinite;
+}
+
+.drag-remove-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  max-width: 260px;
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background: rgba(24, 24, 27, 0.94);
+  border: 1px solid var(--accent-red);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  color: var(--text-primary);
+  text-align: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.drag-remove-card svg.lucide-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--accent-red);
+}
+
+.drag-remove-sub {
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+@keyframes drag-remove-pulse {
+  0%, 100% { background-color: rgba(244, 63, 94, 0.08); }
+  50% { background-color: rgba(244, 63, 94, 0.18); }
+}
 
 /* ==============================================================================
    Toast 提示 (標準樣式：對齊 AI上下文檢視器)

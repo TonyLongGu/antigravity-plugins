@@ -836,6 +836,64 @@ function resetWorkspaceNames(provider = null) {
 }
 
 /**
+ * 從多專案工作區移除單一專案（面板「拖出邊界後放開」手勢觸發）
+ *   - 只改 `.code-workspace`（`folders`／`disabledFolders`／`folderOrder`），
+ *     不動磁碟上的專案資料夾，使用者仍可事後用「將資料夾加入工作區」加回來。
+ *   - 立即寫檔（不等 80ms 防抖）：移除是破壞性操作，後續 `pushStatus(0)` 必須讀到新內容。
+ * @param {string} targetPath 專案路徑（可為相對 `wsDir` 的路徑）
+ * @param {object} [provider]
+ * @returns {boolean} 是否真的移除
+ */
+function removeWorkspaceFolder(targetPath, provider = null) {
+  const ctx = loadWorkspaceContext(provider);
+  if (!ctx) {
+    const msg = '目前尚未開啟任何 .code-workspace 多專案工作區！';
+    if (provider?.pushToast) provider.pushToast(msg, 'warning');
+    else vscode.window.showWarningMessage(msg);
+    return false;
+  }
+
+  if (!targetPath) return false;
+
+  const { wsPath, wsDir, json } = ctx;
+  // 先自癒重複登記，確保同路徑的殘留副本一起被清掉
+  dedupeWorkspaceItems(json, wsDir);
+
+  const targetCanonical = getCanonicalPath(targetPath, wsDir).toLowerCase();
+  const matchesTarget = (item) =>
+    getCanonicalPath(item?.path || '', wsDir).toLowerCase() === targetCanonical;
+
+  const activeIndex = json.folders.findIndex(matchesTarget);
+  const disabledIndex = json.disabledFolders.findIndex(matchesTarget);
+
+  if (activeIndex === -1 && disabledIndex === -1) {
+    const msg = '未找到指定的專案資料夾，可能已被移除。';
+    if (provider?.pushToast) provider.pushToast(msg, 'warning');
+    else vscode.window.showWarningMessage(msg);
+    return false;
+  }
+
+  if (activeIndex !== -1) json.folders.splice(activeIndex, 1);
+  if (disabledIndex !== -1) json.disabledFolders.splice(disabledIndex, 1);
+
+  // folderOrder 是清單顯示與其他功能（腳本排序、排除首專案）的排序依據，必須同步剔除；
+  // 若原本沒有 folderOrder（舊工作區檔），順手由剩餘專案重建，避免後續分析還要再寫一次檔
+  json.folderOrder = (Array.isArray(json.folderOrder) ? json.folderOrder : []).filter(
+    (p) => getCanonicalPath(p || '', wsDir).toLowerCase() !== targetCanonical
+  );
+  syncFolderOrder(json, wsDir);
+
+  saveWorkspaceJson(wsPath, json, true);
+  // 專案已不在註冊清單 ⇒ workspacePaths 縮小，本工作區對應的 Skills 連結會一併解除
+  maybeSyncSkills(json, wsDir, provider);
+
+  const msg = '已將專案從多專案工作區移除！';
+  if (provider?.pushToast) provider.pushToast(msg, 'success');
+  else vscode.window.showInformationMessage(msg);
+  return true;
+}
+
+/**
  * 重新排列工作區專案順序 (依據前端拖曳傳遞的新順序)
  * @param {string[]} newOrderPaths 新的專案路徑順序陣列
  * @param {object} [provider]
@@ -877,5 +935,6 @@ module.exports = {
   invertWorkspaceFolders,
   fixWorkspaceDuplicates,
   resetWorkspaceNames,
+  removeWorkspaceFolder,
   reorderWorkspaceFolders,
 };
