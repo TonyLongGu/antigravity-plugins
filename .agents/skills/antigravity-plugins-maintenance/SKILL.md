@@ -46,7 +46,7 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 | :--- | :--- |
 | 圖譜位置 | `graphify-out/`（根 `.gitignore` 已排除，**勿 commit**） |
 | 規模 | **1735** nodes / **3139** edges / **107** communities（66 顯示、41 thin 省略） |
-| 建圖標記 | `Built from commit` `c5443cfb`（＝HEAD；工作樹另有未提交的 toolbox 1.7.0 變更）。再跑 `update` 回 `No code-graph topology changes detected` ⇒ 內容與工作樹一致、只有標記落後（無害） |
+| 建圖標記 | `Built from commit` `2ae275a7`（toolbox 1.7.0 feature commit；之後的 `.md`／`.css` docs commit 不改變圖譜內容）。再跑 `update` 回 `No code-graph topology changes detected` ⇒ 內容與工作樹一致、只有標記可能落後（無害） |
 | 語料 | 106 files · ~137,927 words；**74 個 code 檔**被抽取（AST）；30 檔未分類（`.bat` 14、無副檔名 10、`.css` 6） |
 | 抽取品質 | 95% EXTRACTED／5% INFERRED（144 邊，平均信心 0.85）；**0 input／0 output token＝0 元** |
 | 產物大小 | `GRAPH_REPORT.md` **17.9 KB**（18,326 B，可整讀）、`graph.json` **2.1 MB**（禁整讀）、`graph.html` 約 1.7 MB |
