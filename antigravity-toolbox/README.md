@@ -11,7 +11,8 @@ VS Code 相容 IDE 原生側邊欄擴充套件（Cursor、VS Code、VS Code Insi
 1. **多專案工作區管理 (Workspace)**：
    - 即時偵測當前開啟的 `.code-workspace` 多專案工作區。
    - 智慧標記同名專案衝突與同層連帶專案（如 `Unity\MapleRealm` 與 `Spine\MapleRealm`，以及同層的 `GitHub\Antigravity` 與 `GitHub\ai`）。
-   - **一鍵「自動修正同名專案名稱」**：自動在工作區 JSON 中將同名專案及同層專案補上「父資料夾 \ 專案名」前綴，保持命名一致性。
+   - 🧹 **重複登記自癒**：VS Code 對「已載入」的專案再執行一次「將資料夾加入工作區」時，會把同一路徑**再插一筆**（清單出現兩份同名專案、開關只切到其中一份）。面板每次分析都會自動移除重複項（含 `folders`／`disabledFolders` 跨清單重複，兩邊都有時以「啟用」為準），並在提示列回報移除筆數；同時修掉了「有重複項時每次都空寫工作區檔」的舊行為。
+   - **一鍵「自動修正工作區重複專案」**：一次處理①重複登記的路徑（真正移除，不只是改名）②同名專案及同層專案（補上「父資料夾 \ 專案名」前綴），保持命名一致性。
    - 點擊專案項目可直接在 Windows 檔案總管開啟該專案目錄。
    - 🔗 **開關專案時同步全域 Skills（Codex / Cline）**：
      - **開啟**：立即依啟用專案對齊 `~/.agents/skills`，之後跟隨專案開關與專案內 Skills 目錄新增／刪除。
@@ -122,7 +123,7 @@ Cursor、VS Code 與 Antigravity 都實作 VS Code Extension API（`require('vsc
 extension.js                        擴充套件進入點（Webview 訊息路由、命令註冊、事件監聽）
 services/
   systemService.js                  IDE 偵測、全域路徑對照、環境特徵、檔案總管過濾
-  workspaceService.js               多專案工作區分析與同名修正
+  workspaceService.js               多專案工作區分析、重複登記自癒與同名修正
   scriptService.js                  專案腳本執行器
   brainService.js                   對話記憶庫分派層（依環境轉派 Cursor / Antigravity / Copilot）
   copilotChatService.js             Copilot Chat 對話紀錄統計與清理（含索引同步）

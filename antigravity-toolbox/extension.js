@@ -308,6 +308,9 @@ class ToolboxViewProvider {
     this._pushTimer = setTimeout(async () => {
       if (this._view || this._panel) {
         const workspaceStatus = workspaceService.analyzeWorkspace();
+        if (workspaceStatus.deduplicatedCount > 0) {
+          this.pushToast(`已自動移除 ${workspaceStatus.deduplicatedCount} 筆重複登記的專案`, 'success');
+        }
         const scriptsStatus = scriptService.getWorkspaceScripts();
         const brainStatus = await brainService.getBrainStats();
         const settingsStatus = systemService.getExplorerSettings();

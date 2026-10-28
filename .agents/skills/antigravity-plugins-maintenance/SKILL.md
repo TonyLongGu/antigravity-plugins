@@ -32,8 +32,8 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 - **沒有程式碼共用**：2026-10-27 實測 2,974 條邊只有 **1 條**「跨外掛」（且是 `node:sqlite` builtin 的誤判）。真正的耦合是 **VS Code command id 字串**，見 §7。
 - **安裝邏輯只在根目錄 2 支腳本**：各外掛的 `install-extension.ps1`／`uninstall-extension.ps1`（共 12 支）自 2026-10-26 起是**薄殼**（各約 47 行、只剩語句沒有函式），只把自己的資料夾名稱當 `-Plugin` 轉呼叫根腳本。⇒ 改一次 6 個外掛同時生效。
 - **安裝政策＝一鍵全裝**（2026-10-26 起）：根 `install-all.ps1` 的 `-Target` 預設 `All`、`-Plugin` 省略＝全部外掛（可給資料夾名稱或 `package.json` 的 `name`，例：`-Plugin antigravity-quota-status` 或 `-Plugin ai-quota-status`）。`-Target Prompt` 在根腳本是互動選單，在 install 薄殼回溯相容為 `All`；uninstall 薄殼仍是選單。目標 IDE 由腳本自動偵測，使用者改用面板頂部「類別切換鈕」決定看哪一套 IDE 資料；不相容組合由 `$environmentExclusions` 自動略過。
-- **測試＝零相依、直接 `node <檔案>`**（無框架）。2026-10-28 實測 **8 支**：
-  `antigravity-toolbox/tests/`（`environment-flavor`／`mcp-label`／`skill-junction-sync`／`skill-sync-service`）、
+- **測試＝零相依、直接 `node <檔案>`**（無框架）。2026-10-28 實測 **9 支**：
+  `antigravity-toolbox/tests/`（`environment-flavor`／`mcp-label`／`skill-junction-sync`／`skill-sync-service`／`workspace-dedupe`）、
   `antigravity-ai-context-inspector/tests/`（`cline-snapshot`／`mcp-vscode-sources`／`snapshot-source-default`）、
   `antigravity-mcp-manager/tests/agent-host-enablement`。
 - **webview 前端**在 `media/`，**不進圖**（§3）。六個外掛都是 `main: ./extension.js`、CommonJS。
@@ -45,12 +45,12 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 | 項目 | 值 |
 | :--- | :--- |
 | 圖譜位置 | `graphify-out/`（根 `.gitignore` 已排除，**勿 commit**） |
-| 規模 | **1689** nodes / **3056** edges / **103** communities（62 顯示、41 thin 省略） |
-| 建圖標記 | `Built from commit` `fb64d432`；同日 HEAD＝`15f09a91`。再跑 `update` 回 `No code-graph topology changes detected; outputs left untouched.` ⇒ **內容與 HEAD 一致，只有標記落後**（無害過期） |
-| 語料 | 104 files · ~135,389 words；**71 個 code 檔**被抽取（AST）；30 檔未分類（`.bat` 14、無副檔名 10、`.css` 6） |
-| 抽取品質 | 95% EXTRACTED／5% INFERRED（142 邊，平均信心 0.85）；**0 input／0 output token＝0 元** |
-| 產物大小 | `GRAPH_REPORT.md` **17.2 KB**（可整讀）、`graph.json` **2.0 MB**（禁整讀）、`graph.html` 約 1.6 MB |
-| 節點分佈 | script-runner 455／inspector 342／toolbox 348／mcp-manager 265／quota-status 174／quick-access 79／根目錄 17（＋2 支根腳本各 4）／`node:sqlite` 1 |
+| 規模 | **1710** nodes / **3094** edges / **101** communities（61 顯示、40 thin 省略） |
+| 建圖標記 | `Built from commit` `5e5ea2e0`（＝HEAD；工作樹另有未提交的 toolbox 1.6.2 變更）。再跑 `update` 回 `No code-graph topology changes detected` ⇒ 內容與工作樹一致、只有標記落後（無害） |
+| 語料 | 105 files · ~136,368 words；**73 個 code 檔**被抽取（AST）；30 檔未分類（`.bat` 14、無副檔名 10、`.css` 6） |
+| 抽取品質 | 95% EXTRACTED／5% INFERRED（143 邊，平均信心 0.85）；**0 input／0 output token＝0 元** |
+| 產物大小 | `GRAPH_REPORT.md` **17.1 KB**（17,488 B，可整讀）、`graph.json` **2.1 MB**（禁整讀）、`graph.html` 約 1.7 MB |
+| 節點分佈 | script-runner 455／inspector 342／toolbox **369**／mcp-manager 265／quota-status 174／quick-access 79／根目錄 26（含 `node:sqlite` 1 與 2 支根腳本） |
 | 不進圖 | `*.css`、`*.html`、`locales/*.json`、`*.md`（`.graphifyignore` 已排除 `*.md`） |
 
 > ⚠️ 上表是**快照**。用前先驗（三行）：
@@ -141,7 +141,7 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 | :--- | :--- | ---: | :--- | :--- | :--- |
 | `antigravity-script-runner` | 1.7.1 | 455 | `scriptRunner.*`（8 個 id × `.en`／`.cn`＝24） | 無 view（右鍵選單＋媒體檢視） | `extension.js`／6 services（audio／video／image／stream） |
 | `antigravity-ai-context-inspector` | 1.2.6 | 342 | `antigravity.aiContext.*`（3 ＋ `.en`） | `antigravity.aiContextView`／`antigravity-ai-context-container` | `extension.js`／6 services（cline·cursor·vscode chat／contextScanner／mcpDetector） |
-| `antigravity-toolbox` | 1.6.1 | 348 | `antigravity.toolbox.*`（7 ＋ 4 `.en`） | `antigravity.toolboxView`／`antigravity-toolbox-container` | `extension.js`／6 services（brain／copilotChat／skillSync／workspace…） |
+| `antigravity-toolbox` | 1.6.2 | 369 | `antigravity.toolbox.*`（7 ＋ 4 `.en`） | `antigravity.toolboxView`／`antigravity-toolbox-container` | `extension.js`／6 services（brain／copilotChat／skillSync／workspace…） |
 | `antigravity-mcp-manager` | 1.9.3 | 265 | `antigravity.mcp.*`（6 ＋ `.en`） | `antigravity.mcpManagerView`／`mcp-manager-container` | `extension.js`／9 services |
 | `antigravity-quota-status` | 1.1.0（`name`＝`ai-quota-status`） | 174 | `aiQuota.*`（7，無變體） | 無 view（狀態列） | `extension.js`／4 services（quota／cursorAuth…） |
 | `antigravity-quick-access` | 1.2.6 | 79 | `antigravity.quickAccess.*`（20 × 3＝60） | `antigravity.quickAccessView` | `extension.js`／無 `services/` 目錄 |
@@ -153,6 +153,14 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 - 判定集中在 `antigravity-toolbox/services/systemService.js`：`getFlavorOverride()`（讀 `antigravity.uiFlavor`）→ `resolveFlavor()` → `getGlobalPaths(flavor)`／`collectBrainSessionDirs(flavor)`；`brainService` 以 `resolveFlavor()` 決定走 Brain 或 Copilot 分支。**切換類別後必須呼叫 `invalidateCache()`**（5 秒快取，否則顯示舊類別）。
 - 回歸測試：`node antigravity-toolbox/tests/environment-flavor.test.js`；i18n 鍵改動跑 `node antigravity-toolbox/tests/mcp-label.test.js`。
 - 切換鈕（1.6.0 起）＝**彩色 chips**，順序固定 `Antigravity` → `Copilot` → `Cursor` → `Cline`（不隨宿主變動）：`Antigravity`（綠 `#4ec9b0`）／`Copilot`（藍 `#9cdcfe`）／`Cursor`（橘 `#ce9178`）／`Cline`（紫 `#c586c0`）。只在啟用態上色、**不顯示對話筆數**（`flavorCounts`／`getFlavorSessionCounts` 已於 1.6.0 移除，勿再加回）。
+
+### 8.2 toolbox 的工作區清單（重複登記，1.6.2）
+
+- **症狀**：面板同時出現兩份同名專案；切換開關只有其中一份變色；`~/.agents/skills` 連結數與稽核「預期」對不上（實測預期 240／實際 129）。
+- **根因**：在 VS Code 對**已載入**的專案再執行一次「將資料夾加入工作區」，會把同一路徑**再插一筆**（`folders` 27 筆／唯一 14）；`findIndex` 只命中最前面那筆 ⇒ 切換後重複項分裂到 `disabledFolders`。
+- **舊行為的連鎖災難**：`syncFolderOrder()` 以「啟用清單長度＝唯一序列長度」比對，重複存在時永遠 `hasSequenceDiff = true` ⇒ 每次 `analyzeWorkspace()` 都 `saveWorkspaceJson()` **空寫**（`.bak` 與主檔同內容、時間戳只差 1 秒）；而 `fixWorkspaceDuplicates()` 只改 `name`、**不去重**，不會自癒。
+- **修正（1.6.2）**：新增 `workspaceService.dedupeWorkspaceItems(json, wsDir)`（同路徑只留第一筆；`folders` 與 `disabledFolders` 都有時**啟用優先**），並在 `analyzeWorkspace()`（自癒＋`deduplicatedCount`＋提示列回報）、`fixWorkspaceDuplicates()`、`setWorkspaceFolderEnabled()`／`batchSetWorkspaceFoldersEnabled()`（切換前先清）呼叫；`syncFolderOrder()` 改以**唯一集合**比對；命令標題改為「自動修正工作區重複專案（同名＋重複登記）」。
+- **回歸測試**：`node antigravity-toolbox/tests/workspace-dedupe.test.js`（D1 自癒／D2 不得再空寫／D3 同名＋重複同修／D4 切換只動一筆／D5 純函式邊界）。
 - **已無「自動」鈕**：未指定時以 `autoFlavor` 為作用中，點「目前宿主」那顆 chip 即回寫 `auto`。
 - `cline` 是**外掛而非宿主**（`auto` 永遠不會命中，只能手動點）。路徑見 `systemService.getGlobalPaths('cline')`：`~/.cline`，MCP 在 `data/settings`、對話在 `data/sessions`（舊版退回 `globalStorage/saoudrizwan.claude-dev/tasks`）。⚠️ 清理 Cline **只刪 session 資料夾**，不動 `data/db/*.db`（Cline 介面可能仍列出已刪項目）。
 - 樣式基準＝**toolbox** 的 `.flavor-chip`（`media/style.css`，2026-10-27 定案）；inspector 快照的 `.source-chip` 已對齊它（補 `font-family: inherit`／`white-space: nowrap`／`flex: 0 0 auto`，啟用態加 `font-weight: 600`，Cline 色值統一為 `.18`／`.5`）⇒ **改一邊必須同步改另一邊，以 toolbox 為準**。
@@ -221,6 +229,7 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 
 | 日期 | 變更 | 來源 |
 | :--- | :--- | :--- |
+| 2026-10-28 | toolbox `1.6.1 → 1.6.2`＝**工作區重複登記自癒**：新增 `dedupeWorkspaceItems()`（跨清單以啟用優先）、`analyzeWorkspace()` 自癒＋`deduplicatedCount`、切換開關前先去重、`syncFolderOrder()` 改唯一集合比對（修掉「有重複就每輪空寫工作區檔」）；新增 `workspace-dedupe`（D1–D5）測試；命令改名「自動修正工作區重複專案（同名＋重複登記）」；圖譜 1689→**1710** 節點／3056→**3094** 邊／103→**101** 社群（commit `5e5ea2e0`） | 使用者回報：重複「加入資料夾」後面板出現兩份專案 |
 | 2026-10-28 | `AGENTS.md` 改為**條例式技能索引**（740 → 約 640 字元、15 → 10 行）：不再綁死單一技能，改寫成「技能索引／先讀圖／收尾授權／知識落點」四條；§1 叫用方式、§11 維護段同步改為「主技能＋可擴充」 | 使用者指示：AGENTS 要極度精簡易讀，且日後會新增其他技能 |
 | 2026-10-28 | **架構回到「派送句 ＋ 本技能」**（第二次切換）：由 `AGENTS.md`（2,029 字元）拆回本檔，並把 `docs/project-notes.md`（§3–§12）整併進來後**刪除**（回收筒）；§3 改記 1689／3056／103 與「`update` 回 no topology changes ⇒ 標記落後但內容一致」；新增 §5 的 `2>&1` 假失敗坑、§10 第 6／11／13 條 | 使用者指示：知識收回技能，`AGENTS.md` 只留進場指引 |
 | 2026-10-27 | 圖譜 1642→**1689** 節點、2976→**3056** 邊、98→**103** 社群；`Built from commit` `fb64d432` | 收尾依 §5 執行 `graphify update .` |

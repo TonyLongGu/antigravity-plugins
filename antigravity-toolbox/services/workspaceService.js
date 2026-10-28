@@ -159,6 +159,54 @@ function saveWorkspaceJson(wsPath, json, immediate = false) {
 }
 
 /**
+ * 移除重複登記的專案（同一 canonical 路徑只保留第一筆；同時出現在兩份清單時「啟用優先」）
+ *   為什麼需要：VS Code「將資料夾加入工作區」對**已載入**的專案再按一次，會在 `folders` 內
+ *   再插一筆完全相同的路徑。重複項會讓後續 findIndex 只操作到第一筆，於是同名重複在
+ *   `folders`／`disabledFolders` 之間分裂；syncFolderOrder() 以序列長度比對時也會永遠判定
+ *   「順序有變」，導致每次 analyzeWorkspace() 都空寫一次工作區檔。
+ * @param {object} json .code-workspace JSON 物件（會被就地修正）
+ * @param {string} wsDir 工作區目錄路徑（相對路徑的基準）
+ * @returns {{ removed: Array<{path: string, source: string, reason?: string}>, changed: boolean }}
+ */
+function dedupeWorkspaceItems(json, wsDir) {
+  const removed = [];
+  const canonOf = (item) => getCanonicalPath(item?.path || '', wsDir).toLowerCase();
+
+  const dedupeList = (list, source) => {
+    if (!Array.isArray(list)) return [];
+    const seen = new Set();
+    return list.filter((item) => {
+      const canon = canonOf(item);
+      if (!canon) return true;
+      if (seen.has(canon)) {
+        removed.push({ path: item.path || '', source });
+        return false;
+      }
+      seen.add(canon);
+      return true;
+    });
+  };
+
+  const folders = dedupeList(json.folders, 'folders');
+  const activeSet = new Set(folders.map(canonOf));
+  const disabledFolders = dedupeList(json.disabledFolders, 'disabledFolders').filter((item) => {
+    const canon = canonOf(item);
+    if (canon && activeSet.has(canon)) {
+      removed.push({ path: item.path || '', source: 'disabledFolders', reason: 'enabled-wins' });
+      return false;
+    }
+    return true;
+  });
+
+  const changed = removed.length > 0;
+  if (changed) {
+    json.folders = folders;
+    json.disabledFolders = disabledFolders;
+  }
+  return { removed, changed };
+}
+
+/**
  * 同步與維護工作區專案的原始順序列表 (自動過濾已移除的幽靈路徑，並與檔案總管最新順序雙向對齊)
  * @param {object} json .code-workspace JSON 物件
  * @param {string} wsDir 工作區目錄路徑
@@ -205,6 +253,9 @@ function syncFolderOrder(json, wsDir) {
   const activeFoldersCanons = [];
   folders.forEach((f) => {
     const canon = getCanonicalPath(f.path || '', wsDir).toLowerCase();
+    // 同一路徑可能被重複登記（VS Code 對已載入的專案再「加入資料夾」會再插一筆）
+    // ⇒ 只取唯一路徑比對；否則長度永遠對不上，hasSequenceDiff 恆真、每次分析都重寫檔案
+    if (activeFoldersCanonMap.has(canon)) return;
     activeFoldersCanonMap.set(canon, f.path || '');
     activeFoldersCanons.push(canon);
   });
@@ -339,6 +390,7 @@ function analyzeWorkspace() {
       activeCount: folders.length,
       disabledCount: 0,
       duplicateCount: 0,
+      deduplicatedCount: 0,
       customNameCount: 0,
       hasCustomNames: false,
       syncSkillsOnFolderToggle: skillSyncService.isSyncEnabled(),
@@ -357,8 +409,10 @@ function analyzeWorkspace() {
   }
 
   const { wsPath, wsDir, wsName, json } = ctx;
+  // 自癒：先把重複登記的專案清掉（含 folders／disabledFolders 跨清單重複），再同步順序
+  const dedupeResult = dedupeWorkspaceItems(json, wsDir);
   const orderList = syncFolderOrder(json, wsDir);
-  if (orderList.hasChanged) {
+  if (dedupeResult.changed || orderList.hasChanged) {
     saveWorkspaceJson(wsPath, json);
   }
   const comparator = createFolderComparator(orderList, wsDir);
@@ -401,6 +455,7 @@ function analyzeWorkspace() {
     activeCount: activeInfos.length,
     disabledCount: disabledInfos.length,
     duplicateCount,
+    deduplicatedCount: dedupeResult.removed.length,
     customNameCount,
     hasCustomNames: customNameCount > 0,
     syncSkillsOnFolderToggle: skillSyncService.isSyncEnabled(),
@@ -425,6 +480,11 @@ function setWorkspaceFolderEnabled(targetPath, targetEnabled = null, provider = 
   }
 
   const { wsPath, wsDir, json } = ctx;
+  const dedupeResult = dedupeWorkspaceItems(json, wsDir);
+  if (dedupeResult.changed) {
+    // 先把重複項清掉再切換，否則只會切到第一筆、另一筆留在原清單
+    saveWorkspaceJson(wsPath, json);
+  }
   const orderList = syncFolderOrder(json, wsDir);
   const comparator = createFolderComparator(orderList, wsDir);
   const targetCanonical = getCanonicalPath(targetPath, wsDir).toLowerCase();
@@ -485,13 +545,14 @@ function batchSetWorkspaceFoldersEnabled(updates, provider = null) {
   }
 
   const { wsPath, wsDir, json } = ctx;
+  const dedupeResult = dedupeWorkspaceItems(json, wsDir);
   const orderList = syncFolderOrder(json, wsDir);
   const comparator = createFolderComparator(orderList, wsDir);
 
   if (!Array.isArray(json.folders)) json.folders = [];
   if (!Array.isArray(json.disabledFolders)) json.disabledFolders = [];
 
-  let hasChanged = false;
+  let hasChanged = dedupeResult.changed;
 
   updates.forEach(({ path: targetPath, enabled: targetEnabled }) => {
     if (!targetPath || typeof targetEnabled !== 'boolean') return;
@@ -669,6 +730,8 @@ function fixWorkspaceDuplicates(provider = null) {
   }
 
   const { wsPath, wsDir, json } = ctx;
+  // 一併處理「重複登記」：同名修正只改 name，重複的路徑必須真的移除
+  const dedupeResult = dedupeWorkspaceItems(json, wsDir);
   const allItems = [
     ...json.folders.map((item, index) => ({ item, index, source: 'folders' })),
     ...json.disabledFolders.map((item, index) => ({ item, index, source: 'disabledFolders' })),
@@ -706,15 +769,22 @@ function fixWorkspaceDuplicates(provider = null) {
     }
   });
 
-  if (changedCount > 0) {
+  if (changedCount > 0 || dedupeResult.changed) {
     saveWorkspaceJson(wsPath, json);
-    const msg = `已成功修正 ${changedCount} 個專案名稱為「父資料夾 \\ 專案名」格式（含同層連帶專案）！`;
+    const parts = [];
+    if (dedupeResult.removed.length > 0) {
+      parts.push(`移除 ${dedupeResult.removed.length} 筆重複登記的專案`);
+    }
+    if (changedCount > 0) {
+      parts.push(`修正 ${changedCount} 個專案名稱為「父資料夾 \\ 專案名」格式（含同層連帶專案）`);
+    }
+    const msg = `已${parts.join('；')}！`;
     if (provider?.pushToast) provider.pushToast(msg, 'success');
     else vscode.window.showInformationMessage(msg);
     return true;
   }
 
-  const msg = '目前工作區專案名稱良好，無同名衝突或待修正項目。';
+  const msg = '目前工作區專案名稱良好，無重複登記或同名衝突待修正。';
   if (provider?.pushToast) provider.pushToast(msg, 'info');
   else vscode.window.showInformationMessage(msg);
   return false;
@@ -795,6 +865,7 @@ module.exports = {
   loadWorkspaceContext,
   invalidateWorkspaceCache,
   saveWorkspaceJson,
+  dedupeWorkspaceItems,
   maybeSyncSkills,
   analyzeWorkspace,
   getFirstProjectFullPath,
