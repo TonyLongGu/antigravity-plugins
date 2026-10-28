@@ -7,7 +7,7 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 
 > 一句話：**這個 repo 的「事實」都集中在這裡；但事實會過期——§3 的數字一律先驗證再用。**
 > 分工：圖譜的**通用流程**（何時建、怎麼驗、怎麼回報）→ skill `graphify-knowledge-graph`（在別的技能包，本 repo 未必載入；沒載入就用本檔 §4／§9 的自足版本）。本技能只管**這個 repo 的常數、耦合與授權**。
-> 本檔＝**唯一真相**：repo 根 `AGENTS.md` 只有派送句；`docs/project-notes.md` 已於 2026-10-28 併回本檔後退役，不要再把知識寫回那裡。
+> 本檔＝**專案知識主技能**：repo 根 `AGENTS.md` 只有技能索引；`docs/project-notes.md` 已於 2026-10-28 併回本檔後**刪除**（回收筒可還原），⛔ 不要再建平行副本。
 
 ---
 
@@ -222,7 +222,7 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 | 日期 | 變更 | 來源 |
 | :--- | :--- | :--- |
 | 2026-10-28 | `AGENTS.md` 改為**條例式技能索引**（740 → 約 640 字元、15 → 10 行）：不再綁死單一技能，改寫成「技能索引／先讀圖／收尾授權／知識落點」四條；§1 叫用方式、§11 維護段同步改為「主技能＋可擴充」 | 使用者指示：AGENTS 要極度精簡易讀，且日後會新增其他技能 |
-| 2026-10-28 | **架構回到「派送句 ＋ 本技能」**（第二次切換）：由 `AGENTS.md`（2,029 字元）拆回本檔，並把 `docs/project-notes.md`（§3–§12）整併進來後退役；§3 改記 1689／3056／103 與「`update` 回 no topology changes ⇒ 標記落後但內容一致」；新增 §5 的 `2>&1` 假失敗坑、§10 第 6／11／13 條 | 使用者指示：知識收回技能，`AGENTS.md` 只留進場指引 |
+| 2026-10-28 | **架構回到「派送句 ＋ 本技能」**（第二次切換）：由 `AGENTS.md`（2,029 字元）拆回本檔，並把 `docs/project-notes.md`（§3–§12）整併進來後**刪除**（回收筒）；§3 改記 1689／3056／103 與「`update` 回 no topology changes ⇒ 標記落後但內容一致」；新增 §5 的 `2>&1` 假失敗坑、§10 第 6／11／13 條 | 使用者指示：知識收回技能，`AGENTS.md` 只留進場指引 |
 | 2026-10-27 | 圖譜 1642→**1689** 節點、2976→**3056** 邊、98→**103** 社群；`Built from commit` `fb64d432` | 收尾依 §5 執行 `graphify update .` |
 | 2026-10-27 | toolbox `1.6.0 → 1.6.1`＝修正「關掉最後一個專案後 `~/.agents/skills` 仍殘存 Skills」：新增連結歸屬（`workspacePaths`）與 `allowEmpty`、`skipped` 收斂成 2 種、解除連結改走 `fs.rmdirSync`；新增 `skill-junction-sync`（S1–S11）＋`skill-sync-service`（I1–I5）測試 | 使用者回報殘留連結 |
 | 2026-10-27 | inspector `1.2.5 → 1.2.6`＝Cline 快照改以「該對話自己的工作區」掃描（`_snapshotRoots`）；測試 10 → 12 項 | 使用者回報快照常駐規範判斷不正確 |
