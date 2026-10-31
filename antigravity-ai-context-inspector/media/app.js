@@ -786,6 +786,8 @@
         const btnRevealTitle = I18nModule.t('btn_reveal_rule_title');
         const btnOpenTitle = I18nModule.t('btn_open_rule_title');
         const sourceTitle = I18nModule.t('tag_source_title', { source: r.source || '' });
+        // 按需工作流程（`.clinerules/workflows`）與 paths 條件式共用此卡片，描述前先標示避免混淆
+        const kindLabel = r.kind === 'workflow' ? `${I18nModule.t('tag_kind_workflow')} · ` : '';
 
         return `
           <details class="context-item-details ${r.isInvoked ? 'highlight-invoked' : ''}" data-item-key="${escapeHtml(itemKey)}" ${isOpen ? 'open' : ''}>
@@ -802,7 +804,7 @@
                 <button class="action-btn btn-reveal-path" data-path="${escapeHtml(r.filePath)}" title="${escapeHtml(btnRevealTitle)}">${I18nModule.t('btn_reveal_path')}</button>
                 ${r.filePath ? `<button class="action-btn btn-open-file" data-path="${escapeHtml(r.filePath)}" title="${escapeHtml(btnOpenTitle)}">${I18nModule.t('btn_open_file')}</button>` : ''}
               </div>
-              <div class="item-desc">${escapeHtml(r.description || I18nModule.t('desc_none'))}</div>
+              <div class="item-desc">${escapeHtml(kindLabel + (r.description || I18nModule.t('desc_none')))}</div>
             </div>
           </details>
         `;

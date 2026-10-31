@@ -23,8 +23,8 @@
    - 🟣 **Cline 對話來源（跨宿主，任何 IDE 都能看）**：
      - **資料位置**：`~/.cline/data/sessions/<sessionId>/`（user 層級，Antigravity / Cursor / VS Code 共用同一份，因此不必管目前開的是哪個 IDE）。
      - **來源篩選 chips**：快照模式下可一鍵切換「Antigravity / Copilot / Cursor / Cline」（順序固定不隨宿主變動；各來源一色：綠／藍／橘／紫，chip 只顯示來源名稱）。**預設自動選中宿主原生來源**（裝在 Antigravity 就是 Antigravity、Cursor 是 Cursor、VS Code 是 Copilot），並記住最後一次選擇直到再次更改；**不提供「全部」chip**——再點一次作用中的 chip 即取消篩選（顯示全部來源）。只有一種來源時自動隱藏。對話清單項目**不再重複顯示來源徽章**（上方 chips 已表達類別），來源改放在項目 tooltip 供辨識。
-     - **足跡還原**：`skills` 工具呼叫 → 該技能標記為已調用；`<server>__<tool>` → 只留下真正被呼叫的 MCP 伺服器與工具；`read_files` / `editor` 觸及的 `.agents/rules`、`.clinerules` → 標記為已讀取的條件式規範。
-     - **Cline 設定**：`.clinerules`（檔案或資料夾）、`.clinerules/workflows/*.md`、全域 `~/Documents/Cline/Rules`、`~/.agents/skills` 全都會納入掃描；`~/.cline/data/workspaces/*/workspaceState.json` 與 `globalState.json` 的 rules / skills 開關若為關閉，該項目會被淡化並排除在快照之外。**規範 / 技能一律以「該對話自己的工作區」（session meta 的 `workspace_root`／`cwd`）為掃描範圍**，不是目前開著的視窗——用 `clineScope=all` 挑到其他工作區的對話時，不會再列出目前視窗的 `AGENTS.md` / `.clinerules`（多根視窗也不會全部列出）。
+     - **足跡還原**：`skills` 工具呼叫 → 該技能標記為已調用；`<server>__<tool>` → 只留下真正被呼叫的 MCP 伺服器與工具；`read_files` / `editor` 觸及的 `.agents/rules`、`.clinerules`、`.cline/rules` → 標記為已讀取的「條件式 / 按需」項目。條件式規範的顯示依據是 **frontmatter 是否有 `paths:`**，不是檔名。
+     - **Cline 設定**：`.clinerules`（檔案或資料夾）、`.cline/rules/`（官方第二條路徑）、`.clinerules/workflows/*.md`、`.cline/workflows/*.md`、全域 `~/Documents/Cline/Rules`、`~/.agents/skills` 全都會納入掃描。分類依 Cline 4.x 真實行為：有 `paths:` ⇒ **條件式**（依當前開著的檔／提到的路徑自動啟用）、無 `paths:` ⇒ **常駐**（每次對話載入）、`workflows/` ⇒ **按需工作流程**（需叫用才載入，卡片內標示「工作流程」）。`~/.cline/data/workspaces/*/workspaceState.json` 與 `globalState.json` 的 rules / skills 開關若為關閉，該項目會被淡化並排除在快照之外。**規範 / 技能一律以「該對話自己的工作區」（session meta 的 `workspace_root`／`cwd`）為掃描範圍**，不是目前開著的視窗——用 `clineScope=all` 挑到其他工作區的對話時，不會再列出目前視窗的 `AGENTS.md` / `.clinerules`（多根視窗也不會全部列出）。
 2. **一鍵跳轉開啟**：點擊任一項目旁的 `📄 開啟` 按鈕，立即在編輯器開啟對應的 `.md` 檔案。
 3. **即時過濾與搜尋**：輸入關鍵字即時篩選 Rules / Skills / MCP 名稱與描述。
 4. **一鍵複製摘要**：點擊頂部 `📋` 按鈕，將整份生效上下文整理為 Markdown 格式並複製至剪貼簿。

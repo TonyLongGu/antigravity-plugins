@@ -12,15 +12,39 @@ class ContextScannerService {
 
   /**
    * 提取 YAML Frontmatter 中的 key-value (安全解析)
+   * `paths` 是 Cline 官方 Conditional Rules 的判定依據（有值＝條件式、無值＝常駐），
+   * 支援三種寫法：區塊清單、單行字串、行內陣列（paths: ["a/**", "b/**"]）。
    */
   static parseFrontmatter(content) {
-    const result = { name: '', description: '', trigger: '' };
+    const result = { name: '', description: '', trigger: '', paths: [] };
     if (!content || !content.startsWith('---')) return result;
     const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
     if (!match) return result;
 
+    const pushPath = (raw) => {
+      const value = String(raw == null ? '' : raw).trim().replace(/^["']|["']$/g, '').trim();
+      if (value) result.paths.push(value);
+    };
+
     const lines = match[1].split(/\r?\n/);
+    let inPaths = false;
     for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      if (inPaths) {
+        if (trimmed.startsWith('-')) {
+          pushPath(trimmed.replace(/^-+\s*/, ''));
+          continue;
+        }
+        // 不是清單項目 ⇒ 換到別的 key（或清單結束）
+        if (/^[A-Za-z_][\w-]*\s*:/.test(trimmed)) inPaths = false;
+        else {
+          pushPath(trimmed);
+          continue;
+        }
+      }
+
       const parts = line.split(':');
       if (parts.length >= 2) {
         const key = parts[0].trim();
@@ -28,6 +52,16 @@ class ContextScannerService {
         if (key === 'name') result.name = value;
         if (key === 'description') result.description = value;
         if (key === 'trigger') result.trigger = value;
+        if (key === 'paths') {
+          const inline = value.trim();
+          if (inline.startsWith('[')) {
+            inline.replace(/^\[/, '').replace(/\]$/, '').split(',').forEach(pushPath);
+          } else if (inline) {
+            pushPath(inline);
+          } else {
+            inPaths = true;
+          }
+        }
       }
     }
     return result;
@@ -93,6 +127,8 @@ class ContextScannerService {
               isGlobal: isGlobal,
               isAlwaysActive: isAlwaysActive,
               trigger: meta.trigger || (isAlwaysActive ? 'always_on' : 'model_decision'),
+              paths: meta.paths,
+              hasPaths: meta.paths.length > 0,
               description: desc,
               lineCount: lines.length,
               sizeBytes: stat.size
@@ -331,53 +367,32 @@ class ContextScannerService {
 
   /**
    * Cline 規則與技能（與宿主 IDE 無關）
-   * - 工作區：`.clinerules`（可為檔案或資料夾）、`.clinerules/workflows/*.md`（條件式 slash command）
+   * - 工作區規範：`.clinerules/`、`.cline/rules/`（官方兩條合法路徑，可為資料夾或單一檔案）
+   * - 工作流程：`.clinerules/workflows/*.md`、`.cline/workflows/*.md`（slash command，叫用才載入）
    * - 全域：`~/Documents/Cline/Rules`（Cline 官方全域規則位置）
    * - 全域技能：`~/.agents/skills`（Cline 與 Codex 共用）
+   * 分類依據＝Cline 4.x 真實行為（不是檔名）：
+   *   - frontmatter 有 `paths:` ⇒ 條件式（依當前開著的檔／提到的路徑自動啟用）
+   *   - 沒有 `paths:` ⇒ 常駐（每次對話都載入）
+   *   - `workflows/` ⇒ 按需工作流程（既不常駐、也不是條件式）
    * 這裡只負責「掃描並標記」，啟停狀態由 ClineSessionService.applyToggleState 依開關標注。
    */
   static async scanClineSources(result, options = {}) {
     const userHome = this.getUserHome();
 
     for (const ws of result.workspaces || []) {
-      const clinerulesPath = path.join(ws.path, '.clinerules');
-      let stat = null;
-      try {
-        stat = fs.existsSync(clinerulesPath) ? fs.statSync(clinerulesPath) : null;
-      } catch {
-        stat = null;
-      }
-      if (!stat) continue;
-
-      if (stat.isDirectory()) {
-        const rules = await this.scanRulesInDir(clinerulesPath, ws.name, false, ws.index);
-        for (const rule of rules) {
-          this._pushClineRule(result, {
-            ...rule,
-            isAlwaysActive: true,
-            trigger: 'always_on',
-            origin: 'cline'
-          });
+      const layouts = [
+        {
+          rulesPath: path.join(ws.path, '.clinerules'),
+          workflowsPath: path.join(ws.path, '.clinerules', 'workflows')
+        },
+        {
+          rulesPath: path.join(ws.path, '.cline', 'rules'),
+          workflowsPath: path.join(ws.path, '.cline', 'workflows')
         }
-        const workflows = await this.scanRulesInDir(path.join(clinerulesPath, 'workflows'), ws.name, false, ws.index);
-        for (const workflow of workflows) {
-          this._pushClineRule(result, {
-            ...workflow,
-            isAlwaysActive: false,
-            trigger: 'workflow',
-            origin: 'cline'
-          });
-        }
-      } else {
-        const rule = await this.parseSingleRuleFile(clinerulesPath, ws.name, false, ws.index);
-        if (rule) {
-          this._pushClineRule(result, {
-            ...rule,
-            isAlwaysActive: true,
-            trigger: 'always_on',
-            origin: 'cline'
-          });
-        }
+      ];
+      for (const layout of layouts) {
+        await this._scanClineLayout(result, ws, layout);
       }
     }
 
@@ -394,6 +409,58 @@ class ContextScannerService {
 
     const globalSkills = await this.scanSkillsInDir(path.join(userHome, '.agents', 'skills'), '使用者', 'global', 1000);
     this._mergeSkills(result.skills.global, globalSkills);
+  }
+
+  /**
+   * 掃描單一 Cline 佈局（規範目錄＋工作流程目錄）
+   */
+  static async _scanClineLayout(result, ws, layout) {
+    let stat = null;
+    try {
+      stat = fs.existsSync(layout.rulesPath) ? fs.statSync(layout.rulesPath) : null;
+    } catch {
+      stat = null;
+    }
+
+    if (stat && stat.isDirectory()) {
+      const rules = await this.scanRulesInDir(layout.rulesPath, ws.name, false, ws.index);
+      for (const rule of rules) {
+        this._pushClineRule(result, this._toClineEntry(rule, 'rule'));
+      }
+    } else if (stat && stat.isFile()) {
+      // `.clinerules` 允許是單一檔案
+      const rule = await this.parseSingleRuleFile(layout.rulesPath, ws.name, false, ws.index);
+      if (rule) this._pushClineRule(result, this._toClineEntry(rule, 'rule'));
+    }
+
+    const workflows = await this.scanRulesInDir(layout.workflowsPath, ws.name, false, ws.index);
+    for (const workflow of workflows) {
+      this._pushClineRule(result, this._toClineEntry(workflow, 'workflow'));
+    }
+  }
+
+  /**
+   * 依 Cline 真實語意標記 kind／isAlwaysActive：
+   * `paths:` ⇒ 條件式；無 frontmatter ⇒ 常駐；workflows ⇒ 按需工作流程。
+   */
+  static _toClineEntry(rule, kind) {
+    if (kind === 'workflow') {
+      return {
+        ...rule,
+        kind: 'workflow',
+        isAlwaysActive: false,
+        trigger: 'workflow',
+        origin: 'cline'
+      };
+    }
+    const hasPaths = Boolean(rule.hasPaths);
+    return {
+      ...rule,
+      kind: hasPaths ? 'conditional' : 'always',
+      isAlwaysActive: !hasPaths,
+      trigger: hasPaths ? 'conditional_paths' : 'always_on',
+      origin: 'cline'
+    };
   }
 
   static _pushClineRule(result, rule) {
@@ -598,6 +665,8 @@ class ContextScannerService {
         isGlobal: isGlobal,
         isAlwaysActive: isAlwaysActive,
         trigger: meta.trigger || (isAlwaysActive ? 'always_on' : 'model_decision'),
+        paths: meta.paths,
+        hasPaths: meta.paths.length > 0,
         description: desc,
         lineCount: lines.length,
         sizeBytes: stat.size

@@ -53,8 +53,9 @@
       btn_title_mode_name: '檔案名稱',
       btn_title_mode_name_tooltip: '目前顯示：檔案名稱（點擊切換為：內文標題）',
 
-      // 卡片 2：條件式規範
+      // 卡片 2：條件式規範（含按需工作流程，項目以「工作流程」前綴區分）
       card_rules_conditional_title: '條件式規範 (Conditional)',
+      tag_kind_workflow: '工作流程',
 
       // 卡片 3：技能清單
       card_skills_title: '技能清單 (Skills)',
@@ -175,6 +176,7 @@
       btn_title_mode_name_tooltip: '当前显示：文件名（点击切换为：正文标题）',
 
       card_rules_conditional_title: '条件式规范 (Conditional)',
+      tag_kind_workflow: '工作流程',
 
       card_skills_title: '技能清单 (Skills)',
       btn_title_mode_skill_title_tooltip: '当前显示：正文标题（点击切换为：技能名称）',
@@ -293,6 +295,7 @@
 
       // Card 2: Conditional Rules
       card_rules_conditional_title: 'Conditional Rules',
+      tag_kind_workflow: 'Workflow',
 
       // Card 3: Skills List
       card_skills_title: 'Skills',
