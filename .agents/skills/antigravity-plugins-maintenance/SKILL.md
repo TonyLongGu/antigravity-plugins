@@ -32,9 +32,9 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 - **沒有程式碼共用**：2026-10-27 實測 2,974 條邊只有 **1 條**「跨外掛」（且是 `node:sqlite` builtin 的誤判）。真正的耦合是 **VS Code command id 字串**，見 §7。
 - **安裝邏輯只在根目錄 2 支腳本**：各外掛的 `install-extension.ps1`／`uninstall-extension.ps1`（共 12 支）自 2026-10-26 起是**薄殼**（各約 47 行、只剩語句沒有函式），只把自己的資料夾名稱當 `-Plugin` 轉呼叫根腳本。⇒ 改一次 6 個外掛同時生效。
 - **安裝政策＝一鍵全裝**（2026-10-26 起）：根 `install-all.ps1` 的 `-Target` 預設 `All`、`-Plugin` 省略＝全部外掛（可給資料夾名稱或 `package.json` 的 `name`，例：`-Plugin antigravity-quota-status` 或 `-Plugin ai-quota-status`）。`-Target Prompt` 在根腳本是互動選單，在 install 薄殼回溯相容為 `All`；uninstall 薄殼仍是選單。目標 IDE 由腳本自動偵測，使用者改用面板頂部「類別切換鈕」決定看哪一套 IDE 資料；不相容組合由 `$environmentExclusions` 自動略過。
-- **測試＝零相依、直接 `node <檔案>`**（無框架）。2026-10-31 實測 **11 支**：
+- **測試＝零相依、直接 `node <檔案>`**（無框架）。2026-10-31 實測 **12 支**：
   `antigravity-toolbox/tests/`（`environment-flavor`／`mcp-label`／`skill-junction-sync`／`skill-sync-service`／`workspace-dedupe`／`workspace-remove`）、
-  `antigravity-ai-context-inspector/tests/`（`cline-snapshot`／`cline-conditional-rules`／`mcp-vscode-sources`／`snapshot-source-default`）、
+  `antigravity-ai-context-inspector/tests/`（`cline-snapshot`／`cline-conditional-rules`／`mcp-vscode-sources`／`skill-junction-scan`／`snapshot-source-default`）、
   `antigravity-mcp-manager/tests/agent-host-enablement`。
 - **webview 前端**在 `media/`，**不進圖**（§3）。六個外掛都是 `main: ./extension.js`、CommonJS。
 
@@ -45,12 +45,12 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 | 項目 | 值 |
 | :--- | :--- |
 | 圖譜位置 | `graphify-out/`（根 `.gitignore` 已排除，**勿 commit**） |
-| 規模 | **1755** nodes / **3170** edges / **101** communities（62 顯示、39 thin 省略） |
-| 建圖標記 | `Built from commit` `a45d4215`（inspector 1.2.7 已 commit 為 `e0b84e0`；該批只改 service／註解／測試，`update` 回 `No code-graph topology changes` ⇒ 標記停在 `a45d4215` 屬正常）。再跑 `update` 若回 `No code-graph topology changes detected` ⇒ 內容與工作樹一致 |
-| 語料 | 107 files · ~138,936 words；**75 個 code 檔**被抽取（AST）；30 檔未分類（`.bat` 14、無副檔名 10、`.css` 6） |
-| 抽取品質 | 95% EXTRACTED／5% INFERRED（144 邊，平均信心 0.85）；**0 input／0 output token＝0 元** |
-| 產物大小 | `GRAPH_REPORT.md` **17 KB**（17,447 B，可整讀）、`graph.json` **2.1 MB**（禁整讀）、`graph.html` 約 1.7 MB |
-| 節點分佈 | script-runner 455／inspector **362**／toolbox 394／mcp-manager 265／quota-status 174／quick-access 79／根目錄 26（含 `node:sqlite` 1 與 2 支根腳本） |
+| 規模 | **1779** nodes / **3204** edges / **105** communities（65 顯示、40 thin 省略） |
+| 建圖標記 | `Built from commit` `7493df6a`（＝目前 HEAD；inspector 1.2.8 的改動仍在工作樹，`update` 已反映內容）。再跑 `update` 若回 `No code-graph topology changes detected` ⇒ 內容與工作樹一致 |
+| 語料 | 108 files · ~139,668 words；**76 個 code 檔**被抽取（AST）；30 檔未分類（`.bat` 14、無副檔名 10、`.css` 6） |
+| 抽取品質 | 96% EXTRACTED／4% INFERRED（144 邊，平均信心 0.85）；**0 input／0 output token＝0 元** |
+| 產物大小 | `GRAPH_REPORT.md` **18 KB**（18,180 B，可整讀）、`graph.json` **2.2 MB**（禁整讀）、`graph.html` 約 1.8 MB |
+| 節點分佈 | script-runner 455／inspector **386**／toolbox 394／mcp-manager 265／quota-status 174／quick-access 79／根目錄 26（含 `node:sqlite` 1 與 2 支根腳本） |
 | 不進圖 | `*.css`、`*.html`、`locales/*.json`、`*.md`（`.graphifyignore` 已排除 `*.md`） |
 
 > ⚠️ 上表是**快照**。用前先驗（三行）：
@@ -135,12 +135,12 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 
 ## 8. 六外掛速查
 
-> 版本＝2026-10-31 讀 `package.json` 實測（inspector 已升 1.2.7）；節點＝2026-10-31 圖譜實測。兩者都會過期 ⇒ 版本看各外掛 `package.json` 的 `version`，節點用 §3 的查法。
+> 版本＝2026-10-31 讀 `package.json` 實測（inspector 已升 1.2.8）；節點＝2026-10-31 圖譜實測。兩者都會過期 ⇒ 版本看各外掛 `package.json` 的 `version`，節點用 §3 的查法。
 
 | 外掛 | 版本 | 節點 | 對外 id 家族 | view／container | 進入點／服務 |
 | :--- | :--- | ---: | :--- | :--- | :--- |
 | `antigravity-script-runner` | 1.7.1 | 455 | `scriptRunner.*`（8 個 id × `.en`／`.cn`＝24） | 無 view（右鍵選單＋媒體檢視） | `extension.js`／6 services（audio／video／image／stream） |
-| `antigravity-ai-context-inspector` | 1.2.7 | 362 | `antigravity.aiContext.*`（3 ＋ `.en`） | `antigravity.aiContextView`／`antigravity-ai-context-container` | `extension.js`／6 services（cline·cursor·vscode chat／contextScanner／mcpDetector） |
+| `antigravity-ai-context-inspector` | 1.2.8 | 386 | `antigravity.aiContext.*`（3 ＋ `.en`） | `antigravity.aiContextView`／`antigravity-ai-context-container` | `extension.js`／6 services（cline·cursor·vscode chat／contextScanner／mcpDetector） |
 | `antigravity-toolbox` | 1.7.0 | 394 | `antigravity.toolbox.*`（7 ＋ 4 `.en`） | `antigravity.toolboxView`／`antigravity-toolbox-container` | `extension.js`／6 services（brain／copilotChat／skillSync／workspace…） |
 | `antigravity-mcp-manager` | 1.9.3 | 265 | `antigravity.mcp.*`（6 ＋ `.en`） | `antigravity.mcpManagerView`／`mcp-manager-container` | `extension.js`／9 services |
 | `antigravity-quota-status` | 1.1.0（`name`＝`ai-quota-status`） | 174 | `aiQuota.*`（7，無變體） | 無 view（狀態列） | `extension.js`／4 services（quota／cursorAuth…） |
@@ -190,7 +190,8 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 - 實作鏈：`contextScannerService.parseFrontmatter()`（解析 `paths`：區塊清單／單行／行內陣列）→ `scanRulesInDir()`／`parseSingleRuleFile()`（帶出 `paths`／`hasPaths`）→ `scanClineSources()` → `_scanClineLayout()`（`.clinerules`＋`.cline/rules`、`.clinerules/workflows`＋`.cline/workflows`）→ `_toClineEntry()`（`kind`＝`always`／`conditional`／`workflow`、`trigger`＝`always_on`／`conditional_paths`／`workflow`）。
 - UI：卡片標題維持「條件式規範 (Conditional)」（不改成「條件式 / 按需規範」，避免標題過長）；`kind === 'workflow'` 的項目在描述前加「工作流程 · 」作為唯一區分（`media/app.js`，i18n 鍵 `tag_kind_workflow` 三語）。
 - ⛔ 反模式：把 `.clinerules` 根目錄一律標成常駐（1.2.6 以前）⇒ 帶 `paths:` 的檔案被顯示成常駐，與 Cline 實際載入狀況相反。
-- 回歸測試：`node antigravity-ai-context-inspector/tests/cline-conditional-rules.test.js`（B0–B6）。
+- **技能掃描必須接受 symlink／junction（1.2.8 起）**：`scanSkillsInDir()` 的子資料夾條件是 `entry.isDirectory() || entry.isSymbolicLink()`。Windows 的 `Dirent.isDirectory()` 對 junction（`mklink /J`）回傳 **false**、只有 `isSymbolicLink()` 為 true，而 §8.2 的 `~/.agents/skills/*` 正是 toolbox 同步出來的 junction ⇒ 1.2.7 以前全域技能整批掃不到（2026-10-31 實測 26 個掃到 0 個，症狀＝「技能清單只有專案技能、快照看不到 character-performance 這類全域技能」）。`scanRulesInDir()` 的 `.md` 檔案同理放寬。往後新增任何「掃目錄」的服務一律比照。
+- 回歸測試：`node antigravity-ai-context-inspector/tests/cline-conditional-rules.test.js`（B0–B6）＋ `node antigravity-ai-context-inspector/tests/skill-junction-scan.test.js`（J0–J5，含 `Dirent.isDirectory()==false` 的負對照）。
 
 ---
 
@@ -226,8 +227,10 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 | 13 | 把知識寫回 `AGENTS.md`、或又建 `docs/project-notes.md` 平行副本 | 兩份真相，改一邊忘一邊（2026-10-26／10-27 各發生過一次） | 知識只放技能（可多支）；`AGENTS.md` 只放索引；查閱型說明留 `README.md` |
 | 14 | 對外宣稱支援 VSCodium | 實作只「偵測行程」、沒有部署目標 | 已定案不宣稱（2026-10-27）；要真支援得自行補根 2 支腳本（原 9 點清單見 git `6e34e44`） |
 | 15 | 把 `.clinerules` 根目錄一律當常駐（或想靠檔名 `*cond*` 判斷條件式） | 帶 `paths:` 的條件式規範被顯示成常駐，與 Cline 實際載入相反，使用者誤判「規範沒生效」 | 只看 frontmatter：有 `paths:` ⇒ 條件式、無 ⇒ 常駐、`workflows/` ⇒ 按需（§8.3） |
+| 16 | 掃技能／目錄時只認 `Dirent.isDirectory()` | Windows 的 junction 在 Dirent 是 `isSymbolicLink()=true`、`isDirectory()=false`；`~/.agents/skills/*` 全是 toolbox 同步的 junction ⇒ 全域技能整批消失（1.2.7 以前，實測 26→0） | 掃描條件一律寫 `isDirectory() \|\| isSymbolicLink()`，並用 `skill-junction-scan`（J0–J5）守住（§8.3） |
 
-> 這些都是**實際失敗過**才寫上來的（2026-10-24～28），不是假設性風險。
+
+> 這些都是**實際失敗過**才寫上來的（2026-10-24～10-31），不是假設性風險。
 
 ---
 
@@ -245,6 +248,8 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 
 | 日期 | 變更 | 來源 |
 | :--- | :--- | :--- |
+| 2026-10-31 | inspector `1.2.7 → 1.2.8`＝**技能掃描支援 symlink／junction**：`scanSkillsInDir()` 子資料夾條件由 `entry.isDirectory()` 改為 `isDirectory() || isSymbolicLink()`，`scanRulesInDir()` 的 `.md` 比照放寬。根因＝Windows `Dirent.isDirectory()` 對 junction 回傳 false，而 `~/.agents/skills/*` 正是 toolbox 同步的 junction ⇒ 1.2.7 以前全域技能整批掃不到（實測 26 個→0 個，只剩 `.claude/skills` 的實體資料夾）；Cline 快照因而只顯示專案技能。新增 `skill-junction-scan`（J0–J5）測試，測試總數 11 → 12 支；圖譜 1755→**1779** 節點／3170→**3204** 邊／101→**105** 社群（Built from commit `7493df6a`） | 使用者回報：Cline 快照的技能清單只有專案技能，`C:\\Users\\User\\.agents\\skills` 的技能沒出現，懷疑沒被引用 |
+
 | 2026-10-31 | inspector `1.2.6 → 1.2.7`＝**規範分類對齊 Cline 真實行為**：`parseFrontmatter` 解析 `paths`（區塊／單行／行內陣列）、`scanRulesInDir`／`parseSingleRuleFile` 帶出 `paths`／`hasPaths`、`scanClineSources` 改走 `_scanClineLayout`（新增 `.cline/rules`、`.cline/workflows`）＋`_toClineEntry`（`kind`＝always／conditional／workflow）；卡片標題維持「條件式規範 (Conditional)」（不改成「條件式 / 按需規範」，避免標題過長），改以項目描述的「工作流程 · 」前綴區分按需工作流程（三語）；新增 `cline-conditional-rules`（B0–B6）測試，測試總數 10 → 11 支；圖譜 1735→**1755** 節點／3139→**3170** 邊／107→**101** 社群 | 使用者回報 `.clinerules/condition.md` 顯示為常駐、但 Cline 依 `paths:` 判斷並未載入（條件式規範被誤標） |
 | 2026-10-28 | toolbox `1.6.2 → 1.7.0`＝**拖出即移除**：`startCardPointerInteraction()` 判定拖出 webview 邊界（座標＋`pointerout`／`mouseleave` 逸出）→ 顯示 `#drag-remove-overlay` → 放手送 `removeWorkspaceFolder`；`workspaceService.removeWorkspaceFolder()` 同步清 `folders`／`disabledFolders`／`folderOrder`（`syncFolderOrder()` 重建、立即寫檔、不刪磁碟），只在 `hasMultiRoot` 生效；新增 `workspace-remove`（R1–R6）測試；圖譜 1710→**1735** 節點／3094→**3139** 邊／101→**107** 社群（commit `c5443cfb`） | 使用者需求：多專案工作區要能拖出框架移除專案 |
 | 2026-10-28 | toolbox `1.6.1 → 1.6.2`＝**工作區重複登記自癒**：新增 `dedupeWorkspaceItems()`（跨清單以啟用優先）、`analyzeWorkspace()` 自癒＋`deduplicatedCount`、切換開關前先去重、`syncFolderOrder()` 改唯一集合比對（修掉「有重複就每輪空寫工作區檔」）；新增 `workspace-dedupe`（D1–D5）測試；命令改名「自動修正工作區重複專案（同名＋重複登記）」；圖譜 1689→**1710** 節點／3056→**3094** 邊／103→**101** 社群（commit `5e5ea2e0`） | 使用者回報：重複「加入資料夾」後面板出現兩份專案 |

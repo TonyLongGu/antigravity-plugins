@@ -83,8 +83,9 @@ class ContextScannerService {
 
     try {
       const entries = await fsPromises.readdir(dirPath, { withFileTypes: true });
+      // 同樣接受 symlink／junction 檔案（同 scanSkillsInDir 的 Windows Dirent 限制）
       const mdFiles = entries
-        .filter(file => file.isFile() && file.name.endsWith('.md'))
+        .filter(file => (file.isFile() || file.isSymbolicLink()) && file.name.endsWith('.md'))
         .sort((a, b) => this.naturalCompare(a.name, b.name));
       
       const parsedRules = await Promise.all(
@@ -148,6 +149,10 @@ class ContextScannerService {
 
   /**
    * 掃描指定目錄底下的所有 Skills (含有 SKILL.md 的子資料夾)
+   * ⚠️ 子資料夾必須接受 symlink／junction：Windows 上 Dirent.isDirectory() 對
+   * junction（`mklink /J`）回傳 false、只有 isSymbolicLink() 為 true，
+   * 而 `~/.agents/skills/*` 常見做法就是連到各技能庫的 junction。
+   * 只認 isDirectory() 會讓這些技能整批消失（2026-10-31 實測：26 個全域技能掃到 0 個）。
    */
   static async scanSkillsInDir(dirPath, sourceName, type = 'workspace', wsIndex = 999) {
     const skills = [];
@@ -156,7 +161,7 @@ class ContextScannerService {
     try {
       const entries = await fsPromises.readdir(dirPath, { withFileTypes: true });
       const skillDirs = entries
-        .filter(entry => entry.isDirectory())
+        .filter(entry => entry.isDirectory() || entry.isSymbolicLink())
         .sort((a, b) => this.naturalCompare(a.name, b.name));
       
       const parsedSkills = await Promise.all(

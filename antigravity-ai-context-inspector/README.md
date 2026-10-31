@@ -17,7 +17,7 @@
      - **Cursor MCP 清單**：讀取使用者 `~/.cursor/mcp.json` 與各工作區 `.cursor/mcp.json`，顯示已註冊的 MCP 伺服器。
      - **Cursor 內建技能**：掃描 `~/.cursor/skills-cursor`，在技能清單顯示「IDE 內建技能」。
      - **VS Code MCP 清單**：併列三個來源——`%APPDATA%/Code/User/mcp.json`、各工作區 `.vscode/mcp.json`，以及 **Copilot CLI 的 `~/.copilot/mcp-config.json`**。VS Code 啟用 `chat.mcp.discovery.enabled.copilot` 後，最後這一份才是 VS Code 實際載入的來源（本機的 `mcp.json` 反而不存在），只讀前兩者會讓清單整片空白。只列名稱、範圍與啟動方式，不讀取 env / headers，**也不標注啟停狀態**（本工具只呈現「已註冊的伺服器」，不管它目前是否被關掉）。
-     - **VS Code 技能清單**：對齊 Copilot 三分類——使用者（`~/.claude/skills` 等）、擴充（已安裝套件 `skills/`）、內建（Copilot 隨附 skills）。
+     - **VS Code 技能清單**：對齊 Copilot 三分類——使用者（`~/.claude/skills` 等）、擴充（已安裝套件 `skills/`）、內建（Copilot 隨附 skills）。**`~/.agents/skills/<name>` 若是 symlink／junction（toolbox 同步出來的連結就是）也會照樣列出**——Windows 的 `Dirent.isDirectory()` 對 junction 回傳 `false`，只認它會整批漏掉（1.2.8 修正）。
      - **Cursor 對話足跡**：掃描 `~/.cursor/projects/*/agent-transcripts`，還原該對話實際讀過的 Rules / Skills，以及實際呼叫的 MCP。下拉標題優先讀取 Composer 官方名稱。
      - **VS Code Copilot 對話足跡**：掃描 `%APPDATA%/Code/User/workspaceStorage/*/chatSessions/*.jsonl`，用官方 `customTitle` 列出對話，並還原實際讀過的 Rules / Skills 與 `mcp_*` 工具。這不是 Antigravity 那種 session prompt 注入快照。
    - 🟣 **Cline 對話來源（跨宿主，任何 IDE 都能看）**：
@@ -60,12 +60,14 @@
 ```powershell
 node tests/mcp-vscode-sources.test.js
 node tests/cline-snapshot.test.js
+node tests/skill-junction-scan.test.js
 node tests/snapshot-source-default.test.js
 ```
 
 - 離開碼 `0` = 全數通過、`1` = 有失敗（可直接接 CI 或 hook）。
 - `mcp-vscode-sources`：涵蓋 5 項斷言——三來源併列與同名時「VS Code 自身優先」、CLI 條目的 scope / transport / 白名單 `tools` 不計數、**不標注啟停狀態**（負對照：VS Code 兩層開關都標為停用時仍不得出現停用資訊）、以及缺少 CLI 設定檔時不中斷。
 - `cline-snapshot`：涵蓋 12 項斷言——清單只讀 meta（攔截 `*.messages.json` 讀取）、`clineScope` 工作區過濾、`skills` 工具足跡、`<server>__<tool>` MCP 足跡與只保留實際呼叫的工具、設定檔已移除但確實呼叫過的 MCP 仍會列出、`workspaceState.json` 開關對映（關閉的常駐規範不得出現在快照）、條件式規範只留被讀取者、對話 meta、**常駐規範以對話自己的工作區掃描（不列目前視窗的）**、**常駐規範未被讀取時不得標記 isInvoked**、缺少資料目錄不拋錯，以及 **> 20 MB 走串流降級路徑**。
+- `skill-junction-scan`：涵蓋 6 項斷言——**`~/.agents/skills/<name>` 為 junction／symlink 時必須照樣列出**（J0 先驗夾具前提：`Dirent.isDirectory()` 對 junction 為 `false`，這正是 1.2.7 以前整批漏掉全域技能的原因）、沒有 `SKILL.md` 的資料夾不得列入（負對照）、`scanLiveEnvironment` 的 global 群組含 junction 技能、Cline 快照中被 `skills` 工具呼叫的 junction 技能出現在 `skills.global`、未被呼叫者不得出現。夾具在系統暫存目錄，結束前先拆連結再刪資料夾。
 - `snapshot-source-default`：涵蓋 7 項斷言——**未手動選擇時一律載入宿主原生來源**（Antigravity／Cursor 各驗一次）、Webview 注入空的 `INITIAL_SOURCE_FILTER`、點過 chip 後寫回 `workspaceState` 並沿用（重開視窗仍生效）、取消篩選（`all`）沿用已選對話來源、來源不可用時退回宿主，以及空字串清回「跟隨宿主」。以 `Module._load` 攔截 `require('vscode')`，不需要真實 IDE。
 
 ---
