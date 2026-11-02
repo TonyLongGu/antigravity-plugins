@@ -2,7 +2,7 @@
 
 Antigravity 提供完整儀表板（清單、連線探測與原生開關），並常駐左側活動列。Cursor 與 VS Code 只在底部狀態列顯示 `MCP: 啟用數/總數`，不開啟左側活動列，也不在編輯器分頁打開儀表板。
 
-三種宿主只在**目前這個 IDE 已安裝且啟用 Cline** 時，狀態列才會並列 Cline 的 MCP 統計（`… · Cline 啟用數/總數`），懸停視窗另列兩端伺服器清單。沒安裝、或曾經安裝但已停用時，狀態列只顯示本 IDE 的 MCP，不出現 Cline。殘留的 `cline_mcp_settings.json` 不會被當成已安裝。Cline 一律為**純檢視**：本套件在服務層就沒有寫入 Cline 設定的能力，開關請用 Cline 自身的 MCP 面板。
+三種宿主只在**目前這個 IDE 已安裝且啟用 Cline** 時，狀態列才會並列 Cline 的 MCP 統計（`… · Cline 啟用數/總數`）；**Kilo** 同為獨立設定檔來源（`~/.config/kilo/kilo.jsonc`），只要偵測到擴充或設定檔就並列 `· Kilo 啟用數/總數`。懸停視窗另列各來源的伺服器清單。沒安裝、或曾經安裝但已停用時，狀態列只顯示本 IDE 的 MCP。殘留的 `cline_mcp_settings.json` 不會被當成已安裝；Kilo 則以「擴充啟用或設定檔存在」判定（CLI 使用者不一定安裝擴充）。Cline 與 Kilo 一律為**純檢視**：本套件在服務層就沒有寫入兩者設定的能力，開關請用它們自身的介面。
 
 ---
 
@@ -11,11 +11,11 @@ Antigravity 提供完整儀表板（清單、連線探測與原生開關），�
 1. **Antigravity 原生開關**：讀寫 `~/.gemini/config/mcp_config.json`（`mcpServers`，以 `disabled` 欄位開關）。
 2. **VS Code 檢視模式**：讀取 `<User>/mcp.json`、工作區 `.vscode/mcp.json` 與工作區根 `.mcp.json`，並從 `state.vscdb` 的 `mcp.enablement` 顯示真實啟停狀態（含工作區覆寫）。開關請用 **VS Code 原生 UI**。面板另併入 Copilot CLI 的 `~/.copilot/mcp-config.json`（唯讀、以徽章區分來源，詳見「Copilot CLI 整合」）。
 3. **Cursor 檢視模式**：讀取 `~/.cursor/mcp.json`，並從 Cursor 的 Customize 停用清單顯示側邊高光與啟用數。開關仍請用 **Customize**。
-4. **既有備註（唯讀相容）**：1.9.3 起移除「編輯說明」入口，本套件不再寫入 sidecar（`antigravity_mcp_notes.json` / `mcp_notes.json`）；舊資料仍會讀取，Cline 檢視器的 MCP 詳情可持續顯示既有說明。
+4. **既有備註（唯讀相容）**：1.9.3 起移除「編輯說明」入口，本套件不再寫入 sidecar（`antigravity_mcp_notes.json` / `mcp_notes.json`）；舊資料仍會讀取。
 5. **Antigravity 左側活動列**：可在此面板直接開關 MCP。
-6. **狀態列即時指示**：三種環境都顯示 `MCP: 啟用數/總數`；目前 IDE 已啟用 Cline 時才並列 `· Cline 啟用數/總數`（未安裝或已停用則不顯示），可用「切換狀態列顯示方式」決定只顯示本 IDE、只顯示 Cline 或兩者。Cursor 與 VS Code 只有這條狀態列，不開啟左側活動列，也不在編輯器分頁打開儀表板。
-7. **Cline 純檢視（API 層保證）**：狀態列快捷選單提供「檢視 Cline MCP 伺服器狀態」，可看工具清單、啟停情形與開啟 `cline_mcp_settings.json`。Cline 服務只有讀取與統計能力，**不含任何寫入 API**，因此不論宿主、顯示範圍或批次操作都不會改動 Cline 的設定檔。
-8. **兩向熱重載**：修改 MCP 設定檔（含 Cline 的 `cline_mcp_settings.json`），或在 **VS Code 原生 UI** 切換開關時，狀態列會自動更新。Antigravity 已開啟的儀表板也會一起更新。
+6. **狀態列即時指示**：三種環境都顯示 `MCP: 啟用數/總數`；目前 IDE 已啟用 Cline 時並列 `· Cline 啟用數/總數`，偵測到 Kilo 時並列 `· Kilo 啟用數/總數`（可用「切換狀態列顯示方式」決定只顯示本 IDE、Cline、Kilo 或全部）。Cursor 與 VS Code 只有這條狀態列，不開啟左側活動列，也不在編輯器分頁打開儀表板。
+7. **Cline／Kilo 純檢視（API 層保證）**：統計只呈現在狀態列與懸停視窗；設定檔可從快捷選單的「設定檔」區塊直接開啟（1.10.1 起移除檢視器入口）。兩者的服務只有讀取與統計能力，**不含任何寫入 API**，因此不論宿主、顯示範圍或批次操作都不會改動它們的設定檔。
+8. **兩向熱重載**：修改 MCP 設定檔（含 Cline 的 `cline_mcp_settings.json` 與 Kilo 的 `kilo.jsonc`），或在 **VS Code 原生 UI** 切換開關時，狀態列會自動更新。Antigravity 已開啟的儀表板也會一起更新。
 
 ---
 
@@ -24,7 +24,7 @@ Antigravity 提供完整儀表板（清單、連線探測與原生開關），�
 1. 雙擊 [`install-extension.bat`](./install-extension.bat)（或執行 [`install-extension.ps1`](./install-extension.ps1)）。
    - 可安裝至 **Antigravity IDE**、**Cursor** 與 **Visual Studio Code**。
 2. 在目標 IDE 按 <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd>，執行 `Developer: Reload Window`。
-3. Antigravity 左側活動列出現 **「MCP 伺服器管理」**；Cursor 與 VS Code 只在右下狀態列顯示 **MCP 啟用數**（目前 IDE 已啟用 Cline 時才並列 Cline 統計與「檢視 Cline MCP」捷徑）。
+3. Antigravity 左側活動列出現 **「MCP 伺服器管理」**；Cursor 與 VS Code 只在右下狀態列顯示 **MCP 啟用數**（偵測到 Cline／Kilo 時並列其統計）。
 
 ---
 
@@ -36,11 +36,26 @@ Antigravity 提供完整儀表板（清單、連線探測與原生開關），�
 | --- | --- |
 | 狀態列 | `MCP: <本 IDE> 啟用數/總數 · Cline 啟用數/總數`（顯示範圍可用「切換狀態列顯示方式」調整，只影響顯示） |
 | 懸停視窗 | 分兩段列出本 IDE 與 Cline 的已啟用伺服器名稱，並標示目前顯示範圍 |
-| 快捷選單 | 「檢視 Cline MCP 伺服器狀態」（清單、啟停、開啟設定檔）與「開啟 Cline MCP 設定檔」 |
+| 快捷選單 | 「開啟 Cline MCP 設定檔」（1.10.1 起不再提供檢視器入口） |
 
 - 設定檔採自推導：優先 `~/.cline/data/settings/cline_mcp_settings.json`，其次 `~/.cline/settings/`，再退回各 IDE 的 `globalStorage/saoudrizwan.claude-dev/settings/`。
 - **Cline 一律唯讀（含 Antigravity 批次操作）**：本套件只讀取統計與清單，不寫入 `cline_mcp_settings.json`；批次開關也只作用於本 IDE，顯示範圍設為「兩者」時同樣不會連動 Cline。Cline 的開關請用 Cline 自身的 MCP 面板。
 - `cline_mcp_settings.json` 有檔案監聽，Cline 端新增／開關伺服器後狀態列會即時跟上。
+
+## Kilo 整合（三種宿主共用，純檢視）
+
+Kilo Code 7.x 的 MCP 設定在 `~/.config/kilo/kilo.jsonc` 的 `mcp` 段（XDG；舊版相容 `~/.kilo`、`~/.kilocode`）。只要偵測到 **Kilo 擴充已啟用** 或 **設定檔存在**（CLI 使用者不一定裝擴充），狀態列、懸停視窗與快捷選單就會呈現 Kilo 統計：
+
+| 位置 | 內容 |
+| :--- | :--- |
+| 狀態列 | `MCP: <本 IDE> 啟用數/總數 · Cline … · Kilo 啟用數/總數`（顯示範圍可用「切換狀態列顯示方式」調整） |
+| 懸停視窗 | 依序列出主要來源、次要來源、Cline、Kilo 的已啟用伺服器名稱 |
+| 快捷選單 | 「開啟 Kilo MCP 設定檔」（1.10.1 起不再提供檢視器入口） |
+
+- **JSONC 解析**：`kilo.jsonc` 允許 `//`、`/* */` 註解與尾逗號；服務會先剝除再解析，不會因一行註解讓整份清單變空。
+- **啟停判定**：`enabled: false` 視為停用（舊欄位 `disabled: true` 亦相容），沒有欄位視為啟用。
+- **一律唯讀**：不寫入 `kilo.jsonc`，批次操作也不會連動 Kilo；不讀 `headers`／`environment`／`auth.json`。
+- `kilo.jsonc` 有檔案監聽，Kilo 端調整後狀態列會即時跟上。
 
 ---
 
@@ -86,7 +101,7 @@ VS Code 的 MCP 伺服器與 Copilot CLI（Agent Host）的 MCP 伺服器是**�
 
 | 設定 | 可選值 | 說明 |
 | --- | --- | --- |
-| `antigravity.mcp.displayMode` | `both`（預設）／`antigravity`／`cline` | 狀態列顯示本 IDE、Cline 或兩者 |
+| `antigravity.mcp.displayMode` | `both`（預設）／`antigravity`／`cline`／`kilo` | 狀態列顯示本 IDE、Cline、Kilo 或全部 |
 
 - 快捷選單的「切換狀態列顯示方式」與 **VS Code 設定 UI** 都寫入這一個設定；懸停視窗的「目前顯示範圍」讀同一來源，兩處不會各說各話。
 - 值 `antigravity` 代表「目前這個 IDE 自己的 MCP」（在 VS Code / Cursor 亦沿用同一鍵名）。

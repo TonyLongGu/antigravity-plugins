@@ -2,7 +2,7 @@
 	"name": "antigravity-mcp-manager",
 	"displayName": "MCP 管理儀表板",
 	"description": "Antigravity IDE / Cursor / VS Code 相容的 MCP 儀表板：Antigravity 提供左側面板與原生開關；Cursor 與 VS Code 只顯示底部狀態列；目前 IDE 已啟用 Cline 時才並列 Cline MCP 統計（未安裝或已停用則不顯示；Cline 恆為純檢視，本套件不含寫入 API）",
-	"version": "1.9.3",
+	"version": "1.10.1",
 	"publisher": "antigravity-toolkit",
 	"engines": {
 		"vscode": "^1.80.0"
@@ -45,12 +45,14 @@
 						"enum": [
 							"both",
 							"antigravity",
-							"cline"
+							"cline",
+							"kilo"
 						],
 						"enumDescriptions": [
-							"兩者皆顯示（此 IDE 的 MCP 與 Cline 狀態統計）",
+							"全部顯示（此 IDE 的 MCP，以及 Cline／Kilo 狀態統計）",
 							"僅顯示此 IDE 的 MCP 狀態",
-							"僅顯示 Cline MCP 狀態"
+							"僅顯示 Cline MCP 狀態",
+							"僅顯示 Kilo MCP 狀態"
 						],
 						"description": "狀態列上的 MCP 顯示方式（唯一來源，只影響顯示、不影響寫入範圍）。選項值 antigravity 代表目前這個 IDE 自己的 MCP。"
 					}
@@ -90,12 +92,6 @@
 				"title": "切換狀態列顯示方式",
 				"category": "MCP",
 				"icon": "$(filter)"
-			},
-			{
-				"command": "antigravity.mcp.viewClineMcp",
-				"title": "檢視 Cline MCP 狀態",
-				"category": "MCP",
-				"icon": "$(eye)"
 			},
 			{
 				"command": "antigravity.mcp.openInEditor",

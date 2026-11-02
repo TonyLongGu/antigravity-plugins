@@ -32,10 +32,10 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 - **沒有程式碼共用**：2026-10-27 實測 2,974 條邊只有 **1 條**「跨外掛」（且是 `node:sqlite` builtin 的誤判）。真正的耦合是 **VS Code command id 字串**，見 §7。
 - **安裝邏輯只在根目錄 2 支腳本**：各外掛的 `install-extension.ps1`／`uninstall-extension.ps1`（共 12 支）自 2026-10-26 起是**薄殼**（各約 47 行、只剩語句沒有函式），只把自己的資料夾名稱當 `-Plugin` 轉呼叫根腳本。⇒ 改一次 6 個外掛同時生效。
 - **安裝政策＝一鍵全裝**（2026-10-26 起）：根 `install-all.ps1` 的 `-Target` 預設 `All`、`-Plugin` 省略＝全部外掛（可給資料夾名稱或 `package.json` 的 `name`，例：`-Plugin antigravity-quota-status` 或 `-Plugin ai-quota-status`）。`-Target Prompt` 在根腳本是互動選單，在 install 薄殼回溯相容為 `All`；uninstall 薄殼仍是選單。目標 IDE 由腳本自動偵測，使用者改用面板頂部「類別切換鈕」決定看哪一套 IDE 資料；不相容組合由 `$environmentExclusions` 自動略過。
-- **測試＝零相依、直接 `node <檔案>`**（無框架）。2026-11-02 實測 **14 支**：
+- **測試＝零相依、直接 `node <檔案>`**（無框架）。2026-11-02 實測 **15 支**：
   `antigravity-toolbox/tests/`（`environment-flavor`／`kilo-brain-stats`／`mcp-label`／`skill-junction-sync`／`skill-sync-service`／`workspace-dedupe`／`workspace-remove`）、
   `antigravity-ai-context-inspector/tests/`（`cline-snapshot`／`cline-conditional-rules`／`kilo-snapshot`／`mcp-vscode-sources`／`skill-junction-scan`／`snapshot-source-default`）、
-  `antigravity-mcp-manager/tests/agent-host-enablement`。
+  `antigravity-mcp-manager/tests/`（`agent-host-enablement`／`kilo-mcp-service`）。
 - **webview 前端**在 `media/`，**不進圖**（§3）。六個外掛都是 `main: ./extension.js`、CommonJS。
 
 ---
@@ -45,12 +45,12 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 | 項目 | 值 |
 | :--- | :--- |
 | 圖譜位置 | `graphify-out/`（根 `.gitignore` 已排除，**勿 commit**） |
-| 規模 | **1875** nodes / **3375** edges / **118** communities（74 顯示、44 thin 省略） |
-| 建圖標記 | `Built from commit` `f9cc2b6b`（＝目前 HEAD；inspector 1.3.1 的改動仍在工作樹，`update` 已反映內容）。再跑 `update` 若回 `No code-graph topology changes detected` ⇒ 內容與工作樹一致 |
-| 語料 | 111 files · ~144,267 words；**79 個 code 檔**被抽取（AST）；30 檔未分類（`.bat` 14、無副檔名 10、`.css` 6） |
+| 規模 | **1908** nodes / **3424** edges / **117** communities（75 顯示、42 thin 省略） |
+| 建圖標記 | `Built from commit` `c94c6569`（＝目前 HEAD；mcp-manager 1.10.1 的改動仍在工作樹，`update` 已反映內容）。再跑 `update` 若回 `No code-graph topology changes detected` ⇒ 內容與工作樹一致 |
+| 語料 | 113 files · ~145,276 words；**84 個 code 檔**被抽取（AST）；30 檔未分類（`.bat` 14、無副檔名 10、`.css` 6） |
 | 抽取品質 | 96% EXTRACTED／4% INFERRED（144 邊，平均信心 0.85）；**0 input／0 output token＝0 元** |
-| 產物大小 | `GRAPH_REPORT.md` **19.7 KB**（20,110 B，可整讀）、`graph.json` **2.3 MB**（2,298,056 B，禁整讀）、`graph.html` 約 1.86 MB |
-| 節點分佈 | script-runner 455／inspector **446**／toolbox 430／mcp-manager 265／quota-status 174／quick-access 79／根目錄 26（含 `node:sqlite` 1 與 2 支根腳本） |
+| 產物大小 | `GRAPH_REPORT.md` **20.1 KB**（20,096 B，可整讀）、`graph.json` **2.3 MB**（2,333,294 B，禁整讀）、`graph.html` 約 1.89 MB |
+| 節點分佈 | script-runner 455／inspector 446／toolbox 430／mcp-manager **298**／quota-status 174／quick-access 79／根目錄 26（含 `node:sqlite` 1 與 2 支根腳本） |
 | 不進圖 | `*.css`、`*.html`、`locales/*.json`、`*.md`（`.graphifyignore` 已排除 `*.md`） |
 
 > ⚠️ 上表是**快照**。用前先驗（三行）：
@@ -142,7 +142,7 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 | `antigravity-script-runner` | 1.7.1 | 455 | `scriptRunner.*`（8 個 id × `.en`／`.cn`＝24） | 無 view（右鍵選單＋媒體檢視） | `extension.js`／6 services（audio／video／image／stream） |
 | `antigravity-ai-context-inspector` | 1.3.1 | 446 | `antigravity.aiContext.*`（3 ＋ `.en`） | `antigravity.aiContextView`／`antigravity-ai-context-container` | `extension.js`／7 services（cline·cursor·kilo·vscode chat／contextScanner／mcpDetector） |
 | `antigravity-toolbox` | 1.8.1 | 406 | `antigravity.toolbox.*`（7 ＋ 4 `.en`） | `antigravity.toolboxView`／`antigravity-toolbox-container` | `extension.js`／6 services（brain／copilotChat／skillSync／workspace…） |
-| `antigravity-mcp-manager` | 1.9.3 | 265 | `antigravity.mcp.*`（6 ＋ `.en`） | `antigravity.mcpManagerView`／`mcp-manager-container` | `extension.js`／9 services |
+| `antigravity-mcp-manager` | 1.10.1 | 298 | `antigravity.mcp.*`（6 ＋ `.en`） | `antigravity.mcpManagerView`／`mcp-manager-container` | `extension.js`／9 services |
 | `antigravity-quota-status` | 1.1.0（`name`＝`ai-quota-status`） | 174 | `aiQuota.*`（7，無變體） | 無 view（狀態列） | `extension.js`／4 services（quota／cursorAuth…） |
 | `antigravity-quick-access` | 1.2.6 | 79 | `antigravity.quickAccess.*`（20 × 3＝60） | `antigravity.quickAccessView` | `extension.js`／無 `services/` 目錄 |
 
@@ -212,6 +212,16 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 - **MCP**：`McpDetectorService.scanKiloMcpServers()` 讀 `~/.config/kilo/kilo.jsonc` 的 `mcp` 段（`parseJsoncText` 剝除註解與尾逗號）＋ 專案 `.kilo/mcp.json`／`.kilocode/mcp.json`；不讀 `env`／`headers`／`auth.json`。
 - 回歸測試：`node antigravity-ai-context-inspector/tests/kilo-snapshot.test.js`（K0–K3）。
 
+### 8.5 mcp-manager 的 Kilo 狀態列（1.10.0 起）
+
+- **資料來源**：`~/.config/kilo/kilo.jsonc` 的 `mcp` 段（XDG）；舊版相容 `~/.kilo`、`~/.kilocode`（只讀既有檔）。
+- **可用性判定**：`KiloMcpService.isAvailable()`＝Kilo 擴充啟用 **或** 設定檔存在。⛔ 不要照抄 Cline 的「只看擴充」：Kilo CLI 可獨立存在，只看擴充會讓 CLI 使用者的狀態列永遠不出現。
+- **啟停判定**：`enabled: false` 為停用（舊欄位 `disabled: true` 相容），缺欄位為啟用。`displayMode` 增加 `kilo`；`both` 會依序接上 Cline、Kilo。
+- **JSONC**：`kilo.jsonc` 有註解與尾逗號，必須先剝除再 `JSON.parse`（`KiloMcpService.parseJsoncText`）。
+- **隱私**：輸出白名單欄位，⛔ 不可 `...server` 展開，否則 `headers`／`environment`（可能含權杖）會進 UI；`auth.json` 一律不讀。
+- **純檢視**：服務層無寫入 API；批次操作只作用於目前 IDE。1.10.1 起**移除檢視器入口**（`viewClineMcp`／`viewKiloMcp` 指令與快捷選單項目），統計只在狀態列與懸停視窗，設定檔改由快捷選單「設定檔」區塊開啟。
+- 回歸測試：`node antigravity-mcp-manager/tests/kilo-mcp-service.test.js`（K1–K5）。
+
 ---
 
 ## 9. 首次建圖／重建（`graphify-out/` 不存在時）
@@ -267,6 +277,8 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 
 | 日期 | 變更 | 來源 |
 | :--- | :--- | :--- |
+| 2026-11-02 | mcp-manager `1.10.0 → 1.10.1`＝**移除 Cline／Kilo 檢視器入口**：快捷選單不再有「檢視 … MCP 伺服器狀態」、移除 `antigravity.mcp.viewClineMcp`／`viewKiloMcp` 指令與檢視器程式、清掉對應三語鍵；統計與「開啟設定檔」保留 | 使用者回報：快捷選單不需要檢視功能 |
+| 2026-11-02 | mcp-manager `1.9.3 → 1.10.0`＝**狀態列新增 Kilo 統計（純檢視）**：`services/kiloMcpService.js` 讀 `~/.config/kilo/kilo.jsonc`（JSONC、`mcp` 段、`enabled:false` 判定）、`displayMode` 加 `kilo`、狀態列／懸停／快捷選單／檢視器／檔案監聽與 `antigravity.mcp.viewKiloMcp` 指令；三語文案；新增 `kilo-mcp-service`（K1–K5）測試，測試總數 14→15 支；圖譜 1875→**1912** 節點／3375→**3434** 邊／118→**115** 社群（commit `c94c6569`） | 使用者需求：下方工具列也要能顯示 Kilo（目前顯示 MCP (Cline)） |
 | 2026-11-02 | inspector `1.3.0 → 1.3.1`＝**Kilo 對話模型顯示正規化**：`session.model` 是 JSON 字串，新增 `_parseModel()` 只取 `id`、`providerID` 另存 `provider`；`session.model` 為空時由 `_collectMessageModels()` 退回訊息中的模型；非 Antigravity 來源缺模型改顯示 `—`（不再誤顯示 Gemini Flash）。`kilo-snapshot` 補 K1／K2 斷言；圖譜 1873→**1875** 節點／3371→**3375** 邊／116→**118** 社群 | 使用者回報：對話使用模型顯示成 JSON 字串太雜亂 |
 | 2026-11-02 | inspector `1.2.8 → 1.3.0`＝**新增 Kilo 對話快照來源**：`services/kiloSessionService.js` 以 `node:sqlite` 唯讀查 `kilo.db`（session 清單／part 足跡），`contextScannerService` 加 `kilo` 佈局（AGENTS.md／.kilo/rules／.agents/skills，跳過 ~/.gemini），`mcpDetectorService` 加 `scanKiloMcpServers`（JSONC 解析）＋ `kiloScope` 設定＋黃色 `src-kilo` chip；新增 `kilo-snapshot`（K0–K3）測試，測試總數 13→14 支；圖譜 1815→**1873** 節點／3270→**3371** 邊／113→**116** 社群（commit `f9cc2b6b`） | 使用者需求：最近對話快照也要能看 Kilo |
 | 2026-11-02 | toolbox `1.8.0 → 1.8.1`＝**Kilo 對話統計修正**：新增 `brainService.getKiloBrainStats()`，以 `node:sqlite` 唯讀查 `kilo.db` 的 `session` 表（不支援時退回 `storage/session_share/*.json` 檔數），佔用空間取整個 `~/.local/share/kilo`；修正 Kilo 卡片顯示 0 筆／0 MB。chip 顏色由琥珀改**黃 `#ffd54f`**；新增 `kilo-brain-stats`（K1–K4）測試，測試總數 12→13 支；圖譜 1791→**1815** 節點／3233→**3270** 邊／108→**113** 社群 | 使用者回報：Kilo 對話記憶庫顯示 0 MB（實測 8 筆／58.4 MB），且 chip 想改黃色 |

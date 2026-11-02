@@ -22,6 +22,7 @@ const os = require('node:os');
 const CursorEnablementService = require('./cursorEnablementService');
 const VscodeEnablementService = require('./vscodeEnablementService');
 const ClineMcpService = require('./clineMcpService');
+const KiloMcpService = require('./kiloMcpService');
 const CopilotCliMcpService = require('./copilotCliMcpService');
 const AgentHostMcpService = require('./agentHostMcpService');
 const I18n = require('./i18nService');
@@ -46,6 +47,15 @@ class McpConfigService {
 
   static get clineConfigPath() {
     return ClineMcpService.getConfigPath();
+  }
+
+  /** Kilo 是否可用（擴充啟用或 ~/.config/kilo/kilo.jsonc 存在；CLI 使用者不一定裝擴充） */
+  static get isKiloInstalled() {
+    return KiloMcpService.isAvailable();
+  }
+
+  static get kiloConfigPath() {
+    return KiloMcpService.getConfigPath();
   }
 
   /** Copilot CLI 設定檔路徑（唯讀來源；供檔案監聽與快捷選單使用） */
@@ -133,14 +143,14 @@ class McpConfigService {
   static get displayMode() {
     try {
       const mode = vscode?.workspace?.getConfiguration('antigravity.mcp')?.get('displayMode');
-      if (mode === 'antigravity' || mode === 'cline' || mode === 'both') return mode;
+      if (mode === 'antigravity' || mode === 'cline' || mode === 'kilo' || mode === 'both') return mode;
     } catch (_) {}
     return 'both';
   }
 
   /** 寫入狀態列顯示範圍（全專案唯一的寫入點） */
   static async setDisplayMode(mode) {
-    if (!['antigravity', 'cline', 'both'].includes(mode)) return false;
+    if (!['antigravity', 'cline', 'kilo', 'both'].includes(mode)) return false;
     await vscode.workspace
       .getConfiguration('antigravity.mcp')
       .update('displayMode', mode, vscode.ConfigurationTarget.Global);
@@ -159,7 +169,7 @@ class McpConfigService {
       const cfg = vscode.workspace.getConfiguration('antigravity.mcp');
       const inspect = typeof cfg.inspect === 'function' ? cfg.inspect('displayMode') : null;
       const explicitlySet = !!(inspect && (inspect.globalValue !== undefined || inspect.workspaceValue !== undefined));
-      if (!explicitlySet && ['antigravity', 'cline', 'both'].includes(legacy)) {
+      if (!explicitlySet && ['antigravity', 'cline', 'kilo', 'both'].includes(legacy)) {
         await this.setDisplayMode(legacy);
       }
       await context.globalState.update('antigravity.mcp.displaySource', undefined);
@@ -346,6 +356,33 @@ class McpConfigService {
   }
 
   /**
+   * 讀取 Kilo 的 MCP 摘要（純檢視）
+   * 與 Cline 相同：狀態列、懸停視窗與快捷選單依此並列顯示；開關由 Kilo 自身管理。
+   */
+  static async readKiloSummary() {
+    const isKiloAvailable = KiloMcpService.isAvailable();
+    if (!isKiloAvailable) {
+      return {
+        isKiloInstalled: false,
+        kiloServers: {},
+        kiloStats: { total: 0, enabled: 0, disabled: 0 },
+        kiloConfigPath: '',
+        kiloEnabledNames: [],
+      };
+    }
+
+    const kiloData = await KiloMcpService.getServers();
+    const kiloServers = kiloData.servers || {};
+    return {
+      isKiloInstalled: true,
+      kiloServers,
+      kiloStats: kiloData.stats || { total: 0, enabled: 0, disabled: 0 },
+      kiloConfigPath: kiloData.path || '',
+      kiloEnabledNames: Object.keys(kiloServers).filter((name) => kiloServers[name].disabled !== true),
+    };
+  }
+
+  /**
    * 讀取 Copilot CLI 的 MCP 摘要（純檢視）
    * 僅在 VS Code 分支使用：Copilot CLI 與 VS Code 同屬 Copilot 生態，
    * 且 Copilot CLI 設定檔的使用者就是這個宿主的使用者。
@@ -399,7 +436,10 @@ class McpConfigService {
     // Cline 摘要（純檢視）：與 VS Code 分支共用同一份讀取邏輯，避免兩處各寫一份而再度不同步
     const { isClineInstalled, clineServers, clineStats, clineConfigPath, clineEnabledNames } =
       await this.readClineSummary();
-    const effectiveDisplaySource = isClineInstalled ? displaySource : 'antigravity';
+    const { isKiloInstalled, kiloServers, kiloStats, kiloConfigPath, kiloEnabledNames } =
+      await this.readKiloSummary();
+    const hasForkSource = isClineInstalled || isKiloInstalled;
+    const effectiveDisplaySource = hasForkSource ? displaySource : 'antigravity';
 
     const viewOnly = this.isViewOnly;
     const configPath = this.globalConfigPath;
@@ -453,13 +493,18 @@ class McpConfigService {
       envName: this.envName,
       isClineInstalled,
       clineConfigPath,
+      isKiloInstalled,
+      kiloConfigPath,
       displaySource: effectiveDisplaySource,
       agStats,
       clineStats,
+      kiloStats,
       combinedStats,
       agEnabledNames,
       clineEnabledNames,
+      kiloEnabledNames,
       clineServers,
+      kiloServers,
       config: {
         ...rawConfig,
         mcpServers: displayServers,
@@ -684,6 +729,9 @@ class McpConfigService {
     // Cline 僅檢視：與 Antigravity / Cursor 一致地並列顯示，開關仍由 Cline 自身 UI 管理
     const { isClineInstalled, clineServers, clineStats, clineConfigPath, clineEnabledNames } =
       await this.readClineSummary();
+    // Kilo 同樣是獨立設定檔（~/.config/kilo/kilo.jsonc），純檢視並列顯示
+    const { isKiloInstalled, kiloServers, kiloStats, kiloConfigPath, kiloEnabledNames } =
+      await this.readKiloSummary();
 
     return {
       path: configPath,
@@ -702,9 +750,12 @@ class McpConfigService {
       configMissing: createdConfig,
       isClineInstalled,
       clineConfigPath,
-      displaySource: isClineInstalled ? displaySource : 'antigravity',
+      isKiloInstalled,
+      kiloConfigPath,
+      displaySource: (isClineInstalled || isKiloInstalled) ? displaySource : 'antigravity',
       agStats,
       clineStats,
+      kiloStats,
       combinedStats: {
         total: agStats.total + clineStats.total,
         enabled: agStats.enabled + clineStats.enabled,
@@ -712,7 +763,9 @@ class McpConfigService {
       },
       agEnabledNames,
       clineEnabledNames,
+      kiloEnabledNames,
       clineServers,
+      kiloServers,
       isCopilotCliAvailable,
       copilotCliParseError,
       copilotCliConfigPath,

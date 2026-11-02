@@ -14,9 +14,6 @@ const McpConfigService = require('./services/mcpConfigService');
 const ProbeService = require('./services/probeService');
 const SystemService = require('./services/systemService');
 const I18n = require('./services/i18nService');
-// Cline 純檢視（showClineMcpViewer 直接使用）；
-// 其 init(context) 已由 McpConfigService.init 統一完成，勿重複呼叫。
-const ClineMcpService = require('./services/clineMcpService');
 
 // 原生 UI（狀態列、通知、Toast）的語言須與面板一致，
 // 故統一由 I18nService 提供；解析順序見該模組。
@@ -278,6 +275,7 @@ class MCPManagerViewProvider {
         const globalData = await McpConfigService.getGlobalData(McpConfigService.displayMode);
         const servers = (globalData.config && globalData.config.mcpServers) || {};
         const clineServers = globalData.clineServers || {};
+        const kiloServers = globalData.kiloServers || {};
         const copilotCliServers = globalData.copilotCliServers || {};
         const fingerprint = JSON.stringify({
           path: globalData.path,
@@ -290,6 +288,11 @@ class MCPManagerViewProvider {
           clineServers: Object.keys(clineServers)
             .sort()
             .map((name) => [name, clineServers[name].disabled === true]),
+          // Kilo 同為獨立設定檔（~/.config/kilo/kilo.jsonc），只改 Kilo 設定時也要更新狀態列
+          kiloStats: globalData.kiloStats || { total: 0, enabled: 0, disabled: 0 },
+          kiloServers: Object.keys(kiloServers)
+            .sort()
+            .map((name) => [name, kiloServers[name].disabled === true]),
           // Copilot CLI 同為獨立設定檔來源：清單變更（含停用數不變的增刪）也要反映
           copilotCliStats: globalData.copilotCliStats || { total: 0, enabled: 0, disabled: 0 },
           copilotCliServers: Object.keys(copilotCliServers)
@@ -312,21 +315,28 @@ class MCPManagerViewProvider {
         // 更新 IDE 底部 Status Bar
         if (this._statusBarItem) {
           const isCline = globalData.isClineInstalled;
+          const isKilo = globalData.isKiloInstalled;
           // stats 已是「主要來源」的數字（VS Code 宿主在 Copilot CLI 有伺服器時即為 CLI）
           const stats = globalData.stats || { total: 0, enabled: 0, disabled: 0 };
           const clineStats = globalData.clineStats || { total: 0, enabled: 0, disabled: 0 };
+          const kiloStats = globalData.kiloStats || { total: 0, enabled: 0, disabled: 0 };
           const primaryShort = globalData.primarySourceShort || McpConfigService.nativeSourceShort;
 
           // 狀態列簡潔文字（顯示範圍一律取自 McpConfigService.displayMode，單一真相來源）
           const currentMode = McpConfigService.displayMode;
 
-          if (isCline) {
+          if (isCline || isKilo) {
             if (currentMode === 'antigravity') {
               this._statusBarItem.text = `$(plug) MCP: ${primaryShort} ${stats.enabled}/${stats.total}`;
-            } else if (currentMode === 'cline') {
+            } else if (currentMode === 'cline' && isCline) {
               this._statusBarItem.text = `$(plug) MCP (Cline): ${clineStats.enabled}/${clineStats.total}`;
+            } else if (currentMode === 'kilo' && isKilo) {
+              this._statusBarItem.text = `$(plug) MCP (Kilo): ${kiloStats.enabled}/${kiloStats.total}`;
             } else {
-              this._statusBarItem.text = `$(plug) MCP: ${primaryShort} ${stats.enabled}/${stats.total} · Cline ${clineStats.enabled}/${clineStats.total}`;
+              const parts = [`$(plug) MCP: ${primaryShort} ${stats.enabled}/${stats.total}`];
+              if (isCline) parts.push(`Cline ${clineStats.enabled}/${clineStats.total}`);
+              if (isKilo) parts.push(`Kilo ${kiloStats.enabled}/${kiloStats.total}`);
+              this._statusBarItem.text = parts.join(' · ');
             }
           } else {
             this._statusBarItem.text = `$(plug) MCP: ${stats.enabled}/${stats.total}`;
@@ -371,7 +381,7 @@ class MCPManagerViewProvider {
               }
             : null;
 
-          if (isCline) {
+          if (isCline || isKilo) {
             tooltip.appendMarkdown(`### $(plug) ${I18n.t('tooltip_mcp_dashboard')}\n\n`);
 
             // 1. 主要來源啟用狀態
@@ -381,17 +391,29 @@ class MCPManagerViewProvider {
             this._appendSourceTooltip(tooltip, secondarySection);
 
             // 3. Cline 啟用狀態
-            this._appendSourceTooltip(tooltip, {
-              name: I18n.t('tooltip_cline_mcp'),
-              stats: clineStats,
-              enabledNames: globalData.clineEnabledNames || [],
-            });
+            if (isCline) {
+              this._appendSourceTooltip(tooltip, {
+                name: I18n.t('tooltip_cline_mcp'),
+                stats: clineStats,
+                enabledNames: globalData.clineEnabledNames || [],
+              });
+            }
+
+            // 4. Kilo 啟用狀態
+            if (isKilo) {
+              this._appendSourceTooltip(tooltip, {
+                name: I18n.t('tooltip_kilo_mcp'),
+                stats: kiloStats,
+                enabledNames: globalData.kiloEnabledNames || [],
+              });
+            }
 
             const modeNames = {
               antigravity: I18n.t('menu_mode_antigravity', {
                 name: globalData.primarySourceName || McpConfigService.nativeSourceName,
               }),
               cline: I18n.t('menu_mode_cline'),
+              kilo: I18n.t('menu_mode_kilo'),
               both: I18n.t('menu_mode_both'),
             };
             const currentModeText = modeNames[McpConfigService.displayMode] || modeNames.both;
@@ -564,9 +586,6 @@ async function activate(context) {
     vscode.commands.registerCommand('antigravity.mcp.toggleDisplayMode', async () => {
       await promptChangeDisplayMode(provider);
     }),
-    vscode.commands.registerCommand('antigravity.mcp.viewClineMcp', async () => {
-      await showClineMcpViewer();
-    }),
     vscode.commands.registerCommand('antigravity.mcp.openInEditor', openInEditorHandler),
     vscode.commands.registerCommand('antigravity.mcp.openInEditor.en', openInEditorHandler),
     vscode.commands.registerCommand('antigravity.mcp.refresh', async () => {
@@ -609,6 +628,22 @@ async function activate(context) {
         clineWatcher.onDidCreate(() => provider.refreshWebviewData());
         clineWatcher.onDidDelete(() => provider.refreshWebviewData());
         context.subscriptions.push(clineWatcher);
+      } catch (e) {}
+    }
+
+    // Kilo MCP 設定檔監聽（~/.config/kilo/kilo.jsonc；只有設定檔、沒有擴充時也可用）
+    if (McpConfigService.isKiloInstalled && McpConfigService.kiloConfigPath) {
+      try {
+        const kiloPath = McpConfigService.kiloConfigPath;
+        const kiloDir = path.dirname(kiloPath);
+        const kiloName = path.basename(kiloPath);
+        const kiloWatcher = vscode.workspace.createFileSystemWatcher(
+          new vscode.RelativePattern(vscode.Uri.file(kiloDir), kiloName)
+        );
+        kiloWatcher.onDidChange(() => provider.refreshWebviewData());
+        kiloWatcher.onDidCreate(() => provider.refreshWebviewData());
+        kiloWatcher.onDidDelete(() => provider.refreshWebviewData());
+        context.subscriptions.push(kiloWatcher);
       } catch (e) {}
     }
 
@@ -695,6 +730,7 @@ async function showQuickMenu(provider) {
   try {
     const globalData = await McpConfigService.getGlobalData();
     const isCline = globalData.isClineInstalled;
+    const isKilo = globalData.isKiloInstalled;
     const items = [];
 
     // 1. 重新載入
@@ -704,22 +740,16 @@ async function showQuickMenu(provider) {
       action: 'refresh',
     });
 
-    // 2. 若安裝了 Cline，提供專屬的「檢視 Cline MCP」與「切換狀態列顯示方式」
-    if (isCline) {
-      const clineStats = globalData.clineStats || { enabled: 0, total: 0 };
-      items.push({
-        label: `$(eye) ${I18n.t('menu_view_cline')}`,
-        description: `(${clineStats.enabled}/${clineStats.total})`,
-        detail: I18n.t('menu_view_cline_desc'),
-        action: 'viewCline',
-      });
-
+    // 2. 若安裝了 Cline／Kilo，提供「切換狀態列顯示方式」
+    //    （檢視器入口已移除：統計在狀態列、設定檔由下方「設定檔」區塊開啟）
+    if (isCline || isKilo) {
       const currentMode = McpConfigService.displayMode;
       const nativeName = globalData.primarySourceName || McpConfigService.nativeSourceName;
       const modeLabels = {
         both: I18n.t('mode_both_label'),
         antigravity: I18n.t('mode_antigravity_label', { name: nativeName }),
         cline: I18n.t('mode_cline_label'),
+        kilo: I18n.t('mode_kilo_label'),
       };
 
       items.push({
@@ -777,6 +807,15 @@ async function showQuickMenu(provider) {
       });
     }
 
+    if (isKilo && globalData.kiloConfigPath) {
+      items.push({
+        label: `$(file-code) ${I18n.t('menu_open_kilo_config')}`,
+        description: globalData.kiloConfigPath,
+        action: 'openConfig',
+        path: globalData.kiloConfigPath,
+      });
+    }
+
     // Copilot CLI 設定檔（唯讀來源；與 VS Code 的 mcp.json 是兩份不同檔案，
     // 故即使在 VS Code 宿主也要獨立列出，否則使用者找不到面板上那些 CLI 條目的來源）
     if (globalData.isCopilotCliAvailable && globalData.copilotCliConfigPath) {
@@ -824,10 +863,6 @@ async function showQuickMenu(provider) {
         provider.pushToast(I18n.t('toast_refreshed'), 'info');
         break;
       }
-      case 'viewCline': {
-        await showClineMcpViewer();
-        break;
-      }
       case 'toggleDisplayMode': {
         await promptChangeDisplayMode(provider);
         break;
@@ -872,13 +907,16 @@ async function promptChangeDisplayMode(provider) {
   // 「本 IDE」的標籤與數字一律跟隨主要來源（VS Code 宿主在 Copilot CLI 有伺服器時即為 CLI）
   const stats = globalData.stats || { enabled: 0, total: 0 };
   const clineStats = globalData.clineStats || { enabled: 0, total: 0 };
+  const kiloStats = globalData.kiloStats || { enabled: 0, total: 0 };
 
   const name = globalData.primarySourceName || McpConfigService.nativeSourceName;
+  const forkDetails = [`Cline: ${clineStats.enabled}/${clineStats.total}`];
+  if (globalData.isKiloInstalled) forkDetails.push(`Kilo: ${kiloStats.enabled}/${kiloStats.total}`);
   const modes = [
     {
       label: I18n.t('mode_both_label'),
       description: I18n.t('mode_both_desc', { name }),
-      detail: `${name}: ${stats.enabled}/${stats.total} · Cline: ${clineStats.enabled}/${clineStats.total}`,
+      detail: `${name}: ${stats.enabled}/${stats.total} · ${forkDetails.join(' · ')}`,
       value: 'both',
       picked: current === 'both',
     },
@@ -896,6 +934,13 @@ async function promptChangeDisplayMode(provider) {
       value: 'cline',
       picked: current === 'cline',
     },
+    {
+      label: I18n.t('mode_kilo_label'),
+      description: I18n.t('mode_kilo_desc'),
+      detail: `Kilo: ${kiloStats.enabled}/${kiloStats.total}`,
+      value: 'kilo',
+      picked: current === 'kilo',
+    },
   ];
 
   const selected = await vscode.window.showQuickPick(modes, {
@@ -911,99 +956,6 @@ async function promptChangeDisplayMode(provider) {
       I18n.t('status_mode_updated', { mode: selected.label }),
       3000
     );
-  }
-}
-
-/**
- * 下方工具列專屬：檢視 Cline MCP 工具清單與狀態 (純檢視，不提供側邊開關)
- */
-async function showClineMcpViewer() {
-  try {
-    const clineData = await ClineMcpService.getServers();
-    const servers = clineData.servers || {};
-    const configPath = clineData.path || '';
-    const serverKeys = Object.keys(servers);
-
-    if (serverKeys.length === 0) {
-      vscode.window.showInformationMessage(
-        I18n.t('empty_no_config', { path: configPath || 'cline_mcp_settings.json' })
-      );
-      return;
-    }
-
-    const items = [
-      {
-        label: `$(file-code) ${I18n.t('cline_viewer_open_config')}`,
-        description: configPath,
-        detail: I18n.t('cline_viewer_open_config_desc'),
-        action: 'openConfig',
-        path: configPath,
-      },
-      {
-        label: I18n.t('cline_viewer_title'),
-        kind: vscode.QuickPickItemKind.Separator,
-      },
-    ];
-
-    // 已啟用的排在前面，停用的排在後面
-    const sortedKeys = serverKeys.sort((a, b) => {
-      const aOn = servers[a].disabled !== true;
-      const bOn = servers[b].disabled !== true;
-      if (aOn !== bOn) return aOn ? -1 : 1;
-      return a.localeCompare(b);
-    });
-
-    for (const key of sortedKeys) {
-      const s = servers[key];
-      const isEnabled = s.disabled !== true;
-      const icon = isEnabled ? '$(pass-filled)' : '$(circle-slash)';
-      const statusText = I18n.t(isEnabled ? 'cline_status_enabled' : 'cline_status_disabled');
-      const targetDetail = s.serverUrl || s.url || (s.command ? `${s.command} ${(s.args || []).join(' ')}` : (s.type || ''));
-
-      items.push({
-        label: `${icon} ${key}`,
-        description: `[${statusText}] ${s.description || ''}`,
-        detail: targetDetail,
-        action: 'viewDetail',
-        server: s,
-      });
-    }
-
-    const selected = await vscode.window.showQuickPick(items, {
-      placeHolder: I18n.t('cline_viewer_placeholder'),
-      matchOnDescription: true,
-      matchOnDetail: true,
-    });
-
-    if (!selected) return;
-
-    if (selected.action === 'openConfig') {
-      await SystemService.openConfigFile(selected.path);
-    } else if (selected.action === 'viewDetail') {
-      const s = selected.server;
-      const isEnabled = s.disabled !== true;
-      const statusText = I18n.t(isEnabled ? 'cline_status_enabled' : 'cline_status_disabled');
-      const lines = [
-        `【Cline MCP: ${s.name}】`,
-        `狀態: ${statusText}`,
-        s.type ? `類型: ${s.type}` : '',
-        s.url || s.serverUrl ? `URL: ${s.url || s.serverUrl}` : '',
-        s.command ? `命令: ${s.command} ${(s.args || []).join(' ')}` : '',
-        s.env ? `環境變數: ${Object.keys(s.env).join(', ')}` : '',
-        s.description ? `說明: ${s.description}` : '',
-      ].filter(Boolean).join('\n');
-
-      const choice = await vscode.window.showInformationMessage(
-        lines,
-        { modal: true },
-        I18n.t('cline_viewer_open_config')
-      );
-      if (choice === I18n.t('cline_viewer_open_config')) {
-        await SystemService.openConfigFile(configPath);
-      }
-    }
-  } catch (err) {
-    vscode.window.showErrorMessage(`[Cline MCP Viewer] ${err.message}`);
   }
 }
 
