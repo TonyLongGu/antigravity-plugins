@@ -8,7 +8,7 @@
 
 | 套件名稱 | 目錄名稱 | 核心功能說明 | 支援 IDE |
 | :--- | :--- | :--- | :--- |
-| 🛠️ **全能控制中心** | `antigravity-toolbox` | 側邊欄管理工作區、專案腳本、依 IDE／Cline 切換的目錄捷徑與檔案總管過濾，並可統計、清理對話紀錄 | Antigravity / Cursor / VS Code |
+| 🛠️ **全能控制中心** | `antigravity-toolbox` | 側邊欄管理工作區、專案腳本、依 IDE／Cline／Kilo 切換的目錄捷徑與檔案總管過濾，並可統計、清理對話紀錄 | Antigravity / Cursor / VS Code |
 | 📊 **AI 額度即時監控** | `antigravity-quota-status` | 狀態列顯示額度與重置倒數。Antigravity 連本機 Language Server；Cursor 查雲端 usage API。VS Code 沒有對應額度 API | Antigravity / Cursor |
 | 🔌 **MCP 伺服器管理器** | `antigravity-mcp-manager` | Antigravity 以左側儀表板開關 MCP。Cursor 與 VS Code 只在狀態列顯示啟用數。目前 IDE 已啟用 Cline 時才並列 Cline 統計（純檢視；未安裝或已停用則不顯示） | Antigravity / Cursor / VS Code |
 | ⚡ **高頻操作快捷面板** | `antigravity-quick-access` | 檔案總管釘選／暫存清單，可拖曳至 Chat 與終端機，並支援多選批次操作 | Antigravity / Cursor / VS Code |
@@ -106,10 +106,11 @@
 
 #### 安裝後：在同一個面板切換 IDE 功能
 
-不論你在哪個 IDE，控制中心頂部都有 **Antigravity / Copilot / Cursor / Cline** 彩色類別切換鈕（順序固定；各類別一色：綠／藍／橘／紫）：
+不論你在哪個 IDE，控制中心頂部都有 **Antigravity / Copilot / Cursor / Cline / Kilo** 彩色類別切換鈕（順序固定；各類別一色：綠／藍／橘／紫／黃）：
 
 - 未手動指定（預設）：依目前開啟的 IDE 顯示對應功能，行為與舊版完全相同；作用中的類別會以該類別的顏色高亮。
-- 點其他類別：即使人在 VS Code，也能直接檢視 Cursor、Antigravity 或 Cline 的資料路徑與對話紀錄（對應設定 `antigravity.uiFlavor`，會記憶選擇）。
+- 點其他類別：即使人在 VS Code，也能直接檢視 Cursor、Antigravity、Cline 或 Kilo 的資料路徑與對話紀錄（對應設定 `antigravity.uiFlavor`，會記憶選擇）。
+- Cline／Kilo 都是外掛、沒有自己的宿主，`auto` 永遠不會判定成兩者，只能手動點選。
 - 點一下目前宿主的類別：回復「跟隨宿主」（等同 `auto`），所以不需要額外的「自動」鈕。
 - 只會顯示本機實際有資料的類別；可用類別少於兩個時，整列切換鈕自動隱藏。
 

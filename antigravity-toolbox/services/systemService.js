@@ -85,14 +85,14 @@ function detectHostIde() {
 /**
  * 控制中心可切換的資料來源類別（對應 antigravity.uiFlavor / 面板頂部類別切換鈕）
  *
- * cline 是「外掛」而非 IDE：它寄生在 VS Code / Cursor / Antigravity 內，
- * 因此只能手動指定，auto 永遠不會判定成 cline（見 resolveFlavor）。
+ * cline／kilo 是「外掛」而非 IDE：它們寄生在 VS Code / Cursor / Antigravity 內，
+ * 因此只能手動指定，auto 永遠不會判定成 cline／kilo（見 resolveFlavor）。
  */
-const FLAVORS = ['antigravity', 'cursor', 'copilot', 'cline'];
+const FLAVORS = ['antigravity', 'cursor', 'copilot', 'cline', 'kilo'];
 
 /**
  * 讀取使用者手動指定的資料來源類別。
- * @returns {'auto'|'antigravity'|'cursor'|'copilot'|'cline'} auto 代表依宿主自動判定
+ * @returns {'auto'|'antigravity'|'cursor'|'copilot'|'cline'|'kilo'} auto 代表依宿主自動判定
  */
 function getFlavorOverride() {
   try {
@@ -109,8 +109,8 @@ function getFlavorOverride() {
  *
  * 手動指定（非 auto）時一律以指定值為準，讓同一套外掛在各 IDE 顯示一致；
  * auto 時依宿主判定：Cursor → cursor、VS Code 家族 + Copilot → copilot、其餘 → antigravity。
- * （cline 為寄生在 IDE 內的外掛，沒有自己的宿主，故 auto 不會回傳 cline。）
- * @returns {'antigravity'|'cursor'|'copilot'|'cline'}
+ * （cline／kilo 為寄生在 IDE 內的外掛，沒有自己的宿主，故 auto 不會回傳兩者。）
+ * @returns {'antigravity'|'cursor'|'copilot'|'cline'|'kilo'}
  */
 function resolveFlavor() {
   const override = getFlavorOverride();
@@ -394,8 +394,67 @@ function resolveClineMcpConfigPath() {
 }
 
 /**
+ * Kilo Code 設定家目錄。
+ *
+ * 7.x（opencode 架構）採 XDG：`~/.config/kilo/kilo.jsonc` 是全域設定（含 mcp 段）；
+ * 舊版與相容層另外會讀 `~/.kilo`、`~/.kilocode`，因此優先指向實際存在的那一個。
+ * @returns {string}
+ */
+function getKiloConfigHome() {
+  const homeDir = getHomeDir();
+  const xdgConfigHome = process.env.XDG_CONFIG_HOME || path.join(homeDir, '.config');
+  return firstExistingDir(
+    [
+      path.join(xdgConfigHome, 'kilo'),
+      path.join(homeDir, '.kilo'),
+      path.join(homeDir, '.kilocode'),
+    ],
+    path.join(xdgConfigHome, 'kilo')
+  );
+}
+
+/**
+ * Kilo Code 資料家目錄（XDG data）。
+ *
+ * 對話資料庫 `kilo.db`、`storage/`、`auth.json` 都在這裡；
+ * 與 Cline 的「一資料夾＝一對話」不同，7.x 的對話存在 SQLite 內。
+ * @returns {string}
+ */
+function getKiloDataHome() {
+  const xdgDataHome = process.env.XDG_DATA_HOME || path.join(getHomeDir(), '.local', 'share');
+  return path.join(xdgDataHome, 'kilo');
+}
+
+/** Kilo Code 的 VS Code 擴充儲存區（全域 MCP 設定與舊版 tasks 對話資料夾） */
+function getKiloExtensionStorageDir() {
+  return path.join(detectHostIde().userSettingsDir, 'globalStorage', 'kilocode.kilo-code');
+}
+
+/**
+ * Kilo 舊版（Cline 分支時期）的資料夾型對話：`globalStorage/kilocode.kilo-code/tasks/<id>/`。
+ * 7.x 起對話改存 `kilo.db`，此目錄可能不存在。
+ * @returns {string}
+ */
+function resolveKiloTasksDir() {
+  return path.join(getKiloExtensionStorageDir(), 'tasks');
+}
+
+/**
+ * Kilo 全域 MCP 設定檔。
+ *
+ * 實際生效的是 `~/.config/kilo/kilo.jsonc` 的 `mcp` 段；檔案不存在時才退回擴充儲存區的
+ * `settings/mcp_settings.json`（Kilo 擴充自身維護的全域 MCP 清單）。
+ * @returns {string}
+ */
+function resolveKiloMcpConfigPath() {
+  const configFile = path.join(getKiloConfigHome(), 'kilo.jsonc');
+  if (fs.existsSync(configFile)) return configFile;
+  return path.join(getKiloExtensionStorageDir(), 'settings', 'mcp_settings.json');
+}
+
+/**
  * 取得全域目錄路徑對應表（依指定或解析出的資料來源類別）
- * @param {'antigravity'|'cursor'|'copilot'|'cline'} [flavor] 省略時依 antigravity.uiFlavor / 宿主自動判定
+ * @param {'antigravity'|'cursor'|'copilot'|'cline'|'kilo'} [flavor] 省略時依 antigravity.uiFlavor / 宿主自動判定
  */
 function getGlobalPaths(flavor = resolveFlavor()) {
   const homeDir = getHomeDir();
@@ -468,6 +527,31 @@ function getGlobalPaths(flavor = resolveFlavor()) {
     };
   }
 
+  if (flavor === 'kilo') {
+    const kiloConfig = getKiloConfigHome();
+    const kiloData = getKiloDataHome();
+
+    return {
+      globalConfig: kiloConfig,
+      // Kilo 沒有固定名稱的全域技能目錄；存在 ~/.config/kilo/skills 時優先，否則用本工具的同步集散地
+      skills: firstExistingDir(
+        [path.join(kiloConfig, 'skills'), path.join(homeDir, '.agents', 'skills')],
+        path.join(homeDir, '.agents', 'skills')
+      ),
+      // 7.x 沒有獨立的 rules 目錄：全域規範寫在 kilo.jsonc 的 instructions，入口指向設定家目錄底下
+      rules: path.join(kiloConfig, 'rules'),
+      plugins: path.join(kiloConfig, 'plugins'),
+      mcpConfig: resolveKiloMcpConfigPath(),
+      appData: kiloData,
+      // 對話本體在 kilo.db（SQLite），這裡指向資料家目錄供使用者自行檢視
+      brain: kiloData,
+      brainScanRoot: resolveKiloTasksDir(),
+      userSettingsDir: host.userSettingsDir,
+      userSettingsPath: host.userSettingsPath,
+      ideExtensions: host.ideExtensionsDir,
+    };
+  }
+
   const globalConfigRoot = path.join(homeDir, '.gemini', 'config');
   const globalAppRoot = path.join(homeDir, '.gemini', 'antigravity-ide');
 
@@ -488,8 +572,8 @@ function getGlobalPaths(flavor = resolveFlavor()) {
 
 /**
  * 收集對話紀錄資料夾
- * （Antigravity：brain；Cursor：各專案 agent-transcripts；Cline：data/sessions）
- * @param {'antigravity'|'cursor'|'copilot'|'cline'} [flavor] 省略時依 antigravity.uiFlavor / 宿主自動判定
+ * （Antigravity：brain；Cursor：各專案 agent-transcripts；Cline：data/sessions；Kilo：舊版 tasks）
+ * @param {'antigravity'|'cursor'|'copilot'|'cline'|'kilo'} [flavor] 省略時依 antigravity.uiFlavor / 宿主自動判定
  * @returns {string[]}
  */
 function collectBrainSessionDirs(flavor = resolveFlavor()) {
@@ -499,6 +583,20 @@ function collectBrainSessionDirs(flavor = resolveFlavor()) {
   // Copilot 的對話為「單檔 jsonl 分散於各工作區」，非資料夾結構，
   // 一律改由 copilotChatService 處理，此處不提供項目以免語意混淆。
   if (flavor === 'copilot') return sessions;
+
+  // Kilo 7.x 的對話存在 kilo.db（SQLite），不是資料夾；
+  // 只回收舊版（Cline 分支時期）留下的 tasks/<id>/，避免把 storage/ 之類的目錄誤判成對話。
+  if (flavor === 'kilo') {
+    const tasksDir = resolveKiloTasksDir();
+    if (!tasksDir || !fs.existsSync(tasksDir)) return sessions;
+    try {
+      const entries = fs.readdirSync(tasksDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) sessions.push(path.join(tasksDir, entry.name));
+      }
+    } catch {}
+    return sessions;
+  }
 
   if (flavor === 'cursor') {
     const projectsRoot = paths.brainScanRoot;
@@ -556,6 +654,10 @@ function getEnvironmentInfo() {
   const cursorHomeExists = fs.existsSync(getCursorHome());
   // Cline 是外掛而非 IDE：只要本機有 ~/.cline（IDE／CLI／SDK 共用）或其對話目錄即視為可用
   const hasCline = fs.existsSync(getClineHome()) || fs.existsSync(resolveClineSessionsDir());
+  // Kilo 同樣是外掛：設定家目錄、資料家目錄或擴充儲存區任一存在即視為可用
+  const hasKilo = fs.existsSync(getKiloConfigHome())
+    || fs.existsSync(getKiloDataHome())
+    || fs.existsSync(getKiloExtensionStorageDir());
 
   const config = vscode.workspace.getConfiguration('antigravity');
   // 預設為 false：在純 VS Code 等外部 IDE 中預設不顯示 Antigravity 專屬卡片
@@ -570,7 +672,7 @@ function getEnvironmentInfo() {
   // 3. VS Code + 手動開啟設定且有 Antigravity → antigravity（尊重使用者明確設定）
   // 4. VS Code + Copilot → copilot（顯示 Copilot 對應路徑與 chatSessions 對話紀錄）
   // 5. 其餘               → 隱藏兩張主機相依卡片
-  // （cline 永遠不會是 auto 的結果：它是寄生在 IDE 內的外掛，只能由使用者手動指定）
+  // （cline／kilo 永遠不會是 auto 的結果：都是寄生在 IDE 內的外掛，只能由使用者手動指定）
   let autoFlavor = 'antigravity';
   let autoShowHostModules = false;
 
@@ -607,6 +709,7 @@ function getEnvironmentInfo() {
     hasAntigravity,
     hasCursor: host.isCursor || cursorHomeExists,
     hasCline,
+    hasKilo,
     uiFlavor,
     autoFlavor,
     flavorOverride,
@@ -619,6 +722,7 @@ function getEnvironmentInfo() {
       cursor: Boolean(host.isCursor || cursorHomeExists),
       copilot: Boolean(isCopilot),
       cline: Boolean(hasCline),
+      kilo: Boolean(hasKilo),
     },
     paths: {
       globalConfig: paths.globalConfig,
@@ -672,6 +776,9 @@ async function handleOpenTarget(target, provider) {
       if (fs.existsSync(paths.mcpConfig)) {
         const doc = await vscode.workspace.openTextDocument(paths.mcpConfig);
         await vscode.window.showTextDocument(doc);
+      } else if (String(paths.mcpConfig).toLowerCase().endsWith('.jsonc')) {
+        // JSONC 是使用者既有設定（Kilo 的 kilo.jsonc），缺檔時不可寫入預設 mcpServers 內容，改開所在資料夾
+        await openFolderInside(path.dirname(paths.mcpConfig));
       } else {
         fs.writeFileSync(paths.mcpConfig, '{\n  "mcpServers": {}\n}\n', 'utf-8');
         const doc = await vscode.workspace.openTextDocument(paths.mcpConfig);

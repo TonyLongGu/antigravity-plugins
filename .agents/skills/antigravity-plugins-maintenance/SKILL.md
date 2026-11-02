@@ -32,25 +32,25 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 - **沒有程式碼共用**：2026-10-27 實測 2,974 條邊只有 **1 條**「跨外掛」（且是 `node:sqlite` builtin 的誤判）。真正的耦合是 **VS Code command id 字串**，見 §7。
 - **安裝邏輯只在根目錄 2 支腳本**：各外掛的 `install-extension.ps1`／`uninstall-extension.ps1`（共 12 支）自 2026-10-26 起是**薄殼**（各約 47 行、只剩語句沒有函式），只把自己的資料夾名稱當 `-Plugin` 轉呼叫根腳本。⇒ 改一次 6 個外掛同時生效。
 - **安裝政策＝一鍵全裝**（2026-10-26 起）：根 `install-all.ps1` 的 `-Target` 預設 `All`、`-Plugin` 省略＝全部外掛（可給資料夾名稱或 `package.json` 的 `name`，例：`-Plugin antigravity-quota-status` 或 `-Plugin ai-quota-status`）。`-Target Prompt` 在根腳本是互動選單，在 install 薄殼回溯相容為 `All`；uninstall 薄殼仍是選單。目標 IDE 由腳本自動偵測，使用者改用面板頂部「類別切換鈕」決定看哪一套 IDE 資料；不相容組合由 `$environmentExclusions` 自動略過。
-- **測試＝零相依、直接 `node <檔案>`**（無框架）。2026-10-31 實測 **12 支**：
-  `antigravity-toolbox/tests/`（`environment-flavor`／`mcp-label`／`skill-junction-sync`／`skill-sync-service`／`workspace-dedupe`／`workspace-remove`）、
+- **測試＝零相依、直接 `node <檔案>`**（無框架）。2026-11-02 實測 **13 支**：
+  `antigravity-toolbox/tests/`（`environment-flavor`／`kilo-brain-stats`／`mcp-label`／`skill-junction-sync`／`skill-sync-service`／`workspace-dedupe`／`workspace-remove`）、
   `antigravity-ai-context-inspector/tests/`（`cline-snapshot`／`cline-conditional-rules`／`mcp-vscode-sources`／`skill-junction-scan`／`snapshot-source-default`）、
   `antigravity-mcp-manager/tests/agent-host-enablement`。
 - **webview 前端**在 `media/`，**不進圖**（§3）。六個外掛都是 `main: ./extension.js`、CommonJS。
 
 ---
 
-## 3. 圖譜常數（2026-10-31 複驗，graphify 0.9.80）
+## 3. 圖譜常數（2026-11-02 複驗，graphify 0.9.80）
 
 | 項目 | 值 |
 | :--- | :--- |
 | 圖譜位置 | `graphify-out/`（根 `.gitignore` 已排除，**勿 commit**） |
-| 規模 | **1779** nodes / **3204** edges / **105** communities（65 顯示、40 thin 省略） |
-| 建圖標記 | `Built from commit` `7493df6a`（＝目前 HEAD；inspector 1.2.8 的改動仍在工作樹，`update` 已反映內容）。再跑 `update` 若回 `No code-graph topology changes detected` ⇒ 內容與工作樹一致 |
-| 語料 | 108 files · ~139,668 words；**76 個 code 檔**被抽取（AST）；30 檔未分類（`.bat` 14、無副檔名 10、`.css` 6） |
+| 規模 | **1815** nodes / **3270** edges / **113** communities（70 顯示、43 thin 省略） |
+| 建圖標記 | `Built from commit` `f6d880b2`（＝目前 HEAD；toolbox 1.8.1 的改動仍在工作樹，`update` 已反映內容）。再跑 `update` 若回 `No code-graph topology changes detected` ⇒ 內容與工作樹一致 |
+| 語料 | 109 files · ~141,042 words；**77 個 code 檔**被抽取（AST）；30 檔未分類（`.bat` 14、無副檔名 10、`.css` 6） |
 | 抽取品質 | 96% EXTRACTED／4% INFERRED（144 邊，平均信心 0.85）；**0 input／0 output token＝0 元** |
-| 產物大小 | `GRAPH_REPORT.md` **18 KB**（18,180 B，可整讀）、`graph.json` **2.2 MB**（禁整讀）、`graph.html` 約 1.8 MB |
-| 節點分佈 | script-runner 455／inspector **386**／toolbox 394／mcp-manager 265／quota-status 174／quick-access 79／根目錄 26（含 `node:sqlite` 1 與 2 支根腳本） |
+| 產物大小 | `GRAPH_REPORT.md` **19.2 KB**（19,244 B，可整讀）、`graph.json` **2.2 MB**（2,221,603 B，禁整讀）、`graph.html` 約 1.80 MB |
+| 節點分佈 | script-runner 455／toolbox **430**／inspector 386／mcp-manager 265／quota-status 174／quick-access 79／根目錄 26（含 `node:sqlite` 1 與 2 支根腳本） |
 | 不進圖 | `*.css`、`*.html`、`locales/*.json`、`*.md`（`.graphifyignore` 已排除 `*.md`） |
 
 > ⚠️ 上表是**快照**。用前先驗（三行）：
@@ -135,13 +135,13 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 
 ## 8. 六外掛速查
 
-> 版本＝2026-10-31 讀 `package.json` 實測（inspector 已升 1.2.8）；節點＝2026-10-31 圖譜實測。兩者都會過期 ⇒ 版本看各外掛 `package.json` 的 `version`，節點用 §3 的查法。
+> 版本＝2026-11-02 讀 `package.json` 實測（toolbox 已升 1.8.0、inspector 1.2.8）；節點＝2026-10-31 圖譜實測。兩者都會過期 ⇒ 版本看各外掛 `package.json` 的 `version`，節點用 §3 的查法。
 
 | 外掛 | 版本 | 節點 | 對外 id 家族 | view／container | 進入點／服務 |
 | :--- | :--- | ---: | :--- | :--- | :--- |
 | `antigravity-script-runner` | 1.7.1 | 455 | `scriptRunner.*`（8 個 id × `.en`／`.cn`＝24） | 無 view（右鍵選單＋媒體檢視） | `extension.js`／6 services（audio／video／image／stream） |
 | `antigravity-ai-context-inspector` | 1.2.8 | 386 | `antigravity.aiContext.*`（3 ＋ `.en`） | `antigravity.aiContextView`／`antigravity-ai-context-container` | `extension.js`／6 services（cline·cursor·vscode chat／contextScanner／mcpDetector） |
-| `antigravity-toolbox` | 1.7.0 | 394 | `antigravity.toolbox.*`（7 ＋ 4 `.en`） | `antigravity.toolboxView`／`antigravity-toolbox-container` | `extension.js`／6 services（brain／copilotChat／skillSync／workspace…） |
+| `antigravity-toolbox` | 1.8.1 | 406 | `antigravity.toolbox.*`（7 ＋ 4 `.en`） | `antigravity.toolboxView`／`antigravity-toolbox-container` | `extension.js`／6 services（brain／copilotChat／skillSync／workspace…） |
 | `antigravity-mcp-manager` | 1.9.3 | 265 | `antigravity.mcp.*`（6 ＋ `.en`） | `antigravity.mcpManagerView`／`mcp-manager-container` | `extension.js`／9 services |
 | `antigravity-quota-status` | 1.1.0（`name`＝`ai-quota-status`） | 174 | `aiQuota.*`（7，無變體） | 無 view（狀態列） | `extension.js`／4 services（quota／cursorAuth…） |
 | `antigravity-quick-access` | 1.2.6 | 79 | `antigravity.quickAccess.*`（20 × 3＝60） | `antigravity.quickAccessView` | `extension.js`／無 `services/` 目錄 |
@@ -152,7 +152,7 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 
 - 判定集中在 `antigravity-toolbox/services/systemService.js`：`getFlavorOverride()`（讀 `antigravity.uiFlavor`）→ `resolveFlavor()` → `getGlobalPaths(flavor)`／`collectBrainSessionDirs(flavor)`；`brainService` 以 `resolveFlavor()` 決定走 Brain 或 Copilot 分支。**切換類別後必須呼叫 `invalidateCache()`**（5 秒快取，否則顯示舊類別）。
 - 回歸測試：`node antigravity-toolbox/tests/environment-flavor.test.js`；i18n 鍵改動跑 `node antigravity-toolbox/tests/mcp-label.test.js`。
-- 切換鈕（1.6.0 起）＝**彩色 chips**，順序固定 `Antigravity` → `Copilot` → `Cursor` → `Cline`（不隨宿主變動）：`Antigravity`（綠 `#4ec9b0`）／`Copilot`（藍 `#9cdcfe`）／`Cursor`（橘 `#ce9178`）／`Cline`（紫 `#c586c0`）。只在啟用態上色、**不顯示對話筆數**（`flavorCounts`／`getFlavorSessionCounts` 已於 1.6.0 移除，勿再加回）。
+- 切換鈕（1.6.0 起）＝**彩色 chips**，順序固定 `Antigravity` → `Copilot` → `Cursor` → `Cline` → `Kilo`（不隨宿主變動）：`Antigravity`（綠 `#4ec9b0`）／`Copilot`（藍 `#9cdcfe`）／`Cursor`（橘 `#ce9178`）／`Cline`（紫 `#c586c0`）／`Kilo`（黃 `#ffd54f`）。只在啟用態上色、**不顯示對話筆數**（`flavorCounts`／`getFlavorSessionCounts` 已於 1.6.0 移除，勿再加回）。
 
 ### 8.2 toolbox 的工作區清單（重複登記＋拖曳手勢，1.7.0）
 
@@ -170,6 +170,14 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
   - 回歸測試：`node antigravity-toolbox/tests/workspace-remove.test.js`（R1 啟用中／R2 隱藏中／R3 找不到不寫檔／R4 相對路徑＋無 folderOrder／R5 重複登記／R6 無工作區）。
 - **已無「自動」鈕**：未指定時以 `autoFlavor` 為作用中，點「目前宿主」那顆 chip 即回寫 `auto`。
 - `cline` 是**外掛而非宿主**（`auto` 永遠不會命中，只能手動點）。路徑見 `systemService.getGlobalPaths('cline')`：`~/.cline`，MCP 在 `data/settings`、對話在 `data/sessions`（舊版退回 `globalStorage/saoudrizwan.claude-dev/tasks`）。⚠️ 清理 Cline **只刪 session 資料夾**，不動 `data/db/*.db`（Cline 介面可能仍列出已刪項目）。
+- **`kilo`（1.8.0 起，同樣是外掛）**：Kilo Code 7.x 改成 opencode 架構，**不能照抄 Cline 的路徑**。實測（`kilocode.kilo-code-7.8.18` 的 `dist/extension.js`＋本機實際目錄）：
+  - 設定：`~/.config/kilo/kilo.jsonc`（XDG；舊版相容 `~/.kilo`、`~/.kilocode`）→ `globalConfig`。
+  - 資料：`~/.local/share/kilo`（`kilo.db`、`storage/`、`auth.json`）→ `appData` 與 `brain`（對話本體在 SQLite）。
+  - MCP：`~/.config/kilo/kilo.jsonc` 的 `mcp` 段優先；沒有才退回 `<IDE User>/globalStorage/kilocode.kilo-code/settings/mcp_settings.json`。⚠️ `handleOpenTarget('mcpConfig')` 對 `.jsonc` **缺檔只開資料夾、不寫預設內容**（否則會蓋掉使用者設定）。
+  - 對話：7.x 在 `kilo.db`，**沒有**「一資料夾＝一對話」。**1.8.1 起** `brainService.getKiloBrainStats()` 會以 `node:sqlite` 唯讀查 `session` 表取對話數（不支援時退回 `storage/session_share/*.json` 檔數），佔用空間取整個資料家目錄（含 `kilo.db`／`storage`／`snapshot`）；否則會顯示 0 筆／0 MB。清理仍只回收舊版 `globalStorage/kilocode.kilo-code/tasks/<id>/`，確認視窗會警告不動 `kilo.db`。
+  - 回歸測試：`node antigravity-toolbox/tests/kilo-brain-stats.test.js`（K1–K4）。
+  - Skills：沒有固定全域目錄，`~/.config/kilo/skills` 存在時優先，否則 `~/.agents/skills`；Rules／Plugins 指向 `~/.config/kilo/{rules,plugins}`（7.x 全域規範在 `kilo.jsonc` 的 `instructions`）。
+  - 測試會固定 `XDG_CONFIG_HOME`／`XDG_DATA_HOME` 到夾具，否則會讀到測試機真實的 Kilo 資料。
 - 樣式基準＝**toolbox** 的 `.flavor-chip`（`media/style.css`，2026-10-27 定案）；inspector 快照的 `.source-chip` 已對齊它（補 `font-family: inherit`／`white-space: nowrap`／`flex: 0 0 auto`，啟用態加 `font-weight: 600`，Cline 色值統一為 `.18`／`.5`）⇒ **改一邊必須同步改另一邊，以 toolbox 為準**。
 
 ### 8.2 toolbox 的 Skills 連結同步（`~/.agents/skills`）
@@ -248,6 +256,8 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 
 | 日期 | 變更 | 來源 |
 | :--- | :--- | :--- |
+| 2026-11-02 | toolbox `1.8.0 → 1.8.1`＝**Kilo 對話統計修正**：新增 `brainService.getKiloBrainStats()`，以 `node:sqlite` 唯讀查 `kilo.db` 的 `session` 表（不支援時退回 `storage/session_share/*.json` 檔數），佔用空間取整個 `~/.local/share/kilo`；修正 Kilo 卡片顯示 0 筆／0 MB。chip 顏色由琥珀改**黃 `#ffd54f`**；新增 `kilo-brain-stats`（K1–K4）測試，測試總數 12→13 支；圖譜 1791→**1815** 節點／3233→**3270** 邊／108→**113** 社群 | 使用者回報：Kilo 對話記憶庫顯示 0 MB（實測 8 筆／58.4 MB），且 chip 想改黃色 |
+| 2026-11-02 | toolbox `1.7.0 → 1.8.0`＝**新增第五個資料類別 `kilo`**：`systemService` 加 `getKiloConfigHome`／`getKiloDataHome`／`getKiloExtensionStorageDir`／`resolveKiloTasksDir`／`resolveKiloMcpConfigPath` 與 `getGlobalPaths('kilo')`、`collectBrainSessionDirs('kilo')`、`getEnvironmentInfo().flavors.kilo`；`brainService` 加 `isKiloHost()` 與 SQLite 警示；UI 加琥珀 chip、三語鍵；`handleOpenTarget('mcpConfig')` 對 `.jsonc` 缺檔改為只開資料夾；`environment-flavor` 測試新增 E1–E5（24 項）並固定 XDG 環境變數；圖譜 1779→**1791** 節點／3204→**3233** 邊／105→**108** 社群（commit `f6d880b2`） | 使用者需求：toolbox 目前有 Antigravity／Copilot／Cursor／Cline，要再加 Kilo |
 | 2026-10-31 | inspector `1.2.7 → 1.2.8`＝**技能掃描支援 symlink／junction**：`scanSkillsInDir()` 子資料夾條件由 `entry.isDirectory()` 改為 `isDirectory() || isSymbolicLink()`，`scanRulesInDir()` 的 `.md` 比照放寬。根因＝Windows `Dirent.isDirectory()` 對 junction 回傳 false，而 `~/.agents/skills/*` 正是 toolbox 同步的 junction ⇒ 1.2.7 以前全域技能整批掃不到（實測 26 個→0 個，只剩 `.claude/skills` 的實體資料夾）；Cline 快照因而只顯示專案技能。新增 `skill-junction-scan`（J0–J5）測試，測試總數 11 → 12 支；圖譜 1755→**1779** 節點／3170→**3204** 邊／101→**105** 社群（Built from commit `7493df6a`） | 使用者回報：Cline 快照的技能清單只有專案技能，`C:\\Users\\User\\.agents\\skills` 的技能沒出現，懷疑沒被引用 |
 
 | 2026-10-31 | inspector `1.2.6 → 1.2.7`＝**規範分類對齊 Cline 真實行為**：`parseFrontmatter` 解析 `paths`（區塊／單行／行內陣列）、`scanRulesInDir`／`parseSingleRuleFile` 帶出 `paths`／`hasPaths`、`scanClineSources` 改走 `_scanClineLayout`（新增 `.cline/rules`、`.cline/workflows`）＋`_toClineEntry`（`kind`＝always／conditional／workflow）；卡片標題維持「條件式規範 (Conditional)」（不改成「條件式 / 按需規範」，避免標題過長），改以項目描述的「工作流程 · 」前綴區分按需工作流程（三語）；新增 `cline-conditional-rules`（B0–B6）測試，測試總數 10 → 11 支；圖譜 1735→**1755** 節點／3139→**3170** 邊／107→**101** 社群 | 使用者回報 `.clinerules/condition.md` 顯示為常駐、但 Cline 依 `paths:` 判斷並未載入（條件式規範被誤標） |

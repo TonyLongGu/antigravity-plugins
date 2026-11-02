@@ -1,6 +1,6 @@
 # Antigravity 控制中心 (Antigravity Toolbox)
 
-VS Code 相容 IDE 原生側邊欄擴充套件（Cursor、VS Code、VS Code Insiders、Google Antigravity），支援環境智慧感應與按需掛載，並內建 GitHub Copilot 對話紀錄統計與清理。
+VS Code 相容 IDE 原生側邊欄擴充套件（Cursor、VS Code、VS Code Insiders、Google Antigravity），支援環境智慧感應與按需掛載，並內建 GitHub Copilot / Cline / Kilo 對話紀錄統計與清理。
 
 ---
 
@@ -79,12 +79,12 @@ Cursor、VS Code 與 Antigravity 都實作 VS Code Extension API（`require('vsc
    - 點擊左側活動列的 **🛠️ (Antigravity 控制中心)** 圖示。
    - 或點擊右下角狀態列 **`$(tools) 控制中心`** 按鈕。
 
-> 🔀 **類別切換鈕（面板頂部）**：`Antigravity / Copilot / Cursor / Cline` 彩色膠囊鈕（順序固定；樣式對齊 inspector 的快照來源 chips，各類別一色：綠／藍／橘／紫），讓你**在同一個 IDE 內切換要檢視哪一套資料**——路徑卡片、對話記憶庫統計與卡片文案都會跟著換。
+> 🔀 **類別切換鈕（面板頂部）**：`Antigravity / Copilot / Cursor / Cline / Kilo` 彩色膠囊鈕（順序固定；樣式對齊 inspector 的快照來源 chips，各類別一色：綠／藍／橘／紫／黃），讓你**在同一個 IDE 內切換要檢視哪一套資料**——路徑卡片、對話記憶庫統計與卡片文案都會跟著換。
 > - 未手動指定（預設）＝依目前宿主 IDE 判定，行為與舊版完全相同；作用中的類別以該類別的顏色高亮。
-> - 手動指定會寫入 `antigravity.uiFlavor` 並記憶；即使人在 VS Code，也能直接查看 Cursor、Antigravity 或 Cline 的資料。
+> - 手動指定會寫入 `antigravity.uiFlavor` 並記憶；即使人在 VS Code，也能直接查看 Cursor、Antigravity、Cline 或 Kilo 的資料。
 > - 點一下「目前宿主」的類別＝回復跟隨宿主（等同 `auto`），因此不再需要「自動」鈕。
 > - 本機沒有資料的類別會自動隱藏；可用類別少於兩個時整列切換鈕隱藏。
-> - **Cline 只能手動選擇**：Cline 是安裝在 IDE 內的外掛，沒有自己的宿主，所以 `auto` 永遠不會判定成 Cline。
+> - **Cline／Kilo 只能手動選擇**：兩者都是安裝在 IDE 內的外掛，沒有自己的宿主，所以 `auto` 永遠不會判定成 Cline／Kilo。
 
 > 💡 **環境感應**：在 Cursor 會顯示 Cursor 本機路徑（`~/.cursor`、agent-transcripts）；在 Antigravity 則顯示 `~/.gemini`；在 VS Code 偵測到 GitHub Copilot 時顯示 Copilot 專屬路徑與 `chatSessions` 對話紀錄（可用上方切換鈕覆寫）。
 
@@ -111,6 +111,21 @@ Cursor、VS Code 與 Antigravity 都實作 VS Code Extension API（`require('vsc
 | 對話記憶庫 | `~/.cline/data/sessions`（不存在時退回舊版 `.../saoudrizwan.claude-dev/tasks`） |
 
 > ⚠️ 清理 Cline 對話只刪除 `~/.cline/data/sessions/<sessionId>/` 資料夾，**不會**同步 `~/.cline/data/db/`（`sessions.db`／`session-search.db` 等 SQLite 索引）；清理後 Cline 介面可能仍列出已刪除的對話，確認視窗會提醒這件事。
+
+Kilo 類別的路徑對照（Kilo Code 7.x 採 opencode 架構，與 Cline 不同）：
+
+| 卡片按鈕 | Kilo 路徑 |
+| :--- | :--- |
+| Config 根目錄 | `~/.config/kilo`（全域 `kilo.jsonc`；舊版相容 `~/.kilo`、`~/.kilocode`） |
+| `mcp.json`（按鈕統一顯示名稱） | 實際檔案 `~/.config/kilo/kilo.jsonc`（`mcp` 段）；檔案不存在時退回 `<IDE User>/globalStorage/kilocode.kilo-code/settings/mcp_settings.json`。⚠️ JSONC 缺檔時只開所在資料夾，不會寫入預設內容 |
+| Skills | `~/.config/kilo/skills`（存在時），否則 `~/.agents/skills` |
+| Rules / Plugins | `~/.config/kilo/{rules,plugins}`；7.x 沒有獨立的全域規範目錄，全域規範寫在 `kilo.jsonc` 的 `instructions` |
+| AppData 核心 | `~/.local/share/kilo`（`kilo.db`、`storage/`、`auth.json`） |
+| 對話記憶庫 | `~/.local/share/kilo`（對話本體在 `kilo.db`）；只有舊版 `.../kilocode.kilo-code/tasks/<id>/` 是資料夾 |
+
+> 📊 Kilo 的「對話紀錄數」會**唯讀查詢 `kilo.db` 的 `session` 表**（`node:sqlite` 不可用時退回 `storage/session_share/*.json` 檔數），「總佔用空間」取整個 `~/.local/share/kilo`（含 `kilo.db`、`storage`、`snapshot`），所以不會再顯示 0 筆／0 MB。
+
+> ⚠️ Kilo 7.x 的對話存在 `~/.local/share/kilo/kilo.db`（SQLite），本工具**只會清理舊版資料夾型 `tasks/`**，不會動 `kilo.db`；沒有資料夾型對話時會提示改用 Kilo 內建功能刪除。
 
 相關設定：
 

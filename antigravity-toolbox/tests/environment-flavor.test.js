@@ -10,7 +10,9 @@
 //     4. 非法設定值一律退回 auto（避免設定檔被手改成亂值時整組壞掉）
 //     5. cline 類別：路徑走 ~/.cline（MCP 在 data/settings、對話在 data/sessions），
 //        舊版 globalStorage/**/tasks 可作為對話目錄的退回來源；auto 永遠不會選到 cline
-//     6. 切換鈕只顯示類別名稱，不再有對話筆數徽章（flavorCounts 自 1.6.0 移除）
+//     6. kilo 類別：設定走 ~/.config/kilo、資料走 ~/.local/share/kilo；7.x 對話在 kilo.db，
+//        只有舊版 globalStorage/kilocode.kilo-code/tasks 是資料夾；auto 永遠不會選到 kilo
+//     7. 切換鈕只顯示類別名稱，不再有對話筆數徽章（flavorCounts 自 1.6.0 移除）
 //   執行：node tests/environment-flavor.test.js
 //   離開碼：0 = 全數通過、1 = 有失敗
 //   設計：所有夾具都在系統暫存目錄，測試結束自動清除，不觸碰真實使用者資料
@@ -42,6 +44,14 @@ const CLINE_MCP = path.join(CLINE_DATA, 'settings', 'cline_mcp_settings.json');
 const CLINE_DOCS_RULES = path.join(HOME, 'Documents', 'Cline', 'Rules');
 // 本工具的全域 Skills 集散地（Cline 也會讀取）
 const AGENTS_SKILLS = path.join(HOME, '.agents', 'skills');
+// Kilo Code：CLI 採 XDG（~/.config/kilo 設定、~/.local/share/kilo 資料），
+// 舊版資料夾型對話在擴充儲存區的 tasks/
+const KILO_CONFIG_HOME = path.join(HOME, '.config', 'kilo');
+const KILO_JSONC = path.join(KILO_CONFIG_HOME, 'kilo.jsonc');
+const KILO_DATA_HOME = path.join(HOME, '.local', 'share', 'kilo');
+const KILO_EXT_STORAGE = path.join(USER_SETTINGS_DIR, 'globalStorage', 'kilocode.kilo-code');
+const KILO_MCP = path.join(KILO_EXT_STORAGE, 'settings', 'mcp_settings.json');
+const KILO_TASKS = path.join(KILO_EXT_STORAGE, 'tasks');
 
 // ── 設定檔夾具（可變動，模擬 antigravity.* 設定）────────────────────────────
 const configStore = {
@@ -93,6 +103,9 @@ Module._load = function (request) {
 // 必須在呼叫服務前改寫家目錄（detectHostIde / getGlobalPaths 皆於呼叫時讀取）
 process.env.USERPROFILE = HOME;
 process.env.APPDATA = APPDATA;
+// Kilo 走 XDG 目錄；固定到夾具，避免讀到測試機真實的 ~/.config/kilo 或 ~/.local/share/kilo
+process.env.XDG_CONFIG_HOME = path.join(HOME, '.config');
+process.env.XDG_DATA_HOME = path.join(HOME, '.local', 'share');
 
 const systemService = require(path.join(EXT_ROOT, 'services', 'systemService.js'));
 
@@ -123,6 +136,11 @@ function createFixtures() {
     path.dirname(CLINE_MCP),
     CLINE_DOCS_RULES,
     AGENTS_SKILLS,
+    KILO_CONFIG_HOME,
+    KILO_DATA_HOME,
+    path.join(KILO_TASKS, 'kilo-legacy-1'),
+    path.join(KILO_TASKS, 'kilo-legacy-2'),
+    path.dirname(KILO_MCP),
   ]) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -135,6 +153,10 @@ function createFixtures() {
   // Cline 的 MCP 設定與 session 內的檔案（檔案不應被當成一筆對話）
   fs.writeFileSync(CLINE_MCP, '{"mcpServers":{}}');
   fs.writeFileSync(path.join(CLINE_SESSIONS, 'index.json'), '{"v":1}');
+
+  // Kilo 的擴充 MCP 設定；tasks 內的檔案同樣不應被當成一筆對話
+  fs.writeFileSync(KILO_MCP, '{"mcpServers":{}}');
+  fs.writeFileSync(path.join(KILO_TASKS, 'catalog.json'), '{"v":1}');
 }
 
 function main() {
@@ -224,17 +246,19 @@ function main() {
   });
 
   setConfig('uiFlavor', 'auto');
-  check('C2 flavors 可用性回報（本機四類別皆有資料）', () => {
+  check('C2 flavors 可用性回報（本機五類別皆有資料）', () => {
     const env = systemService.getEnvironmentInfo();
     assert.strictEqual(env.flavors.antigravity, true, '應偵測到 ~/.gemini/config');
     assert.strictEqual(env.flavors.cursor, true, '應偵測到 ~/.cursor');
     assert.strictEqual(env.flavors.copilot, true, '應由 Copilot 擴充套件判定為 true');
     assert.strictEqual(env.flavors.cline, true, '應偵測到 ~/.cline');
+    assert.strictEqual(env.flavors.kilo, true, '應偵測到 ~/.config/kilo');
   });
 
-  check('C3 auto 永遠不會判定成 cline（Cline 是外掛，不是宿主）', () => {
+  check('C3 auto 永遠不會判定成 cline／kilo（兩者都是外掛，不是宿主）', () => {
     const env = systemService.getEnvironmentInfo();
     assert.notStrictEqual(env.autoFlavor, 'cline', `實際 autoFlavor ${env.autoFlavor}`);
+    assert.notStrictEqual(env.autoFlavor, 'kilo', `實際 autoFlavor ${env.autoFlavor}`);
   });
 
   check('C4 Copilot 偵測快取可重置（切換類別後重新判定）', () => {
@@ -287,6 +311,43 @@ function main() {
     const env = systemService.getEnvironmentInfo();
     assert.strictEqual(env.flavorCounts, undefined, `實際 ${JSON.stringify(env.flavorCounts)}`);
     assert.strictEqual(typeof systemService.getFlavorSessionCounts, 'undefined', '筆數 API 應已移除');
+  });
+
+  // ═══ E. kilo 類別（外掛型資料來源；7.x 對話在 SQLite） ═══════════════════
+  setConfig('uiFlavor', 'kilo');
+  check('E1 手動切換 kilo → 設定／資料目錄與 MCP 路徑', () => {
+    const env = systemService.getEnvironmentInfo();
+    assert.strictEqual(env.uiFlavor, 'kilo', `實際 ${env.uiFlavor}`);
+    assert.strictEqual(env.showHostModules, true, '手動指定後應強制顯示卡片');
+    assert.strictEqual(env.paths.globalConfig, KILO_CONFIG_HOME);
+    assert.strictEqual(env.paths.appData, KILO_DATA_HOME);
+    assert.strictEqual(env.paths.brain, KILO_DATA_HOME);
+    assert.strictEqual(env.paths.mcpConfig, KILO_MCP, '沒有 kilo.jsonc 時退回擴充儲存區的 mcp_settings.json');
+  });
+
+  check('E2 有 kilo.jsonc 時 MCP 入口改指實際生效設定檔', () => {
+    fs.writeFileSync(KILO_JSONC, '{\n  "mcp": {}\n}\n');
+    try {
+      assert.strictEqual(systemService.getGlobalPaths('kilo').mcpConfig, KILO_JSONC, `實際 ${systemService.getGlobalPaths('kilo').mcpConfig}`);
+    } finally {
+      fs.rmSync(KILO_JSONC, { force: true });
+    }
+  });
+
+  check('E3 kilo 對話只認舊版 tasks 資料夾（檔案不計）', () => {
+    const sessions = systemService.collectBrainSessionDirs('kilo');
+    assert.strictEqual(sessions.length, 2, `實際 ${JSON.stringify(sessions)}`);
+    assert.ok(sessions.every((dir) => dir.startsWith(KILO_TASKS)), `實際 ${JSON.stringify(sessions)}`);
+  });
+
+  check('E4 kilo 的 Skills 退回 ~/.agents/skills（沒有 ~/.config/kilo/skills）', () => {
+    assert.strictEqual(systemService.getGlobalPaths('kilo').skills, AGENTS_SKILLS, `實際 ${systemService.getGlobalPaths('kilo').skills}`);
+  });
+
+  check('E5 flavors.kilo 為 true 且 auto 不會判定成 kilo', () => {
+    const env = systemService.getEnvironmentInfo();
+    assert.strictEqual(env.flavors.kilo, true);
+    assert.notStrictEqual(env.autoFlavor, 'kilo', `實際 autoFlavor ${env.autoFlavor}`);
   });
 
   setConfig('uiFlavor', 'auto');
