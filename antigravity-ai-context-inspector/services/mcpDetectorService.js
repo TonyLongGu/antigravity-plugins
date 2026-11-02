@@ -303,6 +303,137 @@ class McpDetectorService {
     return this.mergeMcpServers(lists);
   }
 
+  /**
+   * 解析 JSONC（Kilo 的 kilo.jsonc 允許 `//`、`/* *\/` 註解與尾逗號）。
+   * 只剝除字串外的註解，不引入額外相依套件。
+   */
+  static parseJsoncText(content) {
+    const text = typeof content === 'string' ? content.replace(/^\uFEFF/, '') : '';
+    let out = '';
+    let inString = false;
+    let escaped = false;
+    let inLineComment = false;
+    let inBlockComment = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      const next = text[i + 1];
+      if (inLineComment) {
+        if (ch === '\n') {
+          inLineComment = false;
+          out += ch;
+        }
+        continue;
+      }
+      if (inBlockComment) {
+        if (ch === '*' && next === '/') {
+          inBlockComment = false;
+          i++;
+        }
+        continue;
+      }
+      if (inString) {
+        out += ch;
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (ch === '\\') {
+          escaped = true;
+          continue;
+        }
+        if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') {
+        inString = true;
+        out += ch;
+        continue;
+      }
+      if (ch === '/' && next === '/') {
+        inLineComment = true;
+        i++;
+        continue;
+      }
+      if (ch === '/' && next === '*') {
+        inBlockComment = true;
+        i++;
+        continue;
+      }
+      out += ch;
+    }
+    return JSON.parse(out.replace(/,\s*([}\]])/g, '$1'));
+  }
+
+  /**
+   * 掃描 Kilo Code 的 MCP 伺服器（與宿主 IDE 無關）。
+   * - 全域：`~/.config/kilo/kilo.jsonc`（XDG）的 `mcp` 段
+   * - 專案：`<workspace>/.kilo/mcp.json`、`.kilocode/mcp.json`
+   * 純檢視：不讀 env / headers（避免把權杖帶進 UI）。
+   */
+  static async scanKiloMcpServers(workspaceFolders = []) {
+    const userHome = this.getUserHome();
+    const configHome = process.env.XDG_CONFIG_HOME || path.join(userHome, '.config');
+    const lists = [];
+
+    for (const fileName of ['kilo.jsonc', 'kilo.json']) {
+      const configPath = path.join(configHome, 'kilo', fileName);
+      if (!fs.existsSync(configPath)) continue;
+      try {
+        const parsed = this.parseJsoncText(await fsPromises.readFile(configPath, 'utf-8'));
+        lists.push(this._mapKiloServers(parsed?.mcp || parsed?.mcpServers || {}, 'Kilo 全域', configPath));
+      } catch (err) {
+        console.error(`Error reading Kilo MCP config at ${configPath}:`, err);
+      }
+    }
+
+    for (const folder of workspaceFolders) {
+      const folderPath = typeof folder === 'string' ? folder : (folder?.uri?.fsPath || folder?.path || '');
+      if (!folderPath) continue;
+      for (const rel of ['.kilo/mcp.json', '.kilocode/mcp.json']) {
+        const configPath = path.join(folderPath, rel);
+        if (!fs.existsSync(configPath)) continue;
+        try {
+          const parsed = this.parseJsoncText(await fsPromises.readFile(configPath, 'utf-8'));
+          const mcpServers = parsed?.mcp || parsed?.mcpServers || parsed?.servers || {};
+          lists.push(this._mapKiloServers(mcpServers, `Workspace (${path.basename(folderPath)})`, configPath));
+        } catch (err) {
+          console.error(`Error reading Kilo workspace MCP config at ${configPath}:`, err);
+        }
+      }
+    }
+
+    return this.mergeMcpServers(lists);
+  }
+
+  /** Kilo 的 mcp 項目：`type: 'local'`（command 陣列）或 `'remote'`（url） */
+  static _mapKiloServers(mcpServers, scope, configPath) {
+    const servers = [];
+    const serverKeys = Object.keys(mcpServers || {}).sort((a, b) => this.naturalCompare(a, b));
+    for (const sName of serverKeys) {
+      const sCfg = mcpServers[sName] || {};
+      const url = typeof sCfg.url === 'string' ? sCfg.url : '';
+      const command = Array.isArray(sCfg.command)
+        ? sCfg.command.filter(part => typeof part === 'string')
+        : (typeof sCfg.command === 'string' ? sCfg.command.split(/\s+/).filter(Boolean) : []);
+      const type = typeof sCfg.type === 'string' ? sCfg.type.toLowerCase() : '';
+      servers.push({
+        name: sName,
+        scope,
+        path: configPath,
+        toolCount: 0,
+        tools: [],
+        hasInstructions: false,
+        instructionsPath: null,
+        transport: (type === 'remote' || type === 'http' || type === 'sse' || url) ? 'http' : 'stdio',
+        command: command[0] || '',
+        args: command.slice(1),
+        url,
+        isDisabled: sCfg.enabled === false,
+      });
+    }
+    return servers;
+  }
+
   static async _scanJsonMcpServers(userConfigPath, workspaceRelParts, workspaceFolders = []) {
     const servers = [];
     const seen = new Set();

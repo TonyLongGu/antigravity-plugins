@@ -548,6 +548,13 @@ body {
   color: #c586c0;
 }
 
+/* Kilo → 黃 #ffd54f（與 toolbox 的 .flavor-chip 同值） */
+.source-chip.src-kilo.active {
+  background: rgba(255, 213, 79, 0.16);
+  border-color: rgba(255, 213, 79, 0.5);
+  color: #ffd54f;
+}
+
 /* 快照第二列：提供者 / 狀態 / Token / 成本 */
 .meta-extra {
   color: var(--text-muted);

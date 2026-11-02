@@ -22,9 +22,15 @@
      - **VS Code Copilot 對話足跡**：掃描 `%APPDATA%/Code/User/workspaceStorage/*/chatSessions/*.jsonl`，用官方 `customTitle` 列出對話，並還原實際讀過的 Rules / Skills 與 `mcp_*` 工具。這不是 Antigravity 那種 session prompt 注入快照。
    - 🟣 **Cline 對話來源（跨宿主，任何 IDE 都能看）**：
      - **資料位置**：`~/.cline/data/sessions/<sessionId>/`（user 層級，Antigravity / Cursor / VS Code 共用同一份，因此不必管目前開的是哪個 IDE）。
-     - **來源篩選 chips**：快照模式下可一鍵切換「Antigravity / Copilot / Cursor / Cline」（順序固定不隨宿主變動；各來源一色：綠／藍／橘／紫，chip 只顯示來源名稱）。**預設自動選中宿主原生來源**（裝在 Antigravity 就是 Antigravity、Cursor 是 Cursor、VS Code 是 Copilot），並記住最後一次選擇直到再次更改；**不提供「全部」chip**——再點一次作用中的 chip 即取消篩選（顯示全部來源）。只有一種來源時自動隱藏。對話清單項目**不再重複顯示來源徽章**（上方 chips 已表達類別），來源改放在項目 tooltip 供辨識。
+     - **來源篩選 chips**：快照模式下可一鍵切換「Antigravity / Copilot / Cursor / Cline / Kilo」（順序固定不隨宿主變動；各來源一色：綠／藍／橘／紫／黃，chip 只顯示來源名稱）。**預設自動選中宿主原生來源**（裝在 Antigravity 就是 Antigravity、Cursor 是 Cursor、VS Code 是 Copilot），並記住最後一次選擇直到再次更改；**不提供「全部」chip**——再點一次作用中的 chip 即取消篩選（顯示全部來源）。只有一種來源時自動隱藏。對話清單項目**不再重複顯示來源徽章**（上方 chips 已表達類別），來源改放在項目 tooltip 供辨識。
      - **足跡還原**：`skills` 工具呼叫 → 該技能標記為已調用；`<server>__<tool>` → 只留下真正被呼叫的 MCP 伺服器與工具；`read_files` / `editor` 觸及的 `.agents/rules`、`.clinerules`、`.cline/rules` → 標記為已讀取的「條件式 / 按需」項目。條件式規範的顯示依據是 **frontmatter 是否有 `paths:`**，不是檔名。
      - **Cline 設定**：`.clinerules`（檔案或資料夾）、`.cline/rules/`（官方第二條路徑）、`.clinerules/workflows/*.md`、`.cline/workflows/*.md`、全域 `~/Documents/Cline/Rules`、`~/.agents/skills` 全都會納入掃描。分類依 Cline 4.x 真實行為：有 `paths:` ⇒ **條件式**（依當前開著的檔／提到的路徑自動啟用）、無 `paths:` ⇒ **常駐**（每次對話載入）、`workflows/` ⇒ **按需工作流程**（需叫用才載入，卡片內標示「工作流程」）。`~/.cline/data/workspaces/*/workspaceState.json` 與 `globalState.json` 的 rules / skills 開關若為關閉，該項目會被淡化並排除在快照之外。**規範 / 技能一律以「該對話自己的工作區」（session meta 的 `workspace_root`／`cwd`）為掃描範圍**，不是目前開著的視窗——用 `clineScope=all` 挑到其他工作區的對話時，不會再列出目前視窗的 `AGENTS.md` / `.clinerules`（多根視窗也不會全部列出）。
+- 🟡 **Kilo 對話來源（跨宿主，任何 IDE 都能看）**：
+  - **資料位置**：`~/.local/share/kilo/kilo.db`（Kilo Code 7.x 改用 opencode 架構，對話存在 SQLite 的 `session` / `message` / `part` 表，不再是一資料夾一對話）；清單只讀 `session` 表，選取對話後才讀 `part` 表還原足跡。
+  - **環境需求**：以 Node 內建 `node:sqlite` **唯讀**開啟；宿主 Node 不支援時（舊版 VS Code）Kilo chip 不會出現，其他來源不受影響。
+  - **足跡還原**：`patch` part 的 `files`、工具輸入中的路徑（`filePath`／`path`…）→ 標記已讀取的規範；`skill` 工具 → 技能；`<server>_<tool>` 以已知 MCP 伺服器名稱前綴比對（Kilo 用單底線，不能照抄 Cline 的 `__`）。
+  - **掃描範圍**：`AGENTS.md`、`.kilo/rules`、`.kilocode/rules`、`.agents/skills`（專案與全域）；MCP 讀 `~/.config/kilo/kilo.jsonc` 的 `mcp` 段與專案 `.kilo/mcp.json`（JSONC 註解會先剝除）。**不讀 `auth.json`／`mcp-auth.json`／`env`／`headers`**。
+  - **範圍設定**：`antigravity.aiContext.kiloScope`（`workspace` 預設／`all`）。
 2. **一鍵跳轉開啟**：點擊任一項目旁的 `📄 開啟` 按鈕，立即在編輯器開啟對應的 `.md` 檔案。
 3. **即時過濾與搜尋**：輸入關鍵字即時篩選 Rules / Skills / MCP 名稱與描述。
 4. **一鍵複製摘要**：點擊頂部 `📋` 按鈕，將整份生效上下文整理為 Markdown 格式並複製至剪貼簿。
@@ -47,9 +53,10 @@
 - **效能**：對話清單只讀 meta（1~3 KB）並以 mtime 快取；`messages.json` 只在選取時讀，且超過 20 MB 會改走逐行串流掃描（不做整份 `JSON.parse`），記憶體用量與檔案大小脫鉤（本機最大單檔約 71 MB）。
 - **隱私**：不讀 `~/.cline/data/secrets.json`；`cline_mcp_settings.json` 只取 `command` / `args` / `url` / `disabled`，**不讀 `env`**；`globalState.json` 只取白名單欄位（版本、provider/model、開關）。
 - **可調設定**（`settings.json`）：
-  - `antigravity.aiContext.snapshotSources`：限制可顯示的來源（預設空 = 自動）。
-  - `antigravity.aiContext.clineScope`：`workspace`（預設，只列目前工作區）或 `all`。
-  - `antigravity.aiContext.clineDataDir`：非標準安裝時指定 Cline 資料目錄（測試會以 `CLINE_DATA_DIR` 環境變數覆寫）。
+- `antigravity.aiContext.snapshotSources`：限制可顯示的來源（預設空 = 自動）。
+- `antigravity.aiContext.clineScope`：`workspace`（預設，只列目前工作區）或 `all`。
+- `antigravity.aiContext.kiloScope`：`workspace`（預設）或 `all`（Kilo 對話清單範圍）。
+- `antigravity.aiContext.clineDataDir`：非標準安裝時指定 Cline 資料目錄（測試會以 `CLINE_DATA_DIR` 環境變數覆寫）。
 
 ---
 

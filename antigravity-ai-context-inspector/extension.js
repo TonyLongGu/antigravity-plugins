@@ -9,11 +9,12 @@ const CursorTranscriptService = require('./services/cursorTranscriptService');
 const VsCodeChatSessionService = require('./services/vscodeChatSessionService');
 const McpDetectorService = require('./services/mcpDetectorService');
 const ClineSessionService = require('./services/clineSessionService');
+const KiloSessionService = require('./services/kiloSessionService');
 
 const SUPPORTED_LOCALES = ['zh-TW', 'zh-CN', 'en'];
 
 // 對話快照來源登錄表（順序即 UI chips 固定的顯示順序，任何宿主都一樣）
-const SNAPSHOT_SOURCE_DEFS = ['antigravity', 'copilot', 'cursor', 'cline'];
+const SNAPSHOT_SOURCE_DEFS = ['antigravity', 'copilot', 'cursor', 'cline', 'kilo'];
 // 各來源對話清單快取，避免側邊欄高頻刷新時反覆掃描
 const SOURCE_LIST_TTL_MS = 4000;
 
@@ -95,6 +96,7 @@ class AiContextViewProvider {
     return {
       clineDataDir: String(cfg.get('aiContext.clineDataDir') || '').trim(),
       clineScope: cfg.get('aiContext.clineScope') === 'all' ? 'all' : 'workspace',
+      kiloScope: cfg.get('aiContext.kiloScope') === 'all' ? 'all' : 'workspace',
       snapshotSources: Array.isArray(snapshotSources)
         ? snapshotSources.filter(id => SNAPSHOT_SOURCE_DEFS.includes(id))
         : []
@@ -121,6 +123,8 @@ class AiContextViewProvider {
       switch (sourceId) {
         case 'cline':
           return ClineSessionService.isAvailable(config.clineDataDir);
+        case 'kilo':
+          return KiloSessionService.isAvailable();
         case 'cursor':
           return fs.existsSync(path.join(userHome, '.cursor', 'projects'));
         case 'copilot':
@@ -137,7 +141,7 @@ class AiContextViewProvider {
 
   /**
    * 可用的快照來源（native 一律可用，但不再排第一）。
-   * 顯示順序固定照 SNAPSHOT_SOURCE_DEFS：Antigravity → Copilot → Cursor → Cline，
+   * 顯示順序固定照 SNAPSHOT_SOURCE_DEFS：Antigravity → Copilot → Cursor → Cline → Kilo，
    * 這樣不管裝在哪個 IDE，chips 的位置都一致（只有作用中顏色不同）。
    */
   _resolveSourceOrder(config = this._getConfig()) {
@@ -150,7 +154,7 @@ class AiContextViewProvider {
 
   async _listConversationsFor(sourceId, workspaceFolders, config) {
     const folderKey = workspaceFolders.map(f => f.uri?.fsPath || '').join(';');
-    const cacheKey = `${sourceId}|${config.clineScope}|${folderKey}`;
+    const cacheKey = `${sourceId}|${config.clineScope}|${config.kiloScope}|${folderKey}`;
     const cached = this._sourceListCache.get(cacheKey);
     if (cached && Date.now() - cached.at < SOURCE_LIST_TTL_MS) return cached.items;
 
@@ -160,6 +164,10 @@ class AiContextViewProvider {
         items = await ClineSessionService.getConversationsList(workspaceFolders, {
           scope: config.clineScope,
           clineDataDir: config.clineDataDir
+        });
+      } else if (sourceId === 'kilo') {
+        items = await KiloSessionService.getConversationsList(workspaceFolders, {
+          scope: config.kiloScope
         });
       } else if (sourceId === 'cursor') {
         items = await CursorTranscriptService.getConversationsList(workspaceFolders);
@@ -196,6 +204,12 @@ class AiContextViewProvider {
         ...scanOptions,
         scope: config.clineScope,
         clineDataDir: config.clineDataDir
+      });
+    }
+    if (sourceId === 'kilo') {
+      return KiloSessionService.parseConversationSnapshot(conversationId, workspaceFolders, {
+        ...scanOptions,
+        scope: config.kiloScope
       });
     }
     if (sourceId === 'cursor') {

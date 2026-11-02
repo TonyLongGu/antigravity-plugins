@@ -13,7 +13,7 @@
 | 🔌 **MCP 伺服器管理器** | `antigravity-mcp-manager` | Antigravity 以左側儀表板開關 MCP。Cursor 與 VS Code 只在狀態列顯示啟用數。目前 IDE 已啟用 Cline 時才並列 Cline 統計（純檢視；未安裝或已停用則不顯示） | Antigravity / Cursor / VS Code |
 | ⚡ **高頻操作快捷面板** | `antigravity-quick-access` | 檔案總管釘選／暫存清單，可拖曳至 Chat 與終端機，並支援多選批次操作 | Antigravity / Cursor / VS Code |
 | 📜 **專案腳本執行助手** | `antigravity-script-runner` | 檔案總管／編輯器右鍵執行 Python、批次檔與 PowerShell（可系統管理員），並提供圖片、音訊、影片檢視 | Antigravity / Cursor / VS Code |
-| 🔍 **AI 上下文檢視儀** | `antigravity-ai-context-inspector` | 檢視 Rules、Skills、MCP 與工作區綁定。Antigravity 還原對話注入內容；Cursor 與 VS Code 顯示對話足跡 | Antigravity / Cursor / VS Code |
+| 🔍 **AI 上下文檢視儀** | `antigravity-ai-context-inspector` | 檢視 Rules、Skills、MCP 與工作區綁定。Antigravity 還原對話注入內容；Cursor、VS Code、Cline、Kilo 顯示對話足跡 | Antigravity / Cursor / VS Code |
 
 ---
 

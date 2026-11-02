@@ -835,7 +835,10 @@
 
     if (currentMode === 'snapshot') {
       if (dom.metaModel) {
-        dom.metaModel.textContent = currentData.model || (isCursor || isVsCode ? '—' : 'Gemini Flash');
+        const fallbackModel = (!currentData.sourceId || currentData.sourceId === 'antigravity')
+          ? (isCursor || isVsCode ? '—' : 'Gemini Flash')
+          : '—';
+        dom.metaModel.textContent = currentData.model || fallbackModel;
       }
       if (dom.metaExtra) {
         const parts = [];

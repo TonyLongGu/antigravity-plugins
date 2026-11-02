@@ -306,7 +306,8 @@ class ContextScannerService {
 
     // 2. 掃描全域 Rules 與 Skills (排在工作區之後)
     // 2.1 全域獨立常駐規範 (AGENTS.md / GEMINI.md)
-    const globalStandaloneCandidates = [
+    // Kilo 沒有 Antigravity 的 ~/.gemini 全域設定，整段略過（見 scanKiloSources）
+    const globalStandaloneCandidates = options.kilo ? [] : [
       path.join(globalConfigDir, 'AGENTS.md'),
       path.join(globalConfigDir, 'GEMINI.md')
     ];
@@ -324,7 +325,7 @@ class ContextScannerService {
 
     // 2.2 全域 Rules 目錄
     const globalRulesDir = path.join(globalConfigDir, 'rules');
-    const globalRules = await this.scanRulesInDir(globalRulesDir, '全域設定 (Global)', true, 1000);
+    const globalRules = options.kilo ? [] : await this.scanRulesInDir(globalRulesDir, '全域設定 (Global)', true, 1000);
     for (const r of globalRules) {
       const alreadyExists = result.rules.alwaysActive.some(existing => existing.filePath && existing.filePath.toLowerCase() === r.filePath.toLowerCase());
       if (!alreadyExists) {
@@ -333,13 +334,16 @@ class ContextScannerService {
     }
 
     const globalSkillsDir = path.join(globalConfigDir, 'skills');
-    if (!(isVsCode && !isCursor)) {
+    if (!options.kilo && !(isVsCode && !isCursor)) {
       const globalSkills = await this.scanSkillsInDir(globalSkillsDir, '全域技能 (Global)', 'global', 1000);
       result.skills.global.push(...globalSkills);
     }
 
     // 3. 掃描內建 / VS Code Copilot 技能
-    if (!isVsCode) {
+    if (options.kilo) {
+      // Kilo 沒有 IDE 內建技能；專案／全域技能都在 .agents/skills（與 Cline／Codex 共用）
+      await this.scanKiloSources(result, options);
+    } else if (!isVsCode) {
       const builtinSkills = await this.scanSkillsInDir(builtinSkillsDir, 'Antigravity 內建', 'builtin', 2000);
       result.skills.builtin.push(...builtinSkills);
     } else if (isCursor) {
@@ -352,7 +356,10 @@ class ContextScannerService {
 
     // 4. 掃描 MCP 伺服器與工具
     // Antigravity：本機 MCP 目錄；Cursor：~/.cursor/mcp.json；VS Code：%APPDATA%/Code/User/mcp.json
-    if (!isVsCode) {
+    // Kilo：~/.config/kilo/kilo.jsonc 的 mcp 段 + 專案 .kilo/mcp.json（7.x opencode 架構）
+    if (options.kilo) {
+      result.mcpServers = await McpDetectorService.scanKiloMcpServers(workspaceFolders);
+    } else if (!isVsCode) {
       result.mcpServers = await McpDetectorService.scanMcpServers(workspaceFolders);
     } else if (isCursor) {
       result.mcpServers = await McpDetectorService.scanCursorMcpServers(workspaceFolders);
@@ -368,6 +375,42 @@ class ContextScannerService {
     }
 
     return result;
+  }
+
+  /**
+   * Kilo 專屬來源（與宿主 IDE 無關）
+   * - 專案規範：`AGENTS.md` 由 scanLiveEnvironment 的基本掃描處理
+   * - 專案規則目錄：`.kilo/rules`、`.kilocode/rules`（Kilo 文件列出的自動探索位置）
+   * - 全域技能：`~/.agents/skills`（Kilo 實際會讀；專案 `.agents/skills` 由基本掃描處理）
+   * - 全域規範：7.x 寫在 `~/.config/kilo/kilo.jsonc` 的 instructions，沒有獨立目錄
+   */
+  static async scanKiloSources(result, options = {}) {
+    const userHome = this.getUserHome();
+
+    for (const ws of result.workspaces || []) {
+      for (const rel of ['.kilo/rules', '.kilocode/rules']) {
+        const rules = await this.scanRulesInDir(path.join(ws.path, rel), ws.name, false, ws.index);
+        for (const r of rules) {
+          const alreadyExists = [...result.rules.alwaysActive, ...result.rules.conditional]
+            .some(existing => existing.filePath && existing.filePath.toLowerCase() === r.filePath.toLowerCase());
+          if (alreadyExists) continue;
+          // 與 Cline 4.x 相同的分類：有 paths: ⇒ 條件式；沒有 ⇒ 常駐
+          if (r.hasPaths) {
+            result.rules.conditional.push(r);
+          } else {
+            result.rules.alwaysActive.push({ ...r, isAlwaysActive: true });
+          }
+        }
+      }
+    }
+
+    const globalSkills = await this.scanSkillsInDir(
+      path.join(userHome, '.agents', 'skills'),
+      '使用者',
+      'global',
+      1000
+    );
+    this._mergeSkills(result.skills.global, globalSkills);
   }
 
   /**
