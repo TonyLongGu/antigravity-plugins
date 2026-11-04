@@ -40,17 +40,17 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 
 ---
 
-## 3. 圖譜常數（2026-11-02 複驗，graphify 0.9.80）
+## 3. 圖譜常數（2026-11-04 複驗，graphify 0.9.80）
 
 | 項目 | 值 |
 | :--- | :--- |
 | 圖譜位置 | `graphify-out/`（根 `.gitignore` 已排除，**勿 commit**） |
-| 規模 | **1908** nodes / **3424** edges / **117** communities（75 顯示、42 thin 省略） |
-| 建圖標記 | `Built from commit` `c94c6569`（＝目前 HEAD；mcp-manager 1.10.1 的改動仍在工作樹，`update` 已反映內容）。再跑 `update` 若回 `No code-graph topology changes detected` ⇒ 內容與工作樹一致 |
-| 語料 | 113 files · ~145,276 words；**84 個 code 檔**被抽取（AST）；30 檔未分類（`.bat` 14、無副檔名 10、`.css` 6） |
-| 抽取品質 | 96% EXTRACTED／4% INFERRED（144 邊，平均信心 0.85）；**0 input／0 output token＝0 元** |
-| 產物大小 | `GRAPH_REPORT.md` **20.1 KB**（20,096 B，可整讀）、`graph.json` **2.3 MB**（2,333,294 B，禁整讀）、`graph.html` 約 1.89 MB |
-| 節點分佈 | script-runner 455／inspector 446／toolbox 430／mcp-manager **298**／quota-status 174／quick-access 79／根目錄 26（含 `node:sqlite` 1 與 2 支根腳本） |
+| 規模 | **1910** nodes / **3432** edges / **122** communities（76 顯示、46 thin 省略） |
+| 建圖標記 | `Built from commit` `cc6db55f`（＝目前 HEAD；toolbox 1.8.2 的改動仍在工作樹，`update` 已反映內容）。再跑 `update` 若回 `No code-graph topology changes detected` ⇒ 內容與工作樹一致 |
+| 語料 | 113 files · ~146,196 words；**81 個 code 檔**被抽取（AST）；30 檔未分類（`.bat` 14、無副檔名 10、`.css` 6） |
+| 抽取品質 | 96% EXTRACTED／4% INFERRED（146 邊，平均信心 0.85）；**0 input／0 output token＝0 元** |
+| 產物大小 | `GRAPH_REPORT.md` **20.1 KB**（20,550 B，可整讀）、`graph.json` **2.3 MB**（2,337,781 B，禁整讀）、`graph.html` 約 1.89 MB |
+| 節點分佈 | script-runner 455／inspector 446／toolbox **432**／mcp-manager 298／quota-status 174／quick-access 79／根目錄 26（含 `node:sqlite` 1 與 2 支根腳本） |
 | 不進圖 | `*.css`、`*.html`、`locales/*.json`、`*.md`（`.graphifyignore` 已排除 `*.md`） |
 
 > ⚠️ 上表是**快照**。用前先驗（三行）：
@@ -277,6 +277,7 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 
 | 日期 | 變更 | 來源 |
 | :--- | :--- | :--- |
+| 2026-11-04 | toolbox `1.8.1 → 1.8.2`＝**手動「重新對齊」改為權威模式**：`lib/skill-junction-sync.js` 的 `syncWorkspaceSkills` 新增 `reclaimAll`（忽略 `workspacePaths` 歸屬、全域目錄內連結一律可回收），`skillSyncService.refreshSkillSync` 帶 `reclaimAll: true`。根因＝專案被**整個**移出工作區（拖出即移除／手動刪 `folders`）後，連結目標已不在任何註冊路徑內，舊版歸屬判定永遠認不出來 ⇒ 按幾次 ↻ 都留著；`workspaceService.maybeSyncSkills` 預設帶 `reclaimAll`（**面板操作＝權威**：專案開關／批次／首項／全部／反轉／拖出移除都會順手清孤兒；只有背景 Skills 目錄監看維持保守），`setSyncEnabled(true)`／`setExcludeFirstProject` 亦同；新增 `skillSyncService.alignWorkspaceSkillsNow()`／`scheduleWorkspaceAlign()` 並接上 `onDidChangeWorkspaceFolders` 與 `.code-workspace` 檔監看（700ms 防抖＋1.5s quiet window，避免與面板同步重複），**VS Code 原生「加入／移除工作區資料夾」也會自動對齊**；`removeWorkspaceFolder` 另以 `extraOwnershipPaths` 立即回收被移除專案的連結（不再製造孤兒）。`skill-junction-sync` 測試加 S12／S13、`skill-sync-service` 加 I6／I7／I8／I9 | 使用者回報：多專案工作區按「重新整理 Skills 連結」後，`~/.agents/skills` 仍有當前工作區未載入的技能 |
 | 2026-11-02 | mcp-manager `1.10.0 → 1.10.1`＝**移除 Cline／Kilo 檢視器入口**：快捷選單不再有「檢視 … MCP 伺服器狀態」、移除 `antigravity.mcp.viewClineMcp`／`viewKiloMcp` 指令與檢視器程式、清掉對應三語鍵；統計與「開啟設定檔」保留 | 使用者回報：快捷選單不需要檢視功能 |
 | 2026-11-02 | mcp-manager `1.9.3 → 1.10.0`＝**狀態列新增 Kilo 統計（純檢視）**：`services/kiloMcpService.js` 讀 `~/.config/kilo/kilo.jsonc`（JSONC、`mcp` 段、`enabled:false` 判定）、`displayMode` 加 `kilo`、狀態列／懸停／快捷選單／檢視器／檔案監聽與 `antigravity.mcp.viewKiloMcp` 指令；三語文案；新增 `kilo-mcp-service`（K1–K5）測試，測試總數 14→15 支；圖譜 1875→**1912** 節點／3375→**3434** 邊／118→**115** 社群（commit `c94c6569`） | 使用者需求：下方工具列也要能顯示 Kilo（目前顯示 MCP (Cline)） |
 | 2026-11-02 | inspector `1.3.0 → 1.3.1`＝**Kilo 對話模型顯示正規化**：`session.model` 是 JSON 字串，新增 `_parseModel()` 只取 `id`、`providerID` 另存 `provider`；`session.model` 為空時由 `_collectMessageModels()` 退回訊息中的模型；非 Antigravity 來源缺模型改顯示 `—`（不再誤顯示 Gemini Flash）。`kilo-snapshot` 補 K1／K2 斷言；圖譜 1873→**1875** 節點／3371→**3375** 邊／116→**118** 社群 | 使用者回報：對話使用模型顯示成 JSON 字串太雜亂 |

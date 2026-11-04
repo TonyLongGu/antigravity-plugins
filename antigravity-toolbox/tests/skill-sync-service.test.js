@@ -254,6 +254,129 @@ function main() {
     }
   });
 
+  check('I6【回歸】手動「重新對齊」：解除已不在工作區的殘留連結（舊版留著）', () => {
+    resetGlobalDir();
+    const base = caseDir('i6');
+    const a = makeProject(base, 'projA', ['alpha']);
+    const gone = makeProject(base, 'projGone', ['ghost']);
+
+    // 先用「兩專案都在工作區」的狀態建立連結
+    runSync({ folders: [a, gone], disabledFolders: [] }, base);
+    assert.deepStrictEqual(entries(GLOBAL_SKILLS), ['alpha', 'ghost']);
+
+    // projGone 之後被整個移出工作區（不在 folders／disabledFolders）⇒ 目標已不在歸屬範圍內。
+    // 手動重新對齊必須以目前工作區為權威把它收掉（舊版回 removed 0，連結永遠留著）。
+    skillSyncService.refreshSkillSync(
+      { pushToast: () => {}, pushStatus: () => {} },
+      [a],
+      base
+    );
+
+    assert.deepStrictEqual(entries(GLOBAL_SKILLS), ['alpha'], '殘留連結必須被解除');
+  });
+
+  check('I7【回歸】拖出即移除：被移除專案的連結會一併回收', () => {
+    resetGlobalDir();
+    const base = caseDir('i7');
+    const a = makeProject(base, 'projA', ['alpha']);
+    const b = makeProject(base, 'projB', ['gamma']);
+    const wsPath = path.join(base, 'test.code-workspace');
+    const json = { folders: [a, b], disabledFolders: [] };
+    fs.writeFileSync(wsPath, JSON.stringify(json, null, 2), 'utf-8');
+
+    runSync(json, base);
+    assert.deepStrictEqual(entries(GLOBAL_SKILLS), ['alpha', 'gamma']);
+
+    vscodeStub.workspace.workspaceFile = { fsPath: wsPath };
+    workspaceService.invalidateWorkspaceCache();
+    try {
+      const removed = workspaceService.removeWorkspaceFolder(
+        b.path,
+        { pushToast: () => {}, pushStatus: () => {} }
+      );
+      assert.strictEqual(removed, true, '應成功從工作區移除專案');
+    } finally {
+      vscodeStub.workspace.workspaceFile = null;
+      workspaceService.invalidateWorkspaceCache();
+    }
+
+    assert.deepStrictEqual(entries(GLOBAL_SKILLS), ['alpha'], '被移除專案的連結必須回收（不得變孤兒）');
+  });
+
+  check('I8【回歸】切換專案開關：順手清掉不在工作區的孤兒連結', () => {
+    resetGlobalDir();
+    const base = caseDir('i8');
+    const a = makeProject(base, 'projA', ['alpha']);
+    const b = makeProject(base, 'projB', ['gamma']);
+    const orphanSrc = makeProject(base, 'projOrphan', ['ghost']); // 完全沒登記在工作區
+    const wsPath = path.join(base, 'toggle.code-workspace');
+    const json = { folders: [a, b], disabledFolders: [] };
+    fs.writeFileSync(wsPath, JSON.stringify(json, null, 2), 'utf-8');
+
+    runSync(json, base);
+    assert.deepStrictEqual(entries(GLOBAL_SKILLS), ['alpha', 'gamma']);
+
+    // 模擬舊版遺留的孤兒連結：目標存在，但來源專案不在 folders／disabledFolders 內
+    fs.symlinkSync(
+      path.join(orphanSrc.path, '.agents', 'skills', 'ghost'),
+      path.join(GLOBAL_SKILLS, 'ghost'),
+      'junction'
+    );
+
+    vscodeStub.workspace.workspaceFile = { fsPath: wsPath };
+    workspaceService.invalidateWorkspaceCache();
+    try {
+      // 使用者按下專案 B 的開關（隱藏）⇒ 應同時對齊：B 的連結與孤兒連結一起解除
+      workspaceService.setWorkspaceFolderEnabled(b.path, false, {
+        pushToast: () => {},
+        pushStatus: () => {},
+      });
+    } finally {
+      vscodeStub.workspace.workspaceFile = null;
+      workspaceService.invalidateWorkspaceCache();
+    }
+
+    assert.deepStrictEqual(entries(GLOBAL_SKILLS), ['alpha'], '孤兒連結與被關閉專案的連結都要消失');
+  });
+
+  check('I9 原生加入／移除工作區資料夾：自動對齊（不需按 ↻）', () => {
+    resetGlobalDir();
+    const base = caseDir('i9');
+    const a = makeProject(base, 'projA', ['alpha']);
+    const c = makeProject(base, 'projC', ['delta']);
+    const wsPath = path.join(base, 'native.code-workspace');
+    const writeWs = (folders) => fs.writeFileSync(
+      wsPath,
+      JSON.stringify({ folders, disabledFolders: [] }, null, 2),
+      'utf-8'
+    );
+    writeWs([a]);
+
+    const provider = { pushToast: () => {}, pushStatus: () => {} };
+    vscodeStub.workspace.workspaceFile = { fsPath: wsPath };
+    workspaceService.invalidateWorkspaceCache();
+    try {
+      // 起始狀態：只有 A
+      skillSyncService.alignWorkspaceSkillsNow(provider);
+      assert.deepStrictEqual(entries(GLOBAL_SKILLS), ['alpha']);
+
+      // VS Code 原生「將資料夾加入工作區」⇒ 工作區檔多了 C
+      writeWs([a, c]);
+      workspaceService.invalidateWorkspaceCache();
+      skillSyncService.alignWorkspaceSkillsNow(provider);
+      assert.deepStrictEqual(entries(GLOBAL_SKILLS), ['alpha', 'delta'], '加入的專案技能要自動補連結');
+
+      // VS Code 原生「從工作區移除資料夾」⇒ C 完全不在清單內（也沒進 disabledFolders）
+      writeWs([a]);
+      workspaceService.invalidateWorkspaceCache();
+      skillSyncService.alignWorkspaceSkillsNow(provider);
+      assert.deepStrictEqual(entries(GLOBAL_SKILLS), ['alpha'], '被移除專案的連結要自動回收（不留孤兒）');
+    } finally {
+      vscodeStub.workspace.workspaceFile = null;
+      workspaceService.invalidateWorkspaceCache();
+    }
+  });
+
   cleanup();
 
   console.log(`\n[skill-sync-service] ${failed === 0 ? '全部通過' : `${failed} 項失敗`}\n`);

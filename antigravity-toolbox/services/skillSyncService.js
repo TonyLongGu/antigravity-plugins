@@ -28,6 +28,11 @@ let extensionContext = null;
 let lastProvider = null;
 let watchDebounce = null;
 let skillWatchers = [];
+// 工作區資料夾增減／工作區檔被改寫後的延遲對齊，以及「剛剛才由面板同步過」的時間戳（避免重複 toast）
+let alignDebounce = null;
+let lastPanelSyncAt = 0;
+const WORKSPACE_ALIGN_DEBOUNCE_MS = 700;
+const PANEL_SYNC_QUIET_MS = 1500;
 let watchersBoundToContext = false;
 
 function isSyncWriteInFlight() {
@@ -176,17 +181,21 @@ function notifySyncResult(result, provider, options = {}) {
  * @param {Array<{path?: string, name?: string}>} enabledFolders
  * @param {string} wsDir
  * @param {object} [provider]
- * @param {{ notify?: boolean, force?: boolean, workspacePaths?: string[], allowEmpty?: boolean }} [options]
+ * @param {{ notify?: boolean, force?: boolean, workspacePaths?: string[], allowEmpty?: boolean, reclaimAll?: boolean }} [options]
  *   - workspacePaths / allowEmpty：連結歸屬範圍（見 resolveSyncScope）；未提供時自動查詢目前工作區
+ *   - reclaimAll：忽略歸屬範圍、把全域目錄內所有連結視為本工作區所有（僅手動「重新對齊」使用）
  */
 function syncEnabledProjectSkills(enabledFolders, wsDir, provider = null, options = {}) {
   const { notify = false, force = false } = options;
   if (!force && !isSyncEnabled()) return null;
   lastProvider = provider || lastProvider;
+  // 面板操作（force）剛剛同步過：記錄時間，讓隨之而來的「工作區變更」事件不要重複同步／重複 toast
+  if (force) lastPanelSyncAt = Date.now();
 
   const result = syncWorkspaceSkills(enabledFolders, wsDir, {
     globalDir: getGlobalSkillsDir(),
     excludePaths: resolveExcludedProjectPaths(),
+    reclaimAll: options.reclaimAll === true,
     ...resolveSyncScope(enabledFolders, options),
   });
   notifySyncResult(result, provider, { notify, force });
@@ -241,6 +250,10 @@ function disposeSkillWatchers() {
   if (watchDebounce) {
     clearTimeout(watchDebounce);
     watchDebounce = null;
+  }
+  if (alignDebounce) {
+    clearTimeout(alignDebounce);
+    alignDebounce = null;
   }
   for (const watcher of skillWatchers) {
     try { watcher.dispose(); } catch {}
@@ -320,9 +333,22 @@ function syncWatchersToSetting() {
   }
 }
 
+/**
+ * 使用者手動按「重新對齊 Skills 連結」：以目前工作區為權威，把全域 Skills 目錄整理成
+ * 「只有本工作區啟用專案（且未被排除）的技能」。
+ *
+ * 為什麼要 reclaimAll（2026-11-04 修正）：舊版沿用自動同步的「連結歸屬」判定，只回收
+ * 「目標落在本工作區已註冊專案內」或「目標已失效」的連結。專案一旦被整個從工作區移除
+ * （面板拖出即移除、或手動刪掉 `folders`／`disabledFolders` 的項目），它的目標就不在任何
+ * 註冊路徑內 ⇒ 永遠認不出來、按幾次重新整理都留著（使用者回報的殘留）。
+ * 手動按下這顆按鈕語意是「以目前工作區為準」，故改為權威模式；自動觸發的同步不受影響。
+ * @param {object} [provider]
+ * @param {Array<{path?: string, name?: string}>} [enabledFolders]
+ * @param {string} [wsDir]
+ */
 function refreshSkillSync(provider = null, enabledFolders = [], wsDir = '') {
   lastProvider = provider || lastProvider;
-  syncEnabledProjectSkills(enabledFolders, wsDir, provider, { notify: true, force: true });
+  syncEnabledProjectSkills(enabledFolders, wsDir, provider, { notify: true, force: true, reclaimAll: true });
   if (isSyncEnabled()) {
     refreshSkillWatchers(enabledFolders, wsDir);
   }
@@ -365,7 +391,8 @@ async function setSyncEnabled(enabled, provider = null, enabledFolders = [], wsD
   }
 
   if (enabled) {
-    syncEnabledProjectSkills(enabledFolders, wsDir, provider, { notify: true, force: true });
+    // 使用者主動開啟同步＝以目前工作區為準（含清掉已移除專案的孤兒連結）
+    syncEnabledProjectSkills(enabledFolders, wsDir, provider, { notify: true, force: true, reclaimAll: true });
     refreshSkillWatchers(enabledFolders, wsDir);
     return;
   }
@@ -399,7 +426,8 @@ async function setExcludeFirstProject(enabled, provider = null, enabledFolders =
 
   // 僅在主要同步開關已開啟時才立即重新對齊，避免關閉狀態下被動觸發同步
   if (isSyncEnabled()) {
-    syncEnabledProjectSkills(enabledFolders, wsDir, provider, { notify: true, force: true });
+    // 使用者切換面板開關＝以目前工作區為準（首專案的連結必須解除，孤兒連結一併回收）
+    syncEnabledProjectSkills(enabledFolders, wsDir, provider, { notify: true, force: true, reclaimAll: true });
     refreshSkillWatchers(enabledFolders, wsDir);
     return;
   }
@@ -419,6 +447,52 @@ async function setExcludeFirstProject(enabled, provider = null, enabledFolders =
   }
 }
 
+/**
+ * 以「目前工作區」為權威立即對齊一次（不做防抖、不判斷 quiet window）。
+ * 用於：VS Code 原生「將資料夾加入工作區／從工作區移除」、.code-workspace 被改寫之後。
+ * @param {object} [provider]
+ * @param {{ notify?: boolean }} [options]
+ * @returns {object|null} 同步結果；沒有工作區檔或同步未開啟時回 null
+ */
+function alignWorkspaceSkillsNow(provider = null, options = {}) {
+  if (!isSyncEnabled()) return null;
+  lastProvider = provider || lastProvider;
+  const workspaceService = require('./workspaceService');
+  const ctx = workspaceService.loadWorkspaceContext(provider, true);
+  if (!ctx) return null;
+
+  const result = syncEnabledProjectSkills(
+    ctx.json.folders,
+    ctx.wsDir,
+    provider,
+    { notify: options.notify !== false, force: true, reclaimAll: true }
+  );
+  refreshSkillWatchers(ctx.json.folders, ctx.wsDir);
+  return result;
+}
+
+/**
+ * 工作區「資料夾增減」或工作區檔被改寫時，延遲對齊一次（防抖）。
+ *
+ * 為什麼要 quiet window：面板自己動完專案開關就會同步一次（且已有 toast），
+ * 而那個寫檔／VS Code 重讀資料夾又會再觸發本函式 ⇒ 不加防護會多一次同步與重複提示。
+ * 只有在「最近 PANEL_SYNC_QUIET_MS 內沒有面板同步」時才真的執行，
+ * 也就是真正來自 VS Code 原生加入／移除資料夾或外部改寫工作區檔的情況。
+ * @param {object} [provider]
+ * @param {number} [delay]
+ */
+function scheduleWorkspaceAlign(provider = null, delay = WORKSPACE_ALIGN_DEBOUNCE_MS) {
+  if (!isSyncEnabled()) return;
+  lastProvider = provider || lastProvider;
+  if (alignDebounce) clearTimeout(alignDebounce);
+  alignDebounce = setTimeout(() => {
+    alignDebounce = null;
+    if (!isSyncEnabled()) return;
+    if (Date.now() - lastPanelSyncAt < PANEL_SYNC_QUIET_MS) return;
+    alignWorkspaceSkillsNow(lastProvider, { notify: true });
+  }, delay);
+}
+
 module.exports = {
   SETTING_KEY,
   EXCLUDE_FIRST_SETTING_KEY,
@@ -432,6 +506,8 @@ module.exports = {
   setSyncEnabled,
   setExcludeFirstProject,
   refreshSkillSync,
+  alignWorkspaceSkillsNow,
+  scheduleWorkspaceAlign,
   bindSkillSync,
   syncWatchersToSetting,
   refreshSkillWatchers,

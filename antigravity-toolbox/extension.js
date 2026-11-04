@@ -520,6 +520,9 @@ function activate(context) {
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       workspaceService.invalidateWorkspaceCache();
       skillSyncService.refreshSkillWatchers();
+      // 原生「將資料夾加入工作區／從工作區移除」不會經過面板 ⇒ 這裡補一次以目前工作區為權威的對齊
+      // （延遲 + quiet window，避免與面板自己的同步重複）
+      skillSyncService.scheduleWorkspaceAlign(provider);
       provider.pushStatus(150);
     })
   );
@@ -534,6 +537,8 @@ function activate(context) {
       const onWsChange = () => {
         workspaceService.invalidateWorkspaceCache();
         skillSyncService.syncWatchersToSetting();
+        // 工作區檔被改寫（含外部編輯、原生加入／移除資料夾）⇒ 延遲對齊一次（quiet window 內會跳過）
+        skillSyncService.scheduleWorkspaceAlign(provider);
         provider.pushStatus(100);
       };
       wsFileWatcher.onDidChange(onWsChange);

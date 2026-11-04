@@ -201,17 +201,24 @@ function collectSourceSkills(enabledFolders, wsDir, options = {}) {
  * 依啟用專案比對全域 Skills Junction
  * @param {Array<{path?: string, name?: string}>} enabledFolders 啟用中的專案清單
  * @param {string} wsDir 工作區目錄 (解析相對路徑用)
- * @param {{ dryRun?: boolean, globalDir?: string, excludePaths?: string[], workspacePaths?: string[], allowEmpty?: boolean }} [options]
+ * @param {{ dryRun?: boolean, globalDir?: string, excludePaths?: string[], workspacePaths?: string[], allowEmpty?: boolean, reclaimAll?: boolean }} [options]
  *   - excludePaths: 不納入同步來源的專案路徑 (例如首專案)；其既有連結會被一併解除
  *   - workspacePaths: 本工作區「註冊過」的所有專案（啟用 ＋ 停用）。提供後只會解除「指向這些專案」或
  *     「目標已失效」的連結；指向其他多專案工作區的連結一律保留（全域目錄是所有工作區共用的）
  *   - allowEmpty: enabledFolders 為空時，是否代表權威狀態（＝本工作區所有專案都關掉了）而解除本工作區的連結。
  *     未提供（false）時沿用舊行為：略過同步並保留既有連結（例如沒有開啟 .code-workspace 的單資料夾視窗）
+ *   - reclaimAll: 視「全域目錄內所有連結」都歸本工作區所有（忽略 workspacePaths 歸屬判定）。
+ *     僅供使用者主動按下「重新對齊」時使用：專案若被整個從工作區移除（拖出即移除／手動刪 `folders`），
+ *     其連結的目標已不在任何註冊路徑內，靠歸屬判定永遠認不出來，會變成永久的孤兒連結。
+ *     ⚠️ 代價：同一個 `~/.agents/skills` 由多個工作區共用時，這個模式會把其他工作區的連結一併解除
+ *     （其他工作區下次同步會自行補回）⇒ 自動觸發的同步一律不得開啟此選項。
  * @returns {{ added: number, removed: number, kept: number, failed: number, protected: number, excludedProjects: string[], conflicts: Array<object>, skipped?: string }} skipped: 'empty-enabled'（無啟用專案且無歸屬資訊，保留連結）| 'empty-source'（來源技能 0 且無可回收連結，已中止同步）
  */
 function syncWorkspaceSkills(enabledFolders, wsDir, options = {}) {
   const dryRun = !!options.dryRun;
   const allowEmpty = options.allowEmpty === true;
+  // 手動「重新對齊」＝權威模式：全域目錄內的連結一律視為可回收（詳見 JSDoc 的 reclaimAll）
+  const reclaimAll = options.reclaimAll === true;
   const hasOwnershipInfo = Array.isArray(options.workspacePaths);
   const ownershipRoots = hasOwnershipInfo
     ? options.workspacePaths
@@ -268,7 +275,10 @@ function syncWorkspaceSkills(enabledFolders, wsDir, options = {}) {
     const resolvedTarget = resolveLinkTarget(full);
     // 歸屬判定（2026-10-27）：只有指向本工作區專案的連結（或目標已消失的殘缺連結）才算本工作區的；
     // 其餘可能是另一個多專案工作區建立的，不可因為本工作區沒有對應來源就整批解除。
-    const owned = !hasOwnershipInfo
+    // 例外（2026-11-04）：使用者手動按「重新對齊」帶 reclaimAll ⇒ 視同全部歸本工作區所有。
+    // 沒有這條，「專案被整個從工作區移除」後留下的連結（目標不在任何註冊路徑內）永遠不會被回收。
+    const owned = reclaimAll
+      || !hasOwnershipInfo
       || !resolvedTarget
       || !pathExists(resolvedTarget)
       || ownershipRoots.some((root) => isPathInside(resolvedTarget, root));

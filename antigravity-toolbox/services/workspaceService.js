@@ -19,13 +19,22 @@ function invalidateWorkspaceCache() {
  * @param {object} json
  * @param {string} wsDir
  * @param {object} [provider]
- * @param {{ notify?: boolean, force?: boolean }} [options]
+ * @param {{ notify?: boolean, force?: boolean, extraOwnershipPaths?: string[], reclaimAll?: boolean }} [options]
+ *   - extraOwnershipPaths：已從工作區移除、但仍需一併回收其連結的專案路徑（拖出即移除用）
+ *   - reclaimAll：是否以「目前工作區為權威」回收全域連結（**預設 true**）。本函式只在**使用者操作面板**時
+ *     被呼叫（專案開關／批次開關／首項／全部／反轉／拖出移除），語意一律是「按下去就以目前工作區為準」，
+ *     所以連「專案早被整個移出工作區」留下的孤兒連結也一併收掉（2026-11-04 使用者要求）。
+ *     背景的 Skills 目錄監看去的是 skillSyncService 的 watcher，不會經過這裡，仍維持保守判定；
+ *     若日後有人要從背景呼叫本函式，務必傳 `reclaimAll: false`。
  */
 function maybeSyncSkills(json, wsDir, provider = null, options = {}) {
   try {
     if (!options.force && !skillSyncService.isSyncEnabled()) return;
     const folders = Array.isArray(json?.folders) ? json.folders : [];
     const disabledFolders = Array.isArray(json?.disabledFolders) ? json.disabledFolders : [];
+    const extraOwnershipPaths = Array.isArray(options.extraOwnershipPaths)
+      ? options.extraOwnershipPaths.filter(Boolean)
+      : [];
     // 這裡的 folders 是權威狀態（剛寫入工作區設定檔）：空陣列＝所有專案都被關掉，
     // 應解除「本工作區註冊專案」的連結；workspacePaths 讓同步只動本工作區的連結。
     skillSyncService.syncEnabledProjectSkills(
@@ -35,9 +44,13 @@ function maybeSyncSkills(json, wsDir, provider = null, options = {}) {
       {
         notify: options.notify !== false,
         force: !!options.force,
+        // 面板操作＝權威模式：連不在註冊範圍內的孤兒連結也一併回收（見 JSDoc）
+        reclaimAll: options.reclaimAll !== false,
         workspacePaths: [...folders, ...disabledFolders]
           .map((f) => f?.path || '')
-          .filter(Boolean),
+          .filter(Boolean)
+          // 已移除的專案不在任何清單裡了，必須明確補回歸屬範圍，否則它的連結會變成孤兒
+          .concat(extraOwnershipPaths),
         allowEmpty: true,
       }
     );
@@ -884,8 +897,11 @@ function removeWorkspaceFolder(targetPath, provider = null) {
   syncFolderOrder(json, wsDir);
 
   saveWorkspaceJson(wsPath, json, true);
-  // 專案已不在註冊清單 ⇒ workspacePaths 縮小，本工作區對應的 Skills 連結會一併解除
-  maybeSyncSkills(json, wsDir, provider);
+  // 專案已不在註冊清單 ⇒ workspacePaths 縮小，本工作區對應的 Skills 連結會一併解除。
+  // 注意：這裡必須把「剛移除的專案」補進回收範圍（extraOwnershipPaths），
+  // 否則它的目標已不在任何註冊路徑內，歸屬判定會把它當成別的 workspace 的連結而永遠留著
+  // （2026-11-04 使用者回報：拖出移除後 ~/.agents/skills 殘留該專案的連結）。
+  maybeSyncSkills(json, wsDir, provider, { extraOwnershipPaths: [targetPath] });
 
   const msg = '已將專案從多專案工作區移除！';
   if (provider?.pushToast) provider.pushToast(msg, 'success');

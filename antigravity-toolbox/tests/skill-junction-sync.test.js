@@ -270,6 +270,52 @@ function main() {
     assert.strictEqual(fs.readFileSync(marker, 'utf-8'), '# alpha\n', '來源檔必須完好');
   });
 
+  check('S12【回歸】專案被整個移出工作區後：自動同步保留、reclaimAll（手動重新對齊）才解除', () => {
+    const base = caseDir('s12');
+    const globalDir = makeGlobalDir(base);
+    const a = makeProject(base, 'projA', ['alpha']);
+    const gone = makeProject(base, 'projGone', ['ghost']);
+
+    // 專案還在工作區時，兩顆連結都在
+    sync([a, gone], base, { globalDir, workspacePaths: [a.path, gone.path], allowEmpty: true });
+    assert.deepStrictEqual(entries(globalDir), ['alpha', 'ghost']);
+
+    // projGone 被整個從工作區移除（既不在 folders、也不在 disabledFolders）
+    // ⇒ 目標不在任何註冊路徑內，自動同步認不出歸屬，只能保留（避免誤刪其他工作區的連結）
+    const r1 = sync([a], base, { globalDir, workspacePaths: [a.path], allowEmpty: true });
+    assert.strictEqual(r1.removed, 0, `自動同步不得回收別人的連結，實際 removed ${r1.removed}`);
+    assert.deepStrictEqual(entries(globalDir), ['alpha', 'ghost']);
+
+    // 使用者手動按「重新對齊」＝以目前工作區為權威（reclaimAll），殘留連結必須消失
+    const r2 = sync([a], base, {
+      globalDir,
+      workspacePaths: [a.path],
+      allowEmpty: true,
+      reclaimAll: true,
+    });
+    assert.strictEqual(r2.removed, 1, `reclaimAll 應解除 1 個，實際 ${r2.removed}`);
+    assert.deepStrictEqual(entries(globalDir), ['alpha'], '全域目錄只留目前工作區啟用專案的技能');
+  });
+
+  check('S13 reclaimAll 仍不動實體資料夾，且已對齊時不重建連結', () => {
+    const base = caseDir('s13');
+    const globalDir = makeGlobalDir(base);
+    const manual = path.join(globalDir, 'manualSkill');
+    fs.mkdirSync(manual, { recursive: true });
+    const a = makeProject(base, 'projA', ['alpha']);
+    const options = { globalDir, workspacePaths: [a.path], allowEmpty: true, reclaimAll: true };
+
+    const r1 = sync([a], base, options);
+    assert.strictEqual(r1.added, 1, `added 應為 1，實際 ${r1.added}`);
+    assert.strictEqual(r1.protected, 1, `protected 應為 1，實際 ${r1.protected}`);
+
+    const r2 = sync([a], base, options);
+    assert.strictEqual(r2.kept, 1, `kept 應為 1，實際 ${r2.kept}`);
+    assert.strictEqual(r2.removed, 0);
+    assert.deepStrictEqual(entries(globalDir), ['alpha', 'manualSkill']);
+    assert.ok(!isLink(manual), 'manualSkill 不得變成連結');
+  });
+
   cleanup();
 
   console.log(`\n[skill-junction] ${failed === 0 ? '全部通過' : `${failed} 項失敗`}\n`);
