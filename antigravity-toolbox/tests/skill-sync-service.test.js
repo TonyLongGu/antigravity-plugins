@@ -90,6 +90,17 @@ function check(name, fn) {
   }
 }
 
+/** 非同步案例（例如 setSyncEnabled 需要 await 設定寫入） */
+async function checkAsync(name, fn) {
+  try {
+    await fn();
+    console.log(`  ✔ ${name}`);
+  } catch (e) {
+    failed += 1;
+    console.error(`  ✘ ${name}\n    ${e.message}`);
+  }
+}
+
 // ── 夾具 ────────────────────────────────────────────────────────────────────
 function caseDir(name) {
   const dir = path.join(ROOT, name);
@@ -164,7 +175,7 @@ function resetGlobalDir() {
 }
 
 // ── 測試本體 ────────────────────────────────────────────────────────────────
-function main() {
+async function main() {
   console.log('\n[skill-sync-service] 檢查「專案開關 → 全域 Skills 連結」的實際呼叫鏈\n');
 
   check('I1 依啟用專案建立連結', () => {
@@ -374,6 +385,57 @@ function main() {
     } finally {
       vscodeStub.workspace.workspaceFile = null;
       workspaceService.invalidateWorkspaceCache();
+    }
+  });
+
+  await checkAsync('I10【回歸】關閉同步：即使設定寫入失敗，也要解除全部連結', async () => {
+    resetGlobalDir();
+    const base = caseDir('i10');
+    const a = makeProject(base, 'projA', ['alpha', 'beta']);
+    configStore['antigravity.syncSkillsOnFolderToggle'] = true;
+    runSync({ folders: [a], disabledFolders: [] }, base);
+    assert.deepStrictEqual(entries(GLOBAL_SKILLS), ['alpha', 'beta']);
+
+    // settings.json 唯讀／工作區檔不可寫時，舊版會讓 update() 往外丟，
+    // 後面的解除連結整段被跳過，面板卻已顯示「已關閉」。
+    const originalGetConfiguration = vscodeStub.workspace.getConfiguration;
+    const originalConsoleError = console.error;
+    vscodeStub.workspace.getConfiguration = (section) => ({
+      get: originalGetConfiguration(section).get,
+      update: async () => {
+        throw new Error('settings.json is read-only');
+      },
+      inspect: () => null,
+    });
+    console.error = () => {}; // 這是預期中的失敗路徑，不要讓堆疊蓋住測試輸出
+    try {
+      await skillSyncService.setSyncEnabled(false, { pushToast: () => {}, pushStatus: () => {} }, [], base);
+    } finally {
+      vscodeStub.workspace.getConfiguration = originalGetConfiguration;
+      console.error = originalConsoleError;
+    }
+
+    assert.deepStrictEqual(entries(GLOBAL_SKILLS), [], '設定寫入失敗仍必須解除所有連結');
+  });
+
+  await checkAsync('I11【回歸】同步關閉時按 ↻：只解除、不得重建連結', async () => {
+    resetGlobalDir();
+    const base = caseDir('i11');
+    const a = makeProject(base, 'projA', ['alpha']);
+    configStore['antigravity.syncSkillsOnFolderToggle'] = false;
+    try {
+      // 模擬關閉後仍殘留的連結
+      fs.symlinkSync(
+        path.join(a.path, '.agents', 'skills', 'alpha'),
+        path.join(GLOBAL_SKILLS, 'alpha'),
+        'junction'
+      );
+
+      skillSyncService.refreshSkillSync({ pushToast: () => {}, pushStatus: () => {} }, [a], base);
+
+      assert.deepStrictEqual(entries(GLOBAL_SKILLS), [], '關閉狀態下 ↻ 不得把連結長回來');
+    } finally {
+      configStore['antigravity.syncSkillsOnFolderToggle'] = true;
     }
   });
 

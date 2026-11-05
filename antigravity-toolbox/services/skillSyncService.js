@@ -348,10 +348,16 @@ function syncWatchersToSetting() {
  */
 function refreshSkillSync(provider = null, enabledFolders = [], wsDir = '') {
   lastProvider = provider || lastProvider;
-  syncEnabledProjectSkills(enabledFolders, wsDir, provider, { notify: true, force: true, reclaimAll: true });
-  if (isSyncEnabled()) {
-    refreshSkillWatchers(enabledFolders, wsDir);
+  // 2026-11-05：同步關閉時按 ↻ 不得反向「對齊」——舊版因為 force 繞過開關檢查，
+  // 會把剛關閉時解除的連結全部重建，使用者看到的就是「關了又長回來」。
+  // 關閉狀態下 ↻ 的語意改為「維持關閉」：只解除、不建立。
+  if (!isSyncEnabled()) {
+    disposeSkillWatchers();
+    clearSyncedSkills(provider, { notify: true });
+    return;
   }
+  syncEnabledProjectSkills(enabledFolders, wsDir, provider, { notify: true, force: true, reclaimAll: true });
+  refreshSkillWatchers(enabledFolders, wsDir);
 }
 
 /**
@@ -382,12 +388,31 @@ async function setSyncEnabled(enabled, provider = null, enabledFolders = [], wsD
     : vscode.ConfigurationTarget.Global;
 
   syncWriteInFlight = true;
+  let writeError = null;
   try {
     await config.update(SETTING_KEY, enabled, target);
+  } catch (err) {
+    // 2026-11-05：舊版把寫入失敗往外丟 ⇒ 下面「關閉 ⇒ 解除連結」整段被跳過，
+    // 面板卻已樂觀顯示關閉（settings.json 唯讀、工作區檔不可寫時就是這個症狀）。
+    writeError = err;
   } finally {
     setTimeout(() => {
       syncWriteInFlight = false;
     }, 400);
+  }
+
+  // 不論設定是否寫入成功，都套用使用者這次的意圖；失敗只額外提示，不讓動作靜默消失。
+  if (writeError) {
+    console.error('寫入 Skills 同步設定失敗:', writeError);
+    if (provider?.pushToast) {
+      provider.pushToast(
+        toastText(
+          `同步設定寫入失敗（${writeError.message || writeError}）；本次仍會直接${enabled ? '建立' : '解除'}連結。`,
+          `Failed to persist the sync setting (${writeError.message || writeError}); applying this ${enabled ? 'enable' : 'disable'} action anyway.`
+        ),
+        'warning'
+      );
+    }
   }
 
   if (enabled) {

@@ -139,14 +139,30 @@ class ToolboxViewProvider {
       }
 
       case 'toggleSkillSync': {
-        const ctx = workspaceService.loadWorkspaceContext(this, true);
-        const enabledFolders = Array.isArray(ctx?.json?.folders) ? ctx.json.folders : [];
-        await skillSyncService.setSyncEnabled(
-          !!msg.enabled,
-          this,
-          enabledFolders,
-          ctx?.wsDir || ''
-        );
+        // 2026-11-05：讀工作區資訊或寫設定失敗都不得讓「關閉」靜默失敗——
+        // 舊版一旦丟例外，後面的解除連結整段不會執行，面板卻已樂觀顯示關閉。
+        let enabledFolders = [];
+        let wsDir = '';
+        try {
+          const ctx = workspaceService.loadWorkspaceContext(this, true);
+          enabledFolders = Array.isArray(ctx?.json?.folders) ? ctx.json.folders : [];
+          wsDir = ctx?.wsDir || '';
+        } catch (err) {
+          console.error('讀取工作區資訊失敗，改用空清單繼續切換 Skills 同步:', err);
+        }
+        try {
+          await skillSyncService.setSyncEnabled(
+            !!msg.enabled,
+            this,
+            enabledFolders,
+            wsDir
+          );
+        } catch (err) {
+          console.error('切換 Skills 同步失敗:', err);
+          if (!msg.enabled) {
+            skillSyncService.clearSyncedSkills(this, { notify: true });
+          }
+        }
         this.pushStatus();
         break;
       }
