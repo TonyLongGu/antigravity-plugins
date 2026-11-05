@@ -7,7 +7,7 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 
 > 一句話：**這個 repo 的「事實」都集中在這裡；但事實會過期——§3 的數字一律先驗證再用。**
 > 分工：圖譜的**通用流程**（何時建、怎麼驗、怎麼回報）→ skill `graphify-knowledge-graph`（在別的技能包，本 repo 未必載入；沒載入就用本檔 §4／§9 的自足版本）。本技能只管**這個 repo 的常數、耦合與授權**。
-> 本檔＝**這個 repo 唯一的知識落點**：repo 根**沒有** `AGENTS.md`（2026-11-05 移除，`git show <commit>:AGENTS.md` 可取回；⛔ 不要再建——多根工作區只讀一份，第二份會蓋掉首專案規範）；`docs/project-notes.md` 已於 2026-10-28 併回本檔後**刪除**，⛔ 不要再建平行副本。
+> 本檔＝**專案知識主技能**：repo 根 `AGENTS.md` 只有技能索引；`docs/project-notes.md` 已於 2026-10-28 併回本檔後**刪除**（回收筒可還原），⛔ 不要再建平行副本。
 
 ---
 
@@ -19,9 +19,9 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 | **正例** | 「改 `scriptRunner.runBat` 這個 id 會壞什麼？」／「這個 repo 的圖譜過期了嗎？」 |
 | **負例** | 「幫我建一份知識圖譜」→ `graphify-knowledge-graph`（本技能不含通用建圖流程） |
 | **負例** | 「這台機器做個環境健檢」／「幫我刪掉這些暫存檔」→ `health-check`／`safe-delete` |
-| **怎麼被叫用** | 直接打 `/antigravity-plugins-maintenance`，或由 `description`（圖譜常數、command id 耦合、安裝鐵律）語意觸發——**本 repo 已無 `AGENTS.md` 索引，沒有東西會自動派送**。⚠️ 技能清單沒看到本技能 ⇒ 直接讀 `.agents/skills/antigravity-plugins-maintenance/SKILL.md`（junction 未同步時會這樣） |
+| **怎麼被叫用** | repo 根 `AGENTS.md` 的**技能索引**會指向本技能；也可直接打 `/antigravity-plugins-maintenance`。⚠️ 技能清單沒看到本技能 ⇒ 直接讀 `.agents/skills/antigravity-plugins-maintenance/SKILL.md`（junction 未同步時會這樣） |
 
-> **何時不必用本技能**：只問「graphify 怎麼安裝／怎麼建圖」→ `graphify-knowledge-graph`；只問「外掛有沒有裝起來、環境對不對」→ `health-check`；處理的是**別的 repo** → 那個 repo 自己的技能。
+> **何時不必用本技能**：只問「graphify 怎麼安裝／怎麼建圖」→ `graphify-knowledge-graph`；只問「外掛有沒有裝起來、環境對不對」→ `health-check`；處理的是**別的 repo** → 那個 repo 自己的 `AGENTS.md`／技能。
 
 ---
 
@@ -65,37 +65,20 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 
 ---
 
-## 4. 讀取紀律（省 token）
+## 4. 讀取紀律（本 repo 參數）
 
-1. **先讀** `graphify-out/GRAPH_REPORT.md` 的 `## Summary` 段（整份 17.2 KB 全讀也划算）。
-2. 要細節才用 CLI（本地、免 API key、零成本）：`god-nodes --top 10`／`explain "<節點>"`／`affected "<節點>" --depth 2`／`path "A" "B"`／`query "<問題>" --context call --budget 1500`。
-3. **永不整檔讀** `graph.json`（2.0 MB）。
-4. 社群名是 `Community N`（建圖用 `--no-label`，未付 LLM 費用）→ 導航靠 `god-nodes`，不要期待語意化社群名。
-5. 要改動時才開原始碼，並用圖譜給的 `檔名:行號` 直接跳。
-6. 圖譜與程式碼不一致 ⇒ **以程式碼為準**，收尾依 §5 更新。
-
-> 📌 **同名節點要加路徑**：`explain "McpConfigService"` 會回 `Ambiguous`（3 個節點：service 本體／`extension.js` 引用／測試）。改用 `graphify explain "antigravity-mcp-manager/services/mcpConfigService.js::McpConfigService"`（實測可用，Source 指到 `L35`）。
-
-> 📌 **`$LASTEXITCODE` 不可靠**：實測 `explain`／`query`／`god-nodes` 成功也回 `-1`（只有 `extract`／`cluster-only`／`update` 回 `0`）。成敗請看輸出；`query` 出現 `TRUNCATED` 是預算不足，加大 `--budget` 或縮小問題，**不是壞掉**。
+1. 報告 **17.2 KB** ⇒ 先讀 `## Summary`（整份讀也划算）。
+2. 社群名是 `Community N`（建圖用 `--no-label`，未付 LLM 費用）→ 導航靠 `god-nodes`，不要期待語意化社群名。
+3. 同名節點要加路徑：`explain "antigravity-mcp-manager/services/mcpConfigService.js::McpConfigService"`（不帶路徑會回 `Ambiguous`，3 個節點）。
+4. 其餘（查詢指令與預算、`graph.json` 2.0 MB ⛔ 永不整讀、`$LASTEXITCODE` 對查詢類不可靠、`TRUNCATED`）→ skill `graphify-knowledge-graph` §5、§6 坑 14／16；通用工作守則 → skill `graphify-repo-workflow` §2。
 
 ---
 
-## 5. 改完自動更新（**本節即授權**）
+## 5. 改完自動更新（本 repo 的判準）
 
 - 改了**被抽取的檔案**（`.js`／`.ps1`／`package.json`）⇒ 收尾**直接執行** `graphify update .`，**不需要再詢問使用者**；完成後回報節點／邊／社群數變化與 `Built from commit` 是否＝HEAD。
 - **只改** `.md`／`.css`／`locales/*.json` ⇒ **不要**跑 `update`（屬無害過期；`.graphifyignore` 已排除 `*.md`）。
-- 邊界：
-
-| 情況 | 做法 |
-| :--- | :--- |
-| 一般更新 | `graphify update .` |
-| 無拓撲變更 | 會回 `No code-graph topology changes detected; outputs left untouched.`，`$LASTEXITCODE`＝`0` ⇒ **正常**，不要重跑 |
-| 節點數變少被「縮圖保護」擋下 | 才加 `--force` |
-| 想順手重分群 | ⛔ **不要加 `--no-cluster`**（會寫出沒有 community 的 `graph.json`，報告仍是舊分群） |
-| `graphify-out/` 不存在 | ⛔ **不可**直接 `update` ⇒ 見 §9 |
-| 產物 | `graphify-out/` **不 commit**（2 MB 級產物、重建 3 秒 0 元） |
-
-> 📌 **實測坑（2026-10-28）**：`graphify update . 2>&1 \| Select-Object -Last 25` 會讓 PowerShell 把 stderr 的「18 檔零符號」warning 變成 `NativeCommandError` ⇒ 命令看似 **exit 1 假失敗**。正確判讀：① 用 `graphify update .` 直接跑再看 `$LASTEXITCODE`；② 或看輸出最後一行 `Code graph updated`／`No code-graph topology changes`。18 檔零符號是常態（12 支薄殼＋`media/*/locales.js` 等），⛔ 不要為此改腳本或加旗標。
+- 旗標與例外（無拓撲變更＝正常不重跑、`--force`、⛔ `--no-cluster`、`graphify-out/` 不存在走 §9、`2>&1` 假失敗、「18 檔零符號」是常態、產物不 commit）→ skill `graphify-knowledge-graph` §3、§6 坑 13–15；授權原則 → skill `graphify-repo-workflow` §3。
 
 ---
 
@@ -253,7 +236,7 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 | 10 | 想在切換鈕加回「全部／自動」 | 1.6.0 起刻意移除：未指定即等於跟隨宿主，多一顆鈕反而兩個狀態指同一件事 | 要回 `auto` 就點「目前宿主」那顆 chip |
 | 11 | 新增外掛只改 `$candidatePool` | 漏 `$environmentExclusions`／`-Plugin` 對照／README 支援表 ⇒「裝了沒效果」或「選單有、實際不存在」 | 新增／移除外掛**同步 4 處**（§2 第 3 點） |
 | 12 | Cline 快照用「目前開著的 `workspaceFolders`」掃規範／技能 | 開著 A 視窗看 B 對話時列出無關的 `AGENTS.md`／`.clinerules`；多根視窗全部列出 | 一律走 `ClineSessionService._snapshotRoots(target.workspaceRoot)`（inspector 1.2.6 起）；新來源服務比照「以對話自己的根目錄掃描」 |
-| 13 | 把知識寫回 `AGENTS.md`、或又建 `docs/project-notes.md` 平行副本 | 兩份真相，改一邊忘一邊（2026-10-26／10-27 各發生過一次）；`AGENTS.md` 還會被多根工作區的第二份覆蓋 | 知識只放技能（可多支）；**repo 根不建 `AGENTS.md`**；查閱型說明留 `README.md` |
+| 13 | 把知識寫回 `AGENTS.md`、或又建 `docs/project-notes.md` 平行副本 | 兩份真相，改一邊忘一邊（2026-10-26／10-27 各發生過一次） | 知識只放技能（可多支）；`AGENTS.md` 只放索引；查閱型說明留 `README.md` |
 | 14 | 對外宣稱支援 VSCodium | 實作只「偵測行程」、沒有部署目標 | 已定案不宣稱（2026-10-27）；要真支援得自行補根 2 支腳本（原 9 點清單見 git `6e34e44`） |
 | 15 | 把 `.clinerules` 根目錄一律當常駐（或想靠檔名 `*cond*` 判斷條件式） | 帶 `paths:` 的條件式規範被顯示成常駐，與 Cline 實際載入相反，使用者誤判「規範沒生效」 | 只看 frontmatter：有 `paths:` ⇒ 條件式、無 ⇒ 常駐、`workflows/` ⇒ 按需（§8.3） |
 | 16 | 掃技能／目錄時只認 `Dirent.isDirectory()` | Windows 的 junction 在 Dirent 是 `isSymbolicLink()=true`、`isDirectory()=false`；`~/.agents/skills/*` 全是 toolbox 同步的 junction ⇒ 全域技能整批消失（1.2.7 以前，實測 26→0） | 掃描條件一律寫 `isDirectory() \|\| isSymbolicLink()`，並用 `skill-junction-scan`（J0–J5）守住（§8.3） |
@@ -265,9 +248,9 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 
 ## 11. 本技能維護
 
-- 本技能＝這個 repo 的**唯一知識落點**：常數、授權、耦合表、邊界、反模式都在這裡；repo 根沒有 `AGENTS.md`（2026-11-05 移除）。
-- **可擴充（設計前提）**：repo 之後會再加其他技能（UI／安裝流程／i18n／測試…）。新增時兩件事：① 在該技能 §1 寫清與本技能的分流（何時用誰）② 同一條規則不得在兩支技能各留一份。
-- **取捨（要對使用者誠實）**：若技能沒被叫用，§5 的授權與 §6／§7 的鐵律都不在 context；本 repo 已無 `AGENTS.md` 派送 ⇒ **使用者指名**或 `description` 語意觸發是唯一入口，遇到圖譜相關工作要先想到本技能。
+- 本技能＝這個 repo 的**專案知識主技能**：常數、授權、耦合表、邊界、反模式在這裡；根 `AGENTS.md` 只做**索引＋每輪必做**（技能索引／讀圖／收尾授權／知識落點），**不承載知識**。
+- **可擴充（設計前提）**：repo 之後會再加其他技能（UI／安裝流程／i18n／測試…）。新增時三件事：① 同步補 `AGENTS.md` 的技能索引 ② 在該技能 §1 寫清與本技能的分流（何時用誰）③ 同一條規則不得在兩支技能各留一份。
+- **取捨（要對使用者誠實）**：若技能沒被叫用，§5 的授權與 §6／§7 的鐵律都不在 context；`AGENTS.md` 的技能索引就是為了把「先叫用技能」變成每輪可見的指令，⛔ 不要把它刪掉。
 - 通用圖譜流程不重複抄寫（指向 `graphify-knowledge-graph`）；本檔只管**這個 repo** 的常數與授權。
 - §3 與 §8 的數字會過期：**更新圖譜後順手更新並改日期**；無法確認就寫「查法」而不是寫死。
 - 查閱型內容（完整檔案地圖、使用者向安裝說明）留在 `README.md`，本檔最多一行指標。
@@ -277,8 +260,7 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 
 | 日期 | 變更 | 來源 |
 | :--- | :--- | :--- |
-| 2026-11-05 | **移除 repo 根 `AGENTS.md`（純技能模式）**：§1 叫用方式改為「直接指名／`description` 觸發」、§11 三條改寫（不再有索引可補）、§8 第 13 條改為「⛔ 不建 `AGENTS.md`」；知識全在本檔，§4／§5 的授權自足 | 使用者實測：VS Code Copilot 只讀一份 `AGENTS.md`，多根工作區第二份會覆蓋首專案規範 ⇒ 全工作區只留 `ai` 那一份 |
-
+| 2026-11-05 | **§4／§5 去重**：通用條目（查詢指令、token 預算、`graph.json` 永不整讀、`$LASTEXITCODE` 對查詢類不可靠、`TRUNCATED`、旗標邊界、`2>&1` 假失敗、零符號常態）改為指向 `graphify-knowledge-graph`／`graphify-repo-workflow`；本檔只留本 repo 參數（報告 17.2 KB、`Community N` 命名、`McpConfigService` 的 `Ambiguous` 加路徑寫法、18 檔零符號） | 使用者定案：同一事實只留一份；`AGENTS.md` 已涵蓋「每輪必做」 |
 | 2026-11-05 | toolbox `1.8.2 → 1.8.3`＝**關閉同步一律解除連結（不再可能靜默失敗）**：`skillSyncService.setSyncEnabled()` 把 `config.update()` 包進 `try/catch`，寫入失敗只提示、不再往外丟——舊版例外一丟，後面的「關閉 ⇒ 解除連結」整段被跳過，面板卻已樂觀顯示關閉（＝`~/.agents/skills` 連結留在原地的症狀）。`refreshSkillSync()` 在同步關閉時改為**只解除、不建立**（舊版 `force: true` 繞過開關檢查，按 ↻ 會把剛解除的連結全部重建）。`media/index.html` 的 toggle 標題同步改為「關閉…並解除所有連到全域資料夾的連結」。`skill-sync-service` 測試加 I10（寫入失敗仍要清乾淨）／I11（關閉時 ↻ 不得重建） | 使用者回報：關掉「開關專案時同步全域 Skills」後，`C:\\Users\\User\\.agents\\skills` 的連結沒有自動解除 |
 | 2026-11-04 | toolbox `1.8.1 → 1.8.2`＝**手動「重新對齊」改為權威模式**：`lib/skill-junction-sync.js` 的 `syncWorkspaceSkills` 新增 `reclaimAll`（忽略 `workspacePaths` 歸屬、全域目錄內連結一律可回收），`skillSyncService.refreshSkillSync` 帶 `reclaimAll: true`。根因＝專案被**整個**移出工作區（拖出即移除／手動刪 `folders`）後，連結目標已不在任何註冊路徑內，舊版歸屬判定永遠認不出來 ⇒ 按幾次 ↻ 都留著；`workspaceService.maybeSyncSkills` 預設帶 `reclaimAll`（**面板操作＝權威**：專案開關／批次／首項／全部／反轉／拖出移除都會順手清孤兒；只有背景 Skills 目錄監看維持保守），`setSyncEnabled(true)`／`setExcludeFirstProject` 亦同；新增 `skillSyncService.alignWorkspaceSkillsNow()`／`scheduleWorkspaceAlign()` 並接上 `onDidChangeWorkspaceFolders` 與 `.code-workspace` 檔監看（700ms 防抖＋1.5s quiet window，避免與面板同步重複），**VS Code 原生「加入／移除工作區資料夾」也會自動對齊**；`removeWorkspaceFolder` 另以 `extraOwnershipPaths` 立即回收被移除專案的連結（不再製造孤兒）。`skill-junction-sync` 測試加 S12／S13、`skill-sync-service` 加 I6／I7／I8／I9 | 使用者回報：多專案工作區按「重新整理 Skills 連結」後，`~/.agents/skills` 仍有當前工作區未載入的技能 |
 | 2026-11-02 | mcp-manager `1.10.0 → 1.10.1`＝**移除 Cline／Kilo 檢視器入口**：快捷選單不再有「檢視 … MCP 伺服器狀態」、移除 `antigravity.mcp.viewClineMcp`／`viewKiloMcp` 指令與檢視器程式、清掉對應三語鍵；統計與「開啟設定檔」保留 | 使用者回報：快捷選單不需要檢視功能 |
