@@ -7,7 +7,7 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 
 > 一句話：**這個 repo 的「事實」都集中在這裡；但事實會過期——§3 的數字一律先驗證再用。**
 > 分工：圖譜的**通用流程**（何時建、怎麼驗、怎麼回報）→ skill `graphify-knowledge-graph`（在別的技能包，本 repo 未必載入；沒載入就用本檔 §4／§9 的自足版本）。本技能只管**這個 repo 的常數、耦合與授權**。
-> 本檔＝**專案知識主技能**：repo 根 `AGENTS.md` 只有技能索引；`docs/project-notes.md` 已於 2026-10-28 併回本檔後**刪除**（回收筒可還原），⛔ 不要再建平行副本。
+> 本檔＝**這個 repo 唯一的規則入口**：根 `AGENTS.md` 已於 2026-11-08 移除（commit `2588323`），`docs/project-notes.md` 已於 2026-10-28 併回本檔後刪除，⛔ 兩者都不要重建，也不要開第二份規則文件。
 
 ---
 
@@ -19,7 +19,7 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 | **正例** | 「改 `scriptRunner.runBat` 這個 id 會壞什麼？」／「這個 repo 的圖譜過期了嗎？」 |
 | **負例** | 「幫我建一份知識圖譜」→ `graphify-knowledge-graph`（本技能不含通用建圖流程） |
 | **負例** | 「這台機器做個環境健檢」／「幫我刪掉這些暫存檔」→ `health-check`／`safe-delete` |
-| **怎麼被叫用** | repo 根 `AGENTS.md` 的**技能索引**會指向本技能；也可直接打 `/antigravity-plugins-maintenance`。⚠️ 技能清單沒看到本技能 ⇒ 直接讀 `.agents/skills/antigravity-plugins-maintenance/SKILL.md`（junction 未同步時會這樣） |
+| **怎麼被叫用** | 本檔就是入口：直接打 `/antigravity-plugins-maintenance`，或讀 `.agents/skills/antigravity-plugins-maintenance/SKILL.md`（技能清單沒看到本技能時就是 junction 未同步） |
 
 > **何時不必用本技能**：只問「graphify 怎麼安裝／怎麼建圖」→ `graphify-knowledge-graph`；只問「外掛有沒有裝起來、環境對不對」→ `health-check`；處理的是**別的 repo** → 那個 repo 自己的 `AGENTS.md`／技能。
 
@@ -248,9 +248,9 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 
 ## 11. 本技能維護
 
-- 本技能＝這個 repo 的**專案知識主技能**：常數、授權、耦合表、邊界、反模式在這裡；根 `AGENTS.md` 只做**索引＋每輪必做**（技能索引／讀圖／收尾授權／知識落點），**不承載知識**。
-- **可擴充（設計前提）**：repo 之後會再加其他技能（UI／安裝流程／i18n／測試…）。新增時三件事：① 同步補 `AGENTS.md` 的技能索引 ② 在該技能 §1 寫清與本技能的分流（何時用誰）③ 同一條規則不得在兩支技能各留一份。
-- **取捨（要對使用者誠實）**：若技能沒被叫用，§5 的授權與 §6／§7 的鐵律都不在 context；`AGENTS.md` 的技能索引就是為了把「先叫用技能」變成每輪可見的指令，⛔ 不要把它刪掉。
+- 本技能＝這個 repo 的**專案知識主技能與唯一規則入口**：常數、授權、耦合表、邊界、反模式都在這裡；根目錄沒有 `AGENTS.md`（2026-11-08 移除），不要重建。
+- **可擴充（設計前提）**：repo 之後會再加其他技能（UI／安裝流程／i18n／測試…）。新增時兩件事：① 在該技能 §1 寫清與本技能的分流（何時用誰）② 同一條規則不得在兩支技能各留一份。
+- **取捨（要對使用者誠實）**：若技能沒被叫用，§5 的授權與 §6／§7 的鐵律都不在 context。工單與房間專案卡負責把「先讀本技能」變成每輪可見的指令。
 - 通用圖譜流程不重複抄寫（指向 `graphify-knowledge-graph`）；本檔只管**這個 repo** 的常數與授權。
 - §3 與 §8 的數字會過期：**更新圖譜後順手更新並改日期**；無法確認就寫「查法」而不是寫死。
 - 查閱型內容（完整檔案地圖、使用者向安裝說明）留在 `README.md`，本檔最多一行指標。
