@@ -13,6 +13,7 @@
   "tooltip_daily_budget": "- 建议今日余额: `{value}`\n",
   "tooltip_deviation": "- 偏差值: `{value}`\n\n",
   "tooltip_last_updated": "*最后同步时间: {time}*\n\n",
+  "tooltip_stale_notice": "*语言服务器休眠中，显示 {time} 读到的值。*\n\n",
   "tooltip_click_menu": "[点击开启管理选单](command:aiQuota.showMenu)",
   "tooltip_plan": "- 方案: `{plan}`\n",
   "tooltip_account": "- 账号: `{email}`\n",
@@ -76,5 +77,7 @@
   "menu_lang_label": "界面语言",
   "menu_lang_desc": "繁體中文、简体中文、English",
   "lang_placeholder": "选择界面语言",
-  "lang_updated": "已切换界面语言"
+  "lang_updated": "已切换界面语言",
+  "status_unavailable": "AI 额度: 无法取得",
+  "unavailable": "无法取得"
 }

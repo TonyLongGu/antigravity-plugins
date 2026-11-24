@@ -1,5 +1,6 @@
 const vscode = require('vscode');
 const quotaService = require('./services/quotaService');
+const antigravityQuota = require('./services/antigravityQuotaService');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -48,6 +49,21 @@ const SENTINEL_FILE = path.join(os.homedir(), '.gemini', 'antigravity-ide', 'quo
 function activate(context) {
   extContext = context;
   i18n = new I18n(context.extensionUri);
+
+  // 快照（語言伺服器休眠時的最後成功值）放在擴充套件自己的 globalStorage
+  if (context.globalStorageUri?.fsPath) {
+    antigravityQuota.setCacheDir(context.globalStorageUri.fsPath);
+  }
+
+  // 走 Antigravity 官方語言伺服器 client（與 IDE 配額面板同源）。
+  // port 為 0 代表 IDE 的 agy.exe 目前沒開，直接跳過、別去打 127.0.0.1:80。
+  antigravityQuota.setRpcClientProvider(async () => {
+    const ext = vscode.extensions.getExtension('google.antigravity');
+    if (!ext) return null;
+    const api = ext.isActive ? ext.exports : await ext.activate();
+    if (!api || !api.port || typeof api.getRpcClient !== 'function') return null;
+    return api.getRpcClient();
+  });
 
   // 1. 建立狀態列項目
   const config = vscode.workspace.getConfiguration('aiQuota');
@@ -407,35 +423,51 @@ async function updateStatusBar(forceRefresh = false) {
       return;
     }
 
-    const gPri = data?.gemini?.primary?.percent ?? 100;
-    const cPri = data?.claude?.primary?.percent ?? 100;
+    // 取不到配額時誠實顯示，不要用預設 100% 假裝額度充足
+    if (data && data.success === false) {
+      statusBarItem.text = `${STATUS_ICON} ${i18n.t('status_unavailable')}`;
+      const md = new vscode.MarkdownString();
+      md.isTrusted = true;
+      md.appendMarkdown(i18n.t('tooltip_title'));
+      md.appendMarkdown(i18n.t('status_error_tooltip', { error: data.note || i18n.t('unavailable') }));
+      md.appendMarkdown('\n\n');
+      appendFooter(md);
+      statusBarItem.tooltip = md;
+      return;
+    }
+
+    const gPri = data?.gemini?.primary?.percent ?? null;
+    const cPri = data?.claude?.primary?.percent ?? null;
     const gWk = data?.gemini?.weekly?.percent ?? gPri;
     const cWk = data?.claude?.weekly?.percent ?? cPri;
+    const gHas = gWk !== null && gWk !== undefined;
+    const cHas = cWk !== null && cWk !== undefined;
 
     const g5hObj = data?.gemini?.fiveHour;
     const c5hObj = data?.claude?.fiveHour;
-    const gHas5h = !!(g5hObj?.exists && g5hObj.percent !== null && g5hObj.percent !== undefined);
-    const cHas5h = !!(c5hObj?.exists && c5hObj.percent !== null && c5hObj.percent !== undefined);
+    const gHas5h = !!(gHas && g5hObj?.exists && g5hObj.percent !== null && g5hObj.percent !== undefined);
+    const cHas5h = !!(cHas && c5hObj?.exists && c5hObj.percent !== null && c5hObj.percent !== undefined);
     const g5h = gHas5h ? g5hObj.percent : null;
     const c5h = cHas5h ? c5hObj.percent : null;
 
     let text = '';
 
     if (displayMode === 'standard') {
-      // standard 標準模式：若無 5h 配額則單欄顯示 Gemini: 33% | Claude: 100%
-      const gText = gHas5h ? `${fmtPct(gWk)}, ${fmtPct(g5h)}` : fmtPct(gWk);
-      const cText = cHas5h ? `${fmtPct(cWk)}, ${fmtPct(c5h)}` : fmtPct(cWk);
-      text = `Gemini: ${gText} | Claude: ${cText}`;
+      // standard 標準模式：只顯示真的有配額資料的群組
+      const parts = [];
+      if (gHas) parts.push(`Gemini: ${gHas5h ? `${fmtPct(gWk)}, ${fmtPct(g5h)}` : fmtPct(gWk)}`);
+      if (cHas) parts.push(`Claude: ${cHas5h ? `${fmtPct(cWk)}, ${fmtPct(c5h)}` : fmtPct(cWk)}`);
+      text = parts.join(' | ');
     } else {
-      // compact 極簡雙欄模式 (預設)：若有 5h 配額則雙欄，若皆無則單欄 (如 33% | 100%)
-      if (gHas5h || cHas5h) {
-        const gPart = gHas5h ? `${fmtPct(gWk)}, ${fmtPct(g5h)}` : fmtPct(gWk);
-        const cPart = cHas5h ? `${fmtPct(cWk)}, ${fmtPct(c5h)}` : fmtPct(cWk);
-        text = `${gPart} | ${cPart}`;
-      } else {
-        text = `${fmtPct(gWk)} | ${fmtPct(cWk)}`;
+      // compact 極簡雙欄模式 (預設)：有 5h 配額就雙欄；缺一邊用 -- 表示「這組沒有資料」
+      if (gHas || cHas) {
+        const gText = gHas ? (gHas5h ? `${fmtPct(gWk)}, ${fmtPct(g5h)}` : fmtPct(gWk)) : '--';
+        const cText = cHas ? (cHas5h ? `${fmtPct(cWk)}, ${fmtPct(c5h)}` : fmtPct(cWk)) : '--';
+        text = `${gText} | ${cText}`;
       }
     }
+
+    if (!text) text = i18n.t('unavailable');
 
     statusBarItem.text = `${STATUS_ICON} ${text}`;
 
@@ -444,31 +476,52 @@ async function updateStatusBar(forceRefresh = false) {
     md.isTrusted = true;
     md.appendMarkdown(i18n.t('tooltip_title'));
 
-    const gWkRefresh = formatResetTime(data?.gemini?.weekly?.resetTime, gWk === UNLIMITED, i18n.t('plenty'));
-    const g5hRefresh = gHas5h ? formatResetTime(data?.gemini?.fiveHour?.resetTime, g5h === UNLIMITED, i18n.t('plenty')) : '';
-    const gDaily = formatCalculatedText(data?.gemini?.weekly?.dailyBudget, gWk);
-    const gDev = formatCalculatedText(data?.gemini?.weekly?.deviation, gWk);
-
-    const cWkRefresh = formatResetTime(data?.claude?.weekly?.resetTime, cWk === UNLIMITED, i18n.t('plenty'));
-    const c5hRefresh = cHas5h ? formatResetTime(data?.claude?.fiveHour?.resetTime, c5h === UNLIMITED, i18n.t('plenty')) : '';
-    const cDaily = formatCalculatedText(data?.claude?.weekly?.dailyBudget, cWk);
-    const cDev = formatCalculatedText(data?.claude?.weekly?.deviation, cWk);
-
-    md.appendMarkdown(i18n.t('tooltip_gemini_header'));
-    md.appendMarkdown(i18n.t('tooltip_weekly_limit', { value: fmtPct(gWk), refresh: gWkRefresh }));
-    if (gHas5h) {
-      md.appendMarkdown(i18n.t('tooltip_five_hour_limit', { value: fmtPct(g5h), refresh: g5hRefresh }));
+    if (data?.stale) {
+      md.appendMarkdown(i18n.t('tooltip_stale_notice', { time: data.capturedAtLocal || '--' }));
     }
-    md.appendMarkdown(i18n.t('tooltip_daily_budget', { value: gDaily }));
-    md.appendMarkdown(i18n.t('tooltip_deviation', { value: gDev }));
 
-    md.appendMarkdown(i18n.t('tooltip_claude_header'));
-    md.appendMarkdown(i18n.t('tooltip_weekly_limit', { value: fmtPct(cWk), refresh: cWkRefresh }));
-    if (cHas5h) {
-      md.appendMarkdown(i18n.t('tooltip_five_hour_limit', { value: fmtPct(c5h), refresh: c5hRefresh }));
+    if (gHas) {
+      const gWkRefresh = formatResetTime(data?.gemini?.weekly?.resetTime, gWk === UNLIMITED, i18n.t('plenty'));
+      const g5hRefresh = gHas5h ? formatResetTime(data?.gemini?.fiveHour?.resetTime, g5h === UNLIMITED, i18n.t('plenty')) : '';
+      const gDaily = formatCalculatedText(data?.gemini?.weekly?.dailyBudget, gWk);
+      const gDev = formatCalculatedText(data?.gemini?.weekly?.deviation, gWk);
+
+      md.appendMarkdown(i18n.t('tooltip_gemini_header'));
+      md.appendMarkdown(i18n.t('tooltip_weekly_limit', { value: fmtPct(gWk), refresh: gWkRefresh }));
+      if (gHas5h) {
+        md.appendMarkdown(i18n.t('tooltip_five_hour_limit', { value: fmtPct(g5h), refresh: g5hRefresh }));
+      }
+      md.appendMarkdown(i18n.t('tooltip_daily_budget', { value: gDaily }));
+      md.appendMarkdown(i18n.t('tooltip_deviation', { value: gDev }));
     }
-    md.appendMarkdown(i18n.t('tooltip_daily_budget', { value: cDaily }));
-    md.appendMarkdown(i18n.t('tooltip_deviation', { value: cDev }));
+
+    if (cHas) {
+      const cWkRefresh = formatResetTime(data?.claude?.weekly?.resetTime, cWk === UNLIMITED, i18n.t('plenty'));
+      const c5hRefresh = cHas5h ? formatResetTime(data?.claude?.fiveHour?.resetTime, c5h === UNLIMITED, i18n.t('plenty')) : '';
+      const cDaily = formatCalculatedText(data?.claude?.weekly?.dailyBudget, cWk);
+      const cDev = formatCalculatedText(data?.claude?.weekly?.deviation, cWk);
+
+      md.appendMarkdown(i18n.t('tooltip_claude_header'));
+      md.appendMarkdown(i18n.t('tooltip_weekly_limit', { value: fmtPct(cWk), refresh: cWkRefresh }));
+      if (cHas5h) {
+        md.appendMarkdown(i18n.t('tooltip_five_hour_limit', { value: fmtPct(c5h), refresh: c5hRefresh }));
+      }
+      md.appendMarkdown(i18n.t('tooltip_daily_budget', { value: cDaily }));
+      md.appendMarkdown(i18n.t('tooltip_deviation', { value: cDev }));
+    }
+
+    if (!gHas && !cHas) {
+      md.appendMarkdown(i18n.t('status_error_tooltip', { error: data?.note || i18n.t('unavailable') }));
+      md.appendMarkdown('\n\n');
+    } else if (!gHas) {
+      md.appendMarkdown(i18n.t('tooltip_gemini_header'));
+      md.appendMarkdown(i18n.t('status_error_tooltip', { error: data?.note || i18n.t('unavailable') }));
+      md.appendMarkdown('\n\n');
+    } else if (!cHas) {
+      md.appendMarkdown(i18n.t('tooltip_claude_header'));
+      md.appendMarkdown(i18n.t('status_error_tooltip', { error: data?.note || i18n.t('unavailable') }));
+      md.appendMarkdown('\n\n');
+    }
 
     appendFooter(md);
     statusBarItem.tooltip = md;

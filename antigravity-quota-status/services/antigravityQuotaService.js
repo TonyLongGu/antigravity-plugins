@@ -1,7 +1,14 @@
 const { exec } = require('node:child_process');
+const fs = require('node:fs');
+const http = require('node:http');
 const https = require('node:https');
+const os = require('node:os');
+const path = require('node:path');
 
 const UNLIMITED = -1; // -1 代表付費版或無限制額度
+
+// Antigravity IDE 1.12+ 的本機語言伺服器（agy.exe）會把 port／csrf 寫在這些 hub 狀態檔
+const HUB_APP_DIRS = ['antigravity', 'antigravity-ide', 'antigravity-cli'];
 
 /**
  * AI 模型額度狀態服務 (Quota Service)
@@ -16,6 +23,76 @@ class QuotaService {
     this._selectedPid = null; // 使用者手動選定的 PID (若為 null 則自動按優先級選擇)
     this._availableServers = []; // 掃描到的可用語言伺服器與帳號清單
     this._inFlightPromise = null; // 並發請求鎖定 (防止重複探測與競態)
+    this._hubDirsOverride = null; // 測試用：指定 hub 狀態檔目錄
+    this._cacheDir = path.join(os.homedir(), '.gemini', 'antigravity-ide'); // 最後成功值的快照位置
+    this._rpcClientProvider = null; // 由擴充套件注入：向 google.antigravity 取得官方 RPC client
+  }
+
+  /**
+   * 注入官方語言伺服器 client 的取得函式（VS Code 內由 antigravity 擴充套件提供）。
+   * 走這條路可以讓 IDE 自己的伺服器管理員按需啟動 agy.exe，不必等使用者開面板。
+   * @param {null|(() => Promise<Object>)} provider
+   */
+  setRpcClientProvider(provider) {
+    this._rpcClientProvider = typeof provider === 'function' ? provider : null;
+  }
+
+  /**
+   * 設定快照目錄（由擴充套件傳入 globalStorage，避免把檔案散落在使用者家目錄）
+   * @param {string} dir
+   */
+  setCacheDir(dir) {
+    if (dir) this._cacheDir = dir;
+  }
+
+  _snapshotFile() {
+    return path.join(this._cacheDir, 'quota-last-good.json');
+  }
+
+  /**
+   * 寫入最後一次成功讀到的額度（只含配額數字與帳號顯示名稱，不含任何權杖）
+   * @private
+   */
+  _writeSnapshot(data) {
+    if (!data || !data.success) return;
+    try {
+      fs.mkdirSync(this._cacheDir, { recursive: true });
+      fs.writeFileSync(this._snapshotFile(), JSON.stringify({
+        capturedAt: new Date().toISOString(),
+        data
+      }), 'utf8');
+    } catch (_) { /* 快照失敗不影響顯示 */ }
+  }
+
+  /**
+   * 讀取快照（超過 24 小時視為過期）
+   * @private
+   * @returns {Object|null}
+   */
+  _readSnapshot() {
+    const doc = (() => {
+      try {
+        const file = this._snapshotFile();
+        if (!fs.existsSync(file)) return null;
+        return JSON.parse(fs.readFileSync(file, 'utf8'));
+      } catch (_) {
+        return null;
+      }
+    })();
+    if (!doc?.data?.success || !doc.capturedAt) return null;
+
+    const capturedMs = new Date(doc.capturedAt).getTime();
+    if (!Number.isFinite(capturedMs) || Date.now() - capturedMs > 24 * 60 * 60 * 1000) return null;
+
+    const capturedLocal = new Date(capturedMs).toLocaleTimeString('zh-TW', { hour12: false });
+    return {
+      ...doc.data,
+      stale: true,
+      capturedAt: doc.capturedAt,
+      capturedAtLocal: capturedLocal,
+      detailSource: 'language-server-cache',
+      note: `語言伺服器目前休眠，顯示 ${capturedLocal} 讀到的值`
+    };
   }
 
   /**
@@ -81,6 +158,7 @@ class QuotaService {
       if (data) {
         this._cachedQuota = data;
         this._lastFetchTime = Date.now();
+        this._writeSnapshot(data);
         return data;
       }
     } catch (err) {
@@ -91,6 +169,13 @@ class QuotaService {
       return this._cachedQuota;
     }
 
+    // 語言伺服器可能因閒置被 IDE 暫停（agy.exe 會結束），此時沿用最後一次成功讀到的值，
+    // 明確標記 stale 與讀取時間，絕不退回雲端 API 的 100% 假數字。
+    const snapshot = this._readSnapshot();
+    if (snapshot) {
+      return snapshot;
+    }
+
     return this._getFallbackQuota('正在連線至本地語言伺服器...');
   }
 
@@ -99,6 +184,12 @@ class QuotaService {
    * @private
    */
   async _fetchFromLanguageServer() {
+    // 0. 有官方 client 就走它（IDE 會按需啟動／喚醒語言伺服器，與配額面板完全同源）
+    const viaIde = await this._fetchViaIdeClient();
+    if (viaIde) {
+      return viaIde;
+    }
+
     // 1. 若有快取連線且符合選定的 PID，直接快速查詢
     if (this._cachedConnection) {
       if (!this._selectedPid || this._cachedConnection.pid === this._selectedPid) {
@@ -111,10 +202,21 @@ class QuotaService {
     }
 
     // 2. 並行探測：同時取得 LS 進程清單與所有本機監聽連接埠 (netstat 耗時 ~70ms)
-    const [procs, portsMap] = await Promise.all([
-      this._getLsProcesses(),
-      this._getAllListeningPortsMap()
-    ]);
+    //    IDE 1.12+ 的語言伺服器（agy.exe）不一定叫 language_server*，但一定會寫出 hub 狀態檔，
+    //    所以先讀 hub（可同時取得 port 與 csrf），讀不到才退回掃進程。
+    const hubs = this._getHubServers();
+    const [procs, portsMap] = hubs.length > 0
+      ? [hubs.map((hub) => ({
+        pid: hub.pid,
+        csrf: hub.csrf,
+        isMainLs: true,
+        ports: [hub.port],
+        secure: hub.secure
+      })), new Map()]
+      : await Promise.all([
+        this._getLsProcesses(),
+        this._getAllListeningPortsMap()
+      ]);
 
     if (!procs || procs.length === 0) {
       return null;
@@ -125,13 +227,13 @@ class QuotaService {
     let chosenConnection = null;
 
     for (const proc of procs) {
-      let ports = portsMap.get(proc.pid) || [];
+      let ports = proc.ports || portsMap.get(proc.pid) || [];
       // 容錯 Fallback：若 netstat 未能取得 ports，退回單一進程查詢
-      if (ports.length === 0) {
+      if (!proc.ports && ports.length === 0) {
         ports = await this._getListeningPorts(proc.pid);
       }
       for (const port of ports) {
-        const quotaData = await this._tryFetchFromPort(port, proc.csrf);
+        const quotaData = await this._tryFetchFromPort(port, proc.csrf, proc.secure !== false);
         if (quotaData) {
           discoveredServers.push({
             pid: proc.pid,
@@ -164,15 +266,58 @@ class QuotaService {
   }
 
   /**
+   * 用官方語言伺服器 client 讀配額（IDE 的伺服器管理員會在需要時啟動 agy.exe）
+   * @private
+   */
+  async _fetchViaIdeClient() {
+    if (!this._rpcClientProvider) return null;
+
+    let client = null;
+    try {
+      client = await this._withTimeout(this._rpcClientProvider(), 10000);
+    } catch (_) {
+      return null;
+    }
+    if (!client || typeof client.retrieveUserQuotaSummary !== 'function') return null;
+
+    try {
+      const [summary, status] = await this._withTimeout(Promise.all([
+        client.retrieveUserQuotaSummary({}),
+        typeof client.getUserStatus === 'function' ? client.getUserStatus({}) : Promise.resolve(null)
+      ]), 10000);
+      if (!summary?.response?.groups || summary.response.groups.length === 0) return null;
+      return this._parseQuotaSummary(summary.response, status?.userStatus);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /**
+   * 為 Promise 加上等待上限，避免語言伺服器卡住拖垮狀態列
+   * @private
+   */
+  _withTimeout(promise, ms) {
+    let timer = null;
+    return Promise.race([
+      Promise.resolve(promise).finally(() => {
+        if (timer) clearTimeout(timer);
+      }),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('timeout')), ms);
+      })
+    ]);
+  }
+
+  /**
    * 向指定連接埠發送 RPC 請求
    * @private
    */
-  async _tryFetchFromPort(port, csrf) {
+  async _tryFetchFromPort(port, csrf, secure = true) {
     try {
       // 1. 優先使用 IDE 官方底層 RetrieveUserQuotaSummary (包含精確的 4 項目雙層配額)
       const [quotaSummaryData, userStatusData] = await Promise.all([
-        this._rpcCall(port, csrf, 'RetrieveUserQuotaSummary'),
-        this._rpcCall(port, csrf, 'GetUserStatus')
+        this._rpcCall(port, csrf, 'RetrieveUserQuotaSummary', secure),
+        this._rpcCall(port, csrf, 'GetUserStatus', secure)
       ]);
 
       if (quotaSummaryData?.response?.groups && quotaSummaryData.response.groups.length > 0) {
@@ -180,7 +325,7 @@ class QuotaService {
       }
 
       // 2. Fallback: 使用 GetCascadeModelConfigData 兼容舊版
-      const modelConfigData = await this._rpcCall(port, csrf, 'GetCascadeModelConfigData');
+      const modelConfigData = await this._rpcCall(port, csrf, 'GetCascadeModelConfigData', secure);
       if (modelConfigData?.clientModelConfigs) {
         return this._parseFallbackModelConfigs(modelConfigData.clientModelConfigs, userStatusData?.userStatus);
       }
@@ -195,7 +340,8 @@ class QuotaService {
    */
   _getLsProcesses() {
     return new Promise((resolve) => {
-      const cmd = `powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process -Filter \\"Name = 'language_server_windows_x64.exe'\\" | Select-Object ProcessId, CommandLine, CreationDate | ConvertTo-Json"`;
+      // 名稱用 LIKE 放寬：不同版本／平台的語言伺服器檔名不完全相同
+      const cmd = `powershell -NoProfile -NonInteractive -Command "Get-CimInstance Win32_Process -Filter \\"Name LIKE 'language_server%'\\" | Select-Object ProcessId, CommandLine, CreationDate | ConvertTo-Json"`;
       exec(cmd, (err, stdout) => {
         if (err || !stdout) return resolve([]);
         try {
@@ -203,7 +349,8 @@ class QuotaService {
           if (!Array.isArray(parsed)) parsed = [parsed];
           const list = [];
           for (const item of parsed) {
-            const csrfMatch = item.CommandLine ? item.CommandLine.match(/--csrf_token\s+([a-f0-9-]+)/) : null;
+            // 兼容 --csrf_token <value> 與 --csrf_token=<value> 兩種寫法
+            const csrfMatch = item.CommandLine ? item.CommandLine.match(/--csrf_token[=\s]+([a-f0-9-]+)/) : null;
             if (csrfMatch && item.ProcessId) {
               const isMainLs = !item.CommandLine.includes('--enable_lsp') && !item.CommandLine.includes('--workspace_id');
               list.push({
@@ -231,6 +378,81 @@ class QuotaService {
   }
 
   /**
+   * 語言伺服器 hub 狀態檔目錄
+   * agy.exe 啟動時會在 ~/.gemini/antigravity/daemon/hub_<port>.json 寫入 pid／port／csrf
+   * @private
+   * @returns {string[]}
+   */
+  _getHubDirs() {
+    if (Array.isArray(this._hubDirsOverride)) return this._hubDirsOverride;
+    return HUB_APP_DIRS.map((name) => path.join(os.homedir(), '.gemini', name, 'daemon'));
+  }
+
+  /**
+   * 進程是否還活著（Windows 下權限不足會丟 EPERM，代表存在）
+   * @private
+   */
+  _isPidAlive(pid) {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (err) {
+      return !!err && err.code === 'EPERM';
+    }
+  }
+
+  /**
+   * 從 hub 狀態檔找出仍在執行中的語言伺服器（新的優先）
+   * @private
+   * @returns {Array<{pid:number, port:number, secure:boolean, csrf:string, version:string}>}
+   */
+  _getHubServers() {
+    const hubs = [];
+    for (const dir of this._getHubDirs()) {
+      let files = [];
+      try {
+        files = fs.readdirSync(dir).filter((name) => /^hub_\d+\.json$/i.test(name));
+      } catch (_) {
+        continue;
+      }
+      for (const name of files) {
+        const file = path.join(dir, name);
+        let doc = null;
+        let mtime = 0;
+        try {
+          doc = JSON.parse(fs.readFileSync(file, 'utf8'));
+          mtime = fs.statSync(file).mtimeMs;
+        } catch (_) {
+          continue;
+        }
+        const pid = parseInt(doc?.pid, 10);
+        const httpsPort = parseInt(doc?.httpsPort, 10);
+        const httpPort = parseInt(doc?.httpPort, 10);
+        const csrf = doc?.csrfToken || '';
+        if (!pid || !csrf || (!httpsPort && !httpPort)) continue;
+        if (!this._isPidAlive(pid)) continue;
+        hubs.push({
+          pid,
+          port: httpsPort || httpPort,
+          secure: !!httpsPort,
+          csrf,
+          version: doc?.lsVersion || '',
+          mtime
+        });
+      }
+    }
+
+    const seen = new Set();
+    return hubs
+      .sort((a, b) => b.mtime - a.mtime)
+      .filter((hub) => {
+        if (seen.has(hub.port)) return false;
+        seen.add(hub.port);
+        return true;
+      });
+  }
+
+  /**
    * 透過原生 netstat 高速取得本機所有 PID 所監聽的 TCP 本地埠口 Map (耗時約 70ms)
    * 避免反覆喚醒 PowerShell 造成 2~3 秒之系統卡頓與高 CPU 負載
    * @private
@@ -238,7 +460,8 @@ class QuotaService {
    */
   _getAllListeningPortsMap() {
     return new Promise((resolve) => {
-      exec('netstat -ano -p tcp', { windowsHide: true }, (err, stdout) => {
+      // 不加 -p tcp：語言伺服器可能只聽 IPv6（::1），只查 IPv4 會整個掃不到
+      exec('netstat -ano', { windowsHide: true }, (err, stdout) => {
         if (err || !stdout) return resolve(new Map());
         try {
           const map = new Map();
@@ -283,7 +506,8 @@ class QuotaService {
    * 通用 RPC 呼叫
    * @private
    */
-  _rpcCall(port, csrf, methodName) {
+  _rpcCall(port, csrf, methodName, secure = true) {
+    const transport = secure ? https : http;
     return new Promise((resolve) => {
       const payload = JSON.stringify({
         metadata: {
@@ -292,7 +516,7 @@ class QuotaService {
         }
       });
 
-      const req = https.request({
+      const req = transport.request({
         hostname: '127.0.0.1',
         port: port,
         path: `/exa.language_server_pb.LanguageServerService/${methodName}`,
@@ -376,12 +600,12 @@ class QuotaService {
           };
         }
 
-        // 若為每週配額但找不到，嘗試歷史快取
+        // 若為每週配額但找不到，先沿用歷史快取；沒有就誠實回報「無法取得」
         const groupKey = (group?.displayName || '').toLowerCase().includes('claude') ? 'claude' : 'gemini';
         const cachedGroup = this._cachedQuota?.[groupKey];
         const cachedBucket = cachedGroup?.weekly;
 
-        if (cachedBucket && cachedBucket.percent !== undefined && cachedBucket.percent !== UNLIMITED && cachedBucket.percent !== -1) {
+        if (cachedBucket && cachedBucket.percent !== undefined && cachedBucket.percent !== null && cachedBucket.percent !== UNLIMITED && cachedBucket.percent !== -1) {
           return {
             ...cachedBucket,
             exists: true,
@@ -390,13 +614,11 @@ class QuotaService {
         }
 
         return {
-          exists: true,
-          percent: 100,
-          rawFraction: 1.0,
+          exists: false,
+          percent: null,
+          rawFraction: null,
           resetTime: null,
-          refreshText: '額度充足',
-          dailyBudget: { isUnlimited: false, usablePercent: 100, displayText: '100%' },
-          deviation: { isUnlimited: false, usablePercent: 0, displayText: '+0.0%' },
+          refreshText: '無法取得',
           isWarning: false
         };
       }
@@ -425,6 +647,11 @@ class QuotaService {
     const cWk = extractBucket(claudeGroup, 'weekly');
     const c5h = extractBucket(claudeGroup, '5h');
 
+    // 一個 bucket 都認不出來（例如回傳格式改變）就當作這次沒有資料，交由上層換資料源
+    if (![gWk, g5h, cWk, c5h].some((bucket) => bucket && bucket.exists)) {
+      return null;
+    }
+
     // 計算主要即時受限配額 (Primary Active Quota: 取較低/有實質約束的那個)
     const getPrimary = (bWk, b5h, defaultType = 'weekly') => {
       if (bWk?.exists && b5h?.exists && bWk.percent !== null && b5h.percent !== null) {
@@ -434,7 +661,7 @@ class QuotaService {
       }
       if (bWk?.exists && bWk.percent !== null) return { ...bWk, type: 'weekly' };
       if (b5h?.exists && b5h.percent !== null) return { ...b5h, type: '5h' };
-      return { exists: false, percent: 100, type: defaultType, refreshText: '額度充足', isWarning: false, resetTime: null };
+      return { exists: false, percent: null, type: defaultType, refreshText: '無法取得', isWarning: false, resetTime: null };
     };
 
     const gPri = getPrimary(gWk, g5h, 'weekly');
@@ -442,6 +669,7 @@ class QuotaService {
 
     return {
       success: true,
+      detailSource: 'language-server',
       lastUpdated: new Date().toLocaleTimeString('zh-TW', { hour12: false }),
       account: {
         email: email,
@@ -480,16 +708,16 @@ class QuotaService {
 
     let geminiFiveHourFraction = UNLIMITED;
     let geminiFiveHourReset = null;
-    let geminiWeeklyFraction = (cachedGeminiWeekly && cachedGeminiWeekly.rawFraction !== undefined && cachedGeminiWeekly.rawFraction !== UNLIMITED && cachedGeminiWeekly.rawFraction !== -1)
+    let geminiWeeklyFraction = (cachedGeminiWeekly && cachedGeminiWeekly.rawFraction !== undefined && cachedGeminiWeekly.rawFraction !== null && cachedGeminiWeekly.rawFraction !== UNLIMITED && cachedGeminiWeekly.rawFraction !== -1)
       ? cachedGeminiWeekly.rawFraction
-      : 1.0;
+      : null;
     let geminiWeeklyReset = cachedGeminiWeekly?.resetTime || null;
 
     let claudeFiveHourFraction = UNLIMITED;
     let claudeFiveHourReset = null;
-    let claudeWeeklyFraction = (cachedClaudeWeekly && cachedClaudeWeekly.rawFraction !== undefined && cachedClaudeWeekly.rawFraction !== UNLIMITED && cachedClaudeWeekly.rawFraction !== -1)
+    let claudeWeeklyFraction = (cachedClaudeWeekly && cachedClaudeWeekly.rawFraction !== undefined && cachedClaudeWeekly.rawFraction !== null && cachedClaudeWeekly.rawFraction !== UNLIMITED && cachedClaudeWeekly.rawFraction !== -1)
       ? cachedClaudeWeekly.rawFraction
-      : 1.0;
+      : null;
     let claudeWeeklyReset = cachedClaudeWeekly?.resetTime || null;
 
     const extractFraction = (quota) => {
@@ -532,7 +760,7 @@ class QuotaService {
       }
     }
 
-    const toPercent = (f) => (f === UNLIMITED || f === null) ? UNLIMITED : Math.round(f * 100);
+    const toPercent = (f) => (f === UNLIMITED || f === null || f === undefined) ? null : Math.round(f * 100);
     const gemini5hPct = toPercent(geminiFiveHourFraction);
     const geminiWeeklyPct = toPercent(geminiWeeklyFraction);
     const claude5hPct = toPercent(claudeFiveHourFraction);
@@ -544,18 +772,20 @@ class QuotaService {
     const claudeHas5h = cachedC5hExists !== undefined ? cachedC5hExists : (claudeFiveHourFraction !== UNLIMITED && claudeFiveHourReset !== null);
 
     const getFallbackPrimary = (pctWk, resetWk, has5h, pct5h, reset5h, defaultType = 'weekly') => {
-      if (pctWk !== UNLIMITED && has5h && pct5h !== UNLIMITED) {
+      const hasWk = pctWk !== UNLIMITED && pctWk !== null && pctWk !== undefined;
+      const has5 = !!has5h && pct5h !== UNLIMITED && pct5h !== null && pct5h !== undefined;
+      if (hasWk && has5) {
         return pct5h <= pctWk
           ? { exists: true, percent: pct5h, type: '5h', refreshText: this._formatResetTime(reset5h), resetTime: reset5h, isWarning: pct5h <= 20 }
           : { exists: true, percent: pctWk, type: 'weekly', refreshText: this._formatResetTime(resetWk, pctWk === UNLIMITED), resetTime: resetWk, isWarning: pctWk <= 20 };
       }
-      if (pctWk !== UNLIMITED) {
+      if (hasWk) {
         return { exists: true, percent: pctWk, type: 'weekly', refreshText: this._formatResetTime(resetWk, pctWk === UNLIMITED), resetTime: resetWk, isWarning: pctWk <= 20 };
       }
-      if (has5h && pct5h !== UNLIMITED) {
+      if (has5) {
         return { exists: true, percent: pct5h, type: '5h', refreshText: this._formatResetTime(reset5h), resetTime: reset5h, isWarning: pct5h <= 20 };
       }
-      return { exists: false, percent: 100, type: defaultType, refreshText: '額度充足', isWarning: false, resetTime: null };
+      return { exists: false, percent: null, type: defaultType, refreshText: '無法取得', isWarning: false, resetTime: null };
     };
 
     const gPri = getFallbackPrimary(geminiWeeklyPct, geminiWeeklyReset, geminiHas5h, gemini5hPct, geminiFiveHourReset, 'weekly');
@@ -563,6 +793,7 @@ class QuotaService {
 
     return {
       success: true,
+      detailSource: 'language-server',
       lastUpdated: new Date().toLocaleTimeString('zh-TW', { hour12: false }),
       account: { email, name, tier: tierName, isPaidTier },
       gemini: {
@@ -577,14 +808,14 @@ class QuotaService {
           isWarning: geminiHas5h ? gemini5hPct <= 20 : false
         },
         weekly: {
-          exists: true,
+          exists: geminiWeeklyPct !== null && geminiWeeklyPct !== undefined,
           percent: geminiWeeklyPct,
           rawFraction: geminiWeeklyFraction,
-          refreshText: this._formatResetTime(geminiWeeklyReset, geminiWeeklyPct === UNLIMITED),
+          refreshText: this._formatResetTime(geminiWeeklyReset, geminiWeeklyPct === UNLIMITED, geminiWeeklyPct === null ? '無法取得' : '額度充足'),
           resetTime: geminiWeeklyReset,
           dailyBudget: this.calculateDailyBudget(geminiWeeklyPct, geminiWeeklyReset),
           deviation: this.calculateDeviation(geminiWeeklyPct, geminiWeeklyReset),
-          isWarning: geminiWeeklyPct <= 20
+          isWarning: geminiWeeklyPct !== null && geminiWeeklyPct <= 20
         }
       },
       claude: {
@@ -599,14 +830,14 @@ class QuotaService {
           isWarning: claudeHas5h ? claude5hPct <= 20 : false
         },
         weekly: {
-          exists: true,
+          exists: claudeWeeklyPct !== null && claudeWeeklyPct !== undefined,
           percent: claudeWeeklyPct,
           rawFraction: claudeWeeklyFraction,
-          refreshText: this._formatResetTime(claudeWeeklyReset),
+          refreshText: this._formatResetTime(claudeWeeklyReset, false, claudeWeeklyPct === null ? '無法取得' : '額度充足'),
           resetTime: claudeWeeklyReset,
           dailyBudget: this.calculateDailyBudget(claudeWeeklyPct, claudeWeeklyReset),
           deviation: this.calculateDeviation(claudeWeeklyPct, claudeWeeklyReset),
-          isWarning: claudeWeeklyPct <= 20
+          isWarning: claudeWeeklyPct !== null && claudeWeeklyPct <= 20
         }
       }
     };
@@ -620,6 +851,14 @@ class QuotaService {
    * @returns {Object} { isUnlimited, isOverdrawn, usablePercent, displayText }
    */
   calculateDailyBudget(weeklyPercent, resetTimeIso) {
+    if (weeklyPercent === null || weeklyPercent === undefined) {
+      return {
+        isUnlimited: false,
+        usablePercent: null,
+        displayText: '—'
+      };
+    }
+
     if (weeklyPercent === UNLIMITED || weeklyPercent < 0) {
       return {
         isUnlimited: true,
@@ -691,6 +930,14 @@ class QuotaService {
    * @returns {Object} { isUnlimited, isOverdrawn, usablePercent, displayText }
    */
   calculateDeviation(weeklyPercent, resetTimeIso) {
+    if (weeklyPercent === null || weeklyPercent === undefined) {
+      return {
+        isUnlimited: false,
+        usablePercent: null,
+        displayText: '—'
+      };
+    }
+
     if (weeklyPercent === UNLIMITED || weeklyPercent < 0) {
       return {
         isUnlimited: true,
@@ -807,27 +1054,38 @@ class QuotaService {
    * @private
    */
   _getFallbackQuota(note = '') {
+    const emptyBucket = (refreshText) => ({
+      exists: false,
+      percent: null,
+      rawFraction: null,
+      resetTime: null,
+      refreshText,
+      isWarning: false
+    });
+
     return {
       success: false,
       lastUpdated: new Date().toLocaleTimeString('zh-TW', { hour12: false }),
       note: note,
       account: {
-        email: '連線中...',
+        email: '—',
         name: '',
         tier: 'Standard',
         isPaidTier: false
       },
       gemini: {
         name: 'Gemini Models',
-        primary: { exists: true, percent: 100, type: 'weekly', refreshText: '檢查中...', isWarning: false },
-        fiveHour: { exists: false, percent: null, refreshText: '檢查中...', isWarning: false },
-        weekly: { exists: true, percent: 100, refreshText: '檢查中...', dailyBudget: { displayText: '檢查中...' }, isWarning: false }
+        exists: false,
+        primary: { exists: false, percent: null, type: 'weekly', refreshText: '無法取得', isWarning: false, resetTime: null },
+        fiveHour: emptyBucket('不適用'),
+        weekly: { ...emptyBucket('無法取得'), dailyBudget: { isUnlimited: false, usablePercent: null, displayText: '—' }, deviation: { isUnlimited: false, usablePercent: null, displayText: '—' } }
       },
       claude: {
         name: 'Claude and GPT models',
-        primary: { exists: true, percent: 100, type: 'weekly', refreshText: '檢查中...', isWarning: false },
-        fiveHour: { exists: false, percent: null, refreshText: '檢查中...', isWarning: false },
-        weekly: { exists: true, percent: 100, refreshText: '檢查中...', dailyBudget: { displayText: '檢查中...' }, isWarning: false }
+        exists: false,
+        primary: { exists: false, percent: null, type: 'weekly', refreshText: '無法取得', isWarning: false, resetTime: null },
+        fiveHour: emptyBucket('不適用'),
+        weekly: { ...emptyBucket('無法取得'), dailyBudget: { isUnlimited: false, usablePercent: null, displayText: '—' }, deviation: { isUnlimited: false, usablePercent: null, displayText: '—' } }
       }
     };
   }

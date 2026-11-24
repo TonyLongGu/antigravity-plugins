@@ -2,7 +2,7 @@
   "name": "ai-quota-status",
   "displayName": "AI 模型額度狀態監控",
   "description": "於 IDE 狀態列常駐呈現 AI 額度：Antigravity 為 Gemini/Claude 雙層配額，Cursor 為 Auto/API 月結用量",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "publisher": "antigravity-toolkit",
   "engines": {
     "vscode": "^1.68.0"
