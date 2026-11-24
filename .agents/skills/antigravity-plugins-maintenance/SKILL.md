@@ -40,17 +40,17 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 
 ---
 
-## 3. 圖譜常數（2026-11-05 複驗，graphify 0.9.80）
+## 3. 圖譜常數（2026-11-24 複驗，graphify 0.9.80）
 
 | 項目 | 值 |
 | :--- | :--- |
 | 圖譜位置 | `graphify-out/`（根 `.gitignore` 已排除，**勿 commit**） |
-| 規模 | **1911** nodes / **3437** edges / **119** communities（77 顯示、42 thin 省略） |
-| 建圖標記 | `Built from commit` `5ebe7ed0`（＝目前 HEAD；toolbox 1.8.3 的改動仍在工作樹，`update` 已反映內容）。再跑 `update` 若回 `No code-graph topology changes detected` ⇒ 內容與工作樹一致 |
-| 語料 | 113 files · ~146,522 words；**81 個 code 檔**被抽取（AST）；30 檔未分類（`.bat` 14、無副檔名 10、`.css` 6） |
+| 規模 | **1973** nodes / **3545** edges / **116** communities（75 顯示、41 thin 省略） |
+| 建圖標記 | `Built from commit` `fa37b072`（本輪改動仍在工作樹，`update` 已反映內容）。再跑 `update` 若回 `No code-graph topology changes detected` ⇒ 內容與工作樹一致 |
+| 語料 | 115 files · ~150,877 words；**86 個 code 檔**被抽取（AST）；30 檔未分類（`.bat` 14、無副檔名 10、`.css` 6） |
 | 抽取品質 | 96% EXTRACTED／4% INFERRED（146 邊，平均信心 0.85）；**0 input／0 output token＝0 元** |
 | 產物大小 | `GRAPH_REPORT.md` **20.1 KB**（20,570 B，可整讀）、`graph.json` **2.3 MB**（禁整讀）、`graph.html` 約 1.89 MB |
-| 節點分佈 | script-runner 455／inspector 446／toolbox **433**／mcp-manager 298／quota-status 174／quick-access 79／根目錄 26（含 `node:sqlite` 1 與 2 支根腳本） |
+| 節點分佈 | script-runner 455／inspector 446／toolbox **433**／mcp-manager 298／quota-status **236**／quick-access 79／根目錄 26（含 `node:sqlite` 1 與 2 支根腳本） |
 | 不進圖 | `*.css`、`*.html`、`locales/*.json`、`*.md`（`.graphifyignore` 已排除 `*.md`） |
 
 > ⚠️ 上表是**快照**。用前先驗（三行）：
@@ -126,7 +126,7 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 | `antigravity-ai-context-inspector` | 1.3.1 | 446 | `antigravity.aiContext.*`（3 ＋ `.en`） | `antigravity.aiContextView`／`antigravity-ai-context-container` | `extension.js`／7 services（cline·cursor·kilo·vscode chat／contextScanner／mcpDetector） |
 | `antigravity-toolbox` | 1.8.1 | 406 | `antigravity.toolbox.*`（7 ＋ 4 `.en`） | `antigravity.toolboxView`／`antigravity-toolbox-container` | `extension.js`／6 services（brain／copilotChat／skillSync／workspace…） |
 | `antigravity-mcp-manager` | 1.10.1 | 298 | `antigravity.mcp.*`（6 ＋ `.en`） | `antigravity.mcpManagerView`／`mcp-manager-container` | `extension.js`／9 services |
-| `antigravity-quota-status` | 1.1.0（`name`＝`ai-quota-status`） | 174 | `aiQuota.*`（7，無變體） | 無 view（狀態列） | `extension.js`／4 services（quota／cursorAuth…） |
+| `antigravity-quota-status` | 1.2.1（`name`＝`ai-quota-status`） | 236 | `aiQuota.*`（7，無變體） | 無 view（狀態列） | `extension.js`／5 services（cloud api／quota／cursorAuth…） |
 | `antigravity-quick-access` | 1.2.6 | 79 | `antigravity.quickAccess.*`（20 × 3＝60） | `antigravity.quickAccessView` | `extension.js`／無 `services/` 目錄 |
 
 > 六個外掛都是 `main: ./extension.js`、CommonJS；`engines.vscode` 除 quota-status（`^1.68.0`）外皆 `^1.80.0`（2026-10-26）。
@@ -260,6 +260,8 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 
 | 日期 | 變更 | 來源 |
 | :--- | :--- | :--- |
+| 2026-11-24 | quota-status `1.2.0 → 1.2.1`＝**額度改回與 IDE 面板同源**：`agy.exe`（語言伺服器）把 `pid`／`httpPort`／`httpsPort`／`csrfToken` 寫在 `~/.gemini/antigravity/daemon/hub_*.json`，`antigravityQuotaService` 新增 hub 探測（死 pid 略過、優先 https）＋可注入的官方 RPC client（`vscode.extensions.getExtension('google.antigravity').exports.getRpcClient()`，讓 IDE 按需啟動伺服器）；**本機語言伺服器重新成為第一優先**，Cloud Code API 退為備援。雲端路徑不再用 `fetchAvailableModels` 的 Gemini 配額冒充 Antigravity 額度（只補 Claude）。語言伺服器休眠時沿用最後成功值快照（`globalStorage/quota-last-good.json`，24 小時過期，tooltip 標示讀取時間）；compact 模式缺一邊顯示 `--`。新增 Q11–Q15（hub／真實回應／client／快照），測試 16 支全過；圖譜 1956→**1973** 節點／3511→**3545** 邊／119→**116** 社群（commit `fa37b072`） | 使用者回報：Antigravity IDE 面板顯示 Gemini 週額度剩 91%，擴充套件仍顯示 100%。實測 IDE 面板資料來自本機 `agy.exe`（`hub_9819.json`，https 9821），回 `gemini-weekly: 0.911068`；1.2.0 走的 Cloud Code API 對 `aicode-consumers` 只回 Claude 群組、Gemini 一律 1.0，兩者是不同產品配額 |
+| 2026-11-24 | quota-status `1.1.0 → 1.2.0`＝**額度資料源改接 Google Cloud Code API**：新增 `services/antigravityApiService.js`（讀 `~/.gemini/antigravity-acp/antigravity-oauth-token` ＋ `acp_token.json`，過期以 refresh token 換新、只快取記憶體，呼叫 `v1internal:retrieveUserQuotaSummary`／`fetchAvailableModels`），`quotaService` 門面改為「雲端 API 優先、本機 language server 才退回」；本機 LS 路徑放寬進程名（`language_server%`）與 `--csrf_token=` 寫法、`netstat` 不再只查 IPv4；**移除所有「抓不到就顯示 100%」的假資料**（fallback／缺 bucket／`?? 100` 全部改 null，狀態列改顯示「無法取得」），tooltip 只列出真的有資料的群組；新增 `tests/antigravity-quota-source.test.js`（Q1–Q10，測試總數 15→16 支）；圖譜 1911→**1956** 節點／3437→**3511** 邊／119 社群（commit `fa37b072`） | 使用者回報：Antigravity IDE 登入 sx785878、額度約 90%，擴充套件卻固定顯示 100%。實測 Antigravity IDE 1.12（`~/.antigravity-ide`）已無 `language_server_windows_x64.exe` 進程，IDE 自己直呼 `cloudcode-pa.googleapis.com/v1internal:*`（`cloudcode.log` 每 5 分鐘一次），舊的 LS RPC 永遠抓不到資料而落到假 100% |
 | 2026-11-05 | **§4／§5 去重**：通用條目（查詢指令、token 預算、`graph.json` 永不整讀、`$LASTEXITCODE` 對查詢類不可靠、`TRUNCATED`、旗標邊界、`2>&1` 假失敗、零符號常態）改為指向 `graphify-knowledge-graph`／`graphify-repo-workflow`；本檔只留本 repo 參數（報告 17.2 KB、`Community N` 命名、`McpConfigService` 的 `Ambiguous` 加路徑寫法、18 檔零符號） | 使用者定案：同一事實只留一份；`AGENTS.md` 已涵蓋「每輪必做」 |
 | 2026-11-05 | toolbox `1.8.2 → 1.8.3`＝**關閉同步一律解除連結（不再可能靜默失敗）**：`skillSyncService.setSyncEnabled()` 把 `config.update()` 包進 `try/catch`，寫入失敗只提示、不再往外丟——舊版例外一丟，後面的「關閉 ⇒ 解除連結」整段被跳過，面板卻已樂觀顯示關閉（＝`~/.agents/skills` 連結留在原地的症狀）。`refreshSkillSync()` 在同步關閉時改為**只解除、不建立**（舊版 `force: true` 繞過開關檢查，按 ↻ 會把剛解除的連結全部重建）。`media/index.html` 的 toggle 標題同步改為「關閉…並解除所有連到全域資料夾的連結」。`skill-sync-service` 測試加 I10（寫入失敗仍要清乾淨）／I11（關閉時 ↻ 不得重建） | 使用者回報：關掉「開關專案時同步全域 Skills」後，`C:\\Users\\User\\.agents\\skills` 的連結沒有自動解除 |
 | 2026-11-04 | toolbox `1.8.1 → 1.8.2`＝**手動「重新對齊」改為權威模式**：`lib/skill-junction-sync.js` 的 `syncWorkspaceSkills` 新增 `reclaimAll`（忽略 `workspacePaths` 歸屬、全域目錄內連結一律可回收），`skillSyncService.refreshSkillSync` 帶 `reclaimAll: true`。根因＝專案被**整個**移出工作區（拖出即移除／手動刪 `folders`）後，連結目標已不在任何註冊路徑內，舊版歸屬判定永遠認不出來 ⇒ 按幾次 ↻ 都留著；`workspaceService.maybeSyncSkills` 預設帶 `reclaimAll`（**面板操作＝權威**：專案開關／批次／首項／全部／反轉／拖出移除都會順手清孤兒；只有背景 Skills 目錄監看維持保守），`setSyncEnabled(true)`／`setExcludeFirstProject` 亦同；新增 `skillSyncService.alignWorkspaceSkillsNow()`／`scheduleWorkspaceAlign()` 並接上 `onDidChangeWorkspaceFolders` 與 `.code-workspace` 檔監看（700ms 防抖＋1.5s quiet window，避免與面板同步重複），**VS Code 原生「加入／移除工作區資料夾」也會自動對齊**；`removeWorkspaceFolder` 另以 `extraOwnershipPaths` 立即回收被移除專案的連結（不再製造孤兒）。`skill-junction-sync` 測試加 S12／S13、`skill-sync-service` 加 I6／I7／I8／I9 | 使用者回報：多專案工作區按「重新整理 Skills 連結」後，`~/.agents/skills` 仍有當前工作區未載入的技能 |
