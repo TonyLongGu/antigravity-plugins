@@ -231,7 +231,7 @@ node -e "const fs=require('fs');const P={'antigravity-toolbox':'antigravity.tool
 
 ### M13 重複性
 
-再跑一次 M1 與 M2。預期與第一次逐字相同（`SYNTAX_FAIL=0`、15 行 `exit=0`）。
+再跑一次 M1 與 M2。預期與第一次逐字相同（`SYNTAX_FAIL=0`、行數＝*.test.js 實算數，2026-11-25 為 18，每行 `exit=0`）。
 
 ## 6. 界線與流程
 
@@ -247,7 +247,7 @@ node -e "const fs=require('fs');const P={'antigravity-toolbox':'antigravity.tool
 
 **通過**：一句結論＋證據位置＋已知限制。
 
-> 通過。HEAD `xxxxxxx`。M1 `SYNTAX_FAIL=0`（80 檔）、M2 15/15 `exit=0`、M3 `ALL-SUITES-PASSED (4/4)`、M4 `BAD=none`（112 個 command）、M6 9/9 `OK`、M10 無刪除。已知限制：只在 Antigravity 實測，Cursor 未測。
+> 通過。HEAD `xxxxxxx`。M1 `SYNTAX_FAIL=0`（86 檔）、M2 18/18 `exit=0`、M3 `ALL-SUITES-PASSED (4/4)`、M4 `BAD=none`（112 個 command）、M6 9/9 `OK`、M10 無刪除。已知限制：只在 Antigravity 實測，Cursor 未測。
 
 **退回**：一句結論＋問題清單；每項寫最小重現步驟、期望與實際、對應條號。
 
@@ -261,4 +261,5 @@ node -e "const fs=require('fs');const P={'antigravity-toolbox':'antigravity.tool
 
 | 日期 | 版本 | 變更 |
 | :--- | :--- | :--- |
+| 2026-11-25 | v1.1（同版勘誤） | §7 通過範例與 M13 預期對齊 v1.1 基線（86 檔、M2 18 支）；判定邏輯與門檻未變 |
 | 2026-11-25 | v1.0 → v1.1 | 依 2026-11-25 實測重算基線（JS 檔數、測試支數、inspector 1.3.2、quota-status 1.2.1、toolbox 1.8.4、quota locales 81）；根 AGENTS.md 由「不存在」改為「存在且為索引式」（§3.6、§4.4、M9）。判定邏輯與門檻未變 |

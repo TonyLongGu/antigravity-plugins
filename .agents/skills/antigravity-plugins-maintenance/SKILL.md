@@ -125,7 +125,7 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 | :--- | :--- | ---: | :--- | :--- | :--- |
 | `antigravity-script-runner` | 1.7.1 | 455 | `scriptRunner.*`（8 個 id × `.en`／`.cn`＝24） | 無 view（右鍵選單＋媒體檢視） | `extension.js`／6 services（audio／video／image／stream） |
 | `antigravity-ai-context-inspector` | 1.3.2 | 446 | `antigravity.aiContext.*`（3 ＋ `.en`） | `antigravity.aiContextView`／`antigravity-ai-context-container` | `extension.js`／8 services（cline·cursor·kilo·vscode chat／contextScanner／mcpDetector／antigravityDataRoots） |
-| `antigravity-toolbox` | 1.8.4 | 406 | `antigravity.toolbox.*`（7 ＋ 4 `.en`） | `antigravity.toolboxView`／`antigravity-toolbox-container` | `extension.js`／7 services（brain／copilotChat／skillSync／workspace／antigravityRoots…） |
+| `antigravity-toolbox` | 1.8.4 | 462 | `antigravity.toolbox.*`（7 ＋ 4 `.en`） | `antigravity.toolboxView`／`antigravity-toolbox-container` | `extension.js`／7 services（brain／copilotChat／skillSync／workspace／antigravityRoots…） |
 | `antigravity-mcp-manager` | 1.10.1 | 298 | `antigravity.mcp.*`（6 ＋ `.en`） | `antigravity.mcpManagerView`／`mcp-manager-container` | `extension.js`／9 services |
 | `antigravity-quota-status` | 1.2.1（`name`＝`ai-quota-status`） | 236 | `aiQuota.*`（7，無變體） | 無 view（狀態列） | `extension.js`／5 services（cloud api／quota／cursorAuth…） |
 | `antigravity-quick-access` | 1.2.6 | 79 | `antigravity.quickAccess.*`（20 × 3＝60） | `antigravity.quickAccessView` | `extension.js`／無 `services/` 目錄 |
@@ -262,6 +262,7 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 | 15 | 把 `.clinerules` 根目錄一律當常駐（或想靠檔名 `*cond*` 判斷條件式） | 帶 `paths:` 的條件式規範被顯示成常駐，與 Cline 實際載入相反，使用者誤判「規範沒生效」 | 只看 frontmatter：有 `paths:` ⇒ 條件式、無 ⇒ 常駐、`workflows/` ⇒ 按需（§8.3） |
 | 16 | 掃技能／目錄時只認 `Dirent.isDirectory()` | Windows 的 junction 在 Dirent 是 `isSymbolicLink()=true`、`isDirectory()=false`；`~/.agents/skills/*` 全是 toolbox 同步的 junction ⇒ 全域技能整批消失（1.2.7 以前，實測 26→0） | 掃描條件一律寫 `isDirectory() \|\| isSymbolicLink()`，並用 `skill-junction-scan`（J0–J5）守住（§8.3） |
 | 17 | 把 Antigravity 資料根目錄寫死 `~/.gemini/antigravity-ide`（或反過來只認新根） | 搬遷後的新對話看不到，或 500 筆舊歷史整批消失；標題退回帶 `@[路徑]` 的首句 | 走 `antigravityDataRoots` 新舊合併；標題與排序讀 `conversation_summaries.db`（§8.6） |
+| 18 | `graphify update` 因拓撲未變而跳過時，手改 `graph.json`／`GRAPH_REPORT.md` 的 commit 標記 | 圖譜產物與工具輸出不再一致，日後無法證明內容對應哪棵樹 | 不改產物；回執寫「產物內容＝`<commit>` 的樹，標記停在 `<舊 commit>`」，或重建後再標 |
 
 
 > 這些都是**實際失敗過**才寫上來的（2026-10-24～10-31），不是假設性風險。
