@@ -1,9 +1,9 @@
 # antigravity-plugins 驗收標準
 
-> 版本 1.0　凍結日 2026-11-16
+> 版本 1.1　凍結日 2026-11-25
 > 適用：本 repo 任一交付（6 個擴充套件 ＋ 根目錄安裝／解除安裝腳本）。
 > 判定者：秘書。執行者提供證據，不自稱通過。
-> 基線：commit `e74d28a6`、Node `v24.18.0`、Windows、PowerShell 5.1。文中「預期輸出」全部以此基線實跑為準；數字要變，只有工單明列契約變更才算。
+> 基線：commit `a71e11dd`、Node `v24.18.0`、Windows、PowerShell 5.1。文中「預期輸出」全部以此基線實跑為準；數字要變，只有工單明列契約變更才算。
 > 怎麼做這個 repo 的程式、圖譜與反模式：`.agents/skills/antigravity-plugins-maintenance/SKILL.md`。本檔只寫「怎麼判定」。
 > 凍結判定：秘書 2026-11-16 逐項實跑核對通過（工單 P-20261116-01），基線數字全部重現。此後本檔要改，一律走工單升版。
 
@@ -34,8 +34,8 @@
 
 ### 2.1 主路徑
 
-- [ ] **2.1.1** 全部 JS 可通過語法檢查：M1 → `SYNTAX_FAIL=0`（80 個檔案）。
-- [ ] **2.1.2** 兩組回歸測試全過：M2 → 15 支 `exit=0`；M3 → `ALL-SUITES-PASSED (4/4)`、`exit=0`。
+- [ ] **2.1.1** 全部 JS 可通過語法檢查：M1 → `SYNTAX_FAIL=0`（86 個檔案）。
+- [ ] **2.1.2** 兩組回歸測試全過：M2 → 18 支 `exit=0`（支數以 *.test.js 實算為準）；M3 → `ALL-SUITES-PASSED (4/4)`、`exit=0`。
 - [ ] **2.1.3** manifest 契約完整：M4 → `BAD=none`，command 總數 112，且與 §5.0 基線表一致（差異需工單明列）。
 - [ ] **2.1.4** 工單描述的操作實測一次：寫明「開哪個面板／點哪個選單／按下後畫面出現什麼」，並指出由哪個自動測試守住。只有描述沒有測試、或只有測試沒有實測紀錄，都退回。
 
@@ -71,7 +71,7 @@
 - [ ] **3.3 跨外掛耦合完整**：M6 → 9 行全部 `OK`。`scriptRunner.locale` 是設定鍵、不是 command id，必須先過濾再比對。
 - [ ] **3.4 三語鍵不缺**：M7 → 4 個 `locales` 目錄 `tw_only=0`、`cn_only=0`、`en_only=0/0`；2 個 webview `same=true`（142／142／142、98／98／98）。
 - [ ] **3.5 共用檔影響面**：M5 的薄殼結構 12／12 `OK`。改根目錄腳本不得破壞各外掛薄殼的轉呼叫。
-- [ ] **3.6 版控衛生**：M9 → `graphify-out` 追蹤檔數 0；根 `AGENTS.md` 不存在（規則入口只有 SKILL.md）。
+- [ ] **3.6 版控衛生**：M9 → `graphify-out` 追蹤檔數 0；根 `AGENTS.md` 存在且為索引式（9 行、四條索引），規則入口＝AGENTS.md（索引）＋SKILL.md（知識正本）。
 - [ ] **3.7 不相關檔案未動**：`git diff --name-only <base>..<head>` 不得出現 `README.md`、`install-all.ps1`、`uninstall-all.ps1`、其他外掛的程式檔，除非工單明列。
 
 ## 4. 一致性（UI／命名／文件）
@@ -79,7 +79,7 @@
 - [ ] **4.1 command id 家族**：M12 → `IDS=112`、`OUT_OF_FAMILY=0`。
 - [ ] **4.2 新增 UI 字串三語齊全**：交付列出的每個新 key，在該外掛的 `locales\en.json`、`zh-TW.json`、`zh-CN.json` 都找得到；webview 的 key 在 `media/locales.js` 三個語系各一次。漏一個即退回。
 - [ ] **4.3 切換鈕樣式**：M8 → 沒有 `DIFF` 行、`CHIP_PROPS_COMPARED=14`。色值固定 Antigravity `#4ec9b0`、Copilot `#9cdcfe`、Cursor `#ce9178`、Cline `#c586c0`、Kilo `#ffd54f`，順序不變、只在啟用態上色。
-- [ ] **4.4 文件入口唯一**：M9 的 `AGENTS.md` 不存在；`docs/` 不得出現第二份規則文件（專案規則只在 SKILL.md）。
+- [ ] **4.4 文件入口唯一**：M9 的 `AGENTS.md` 存在但只有索引（≤12 行、含技能索引／先讀圖／收尾更新授權／知識落點四條）；知識本體只在 SKILL.md；`docs/` 不得出現第二份規則文件。
 - [ ] **4.5 使用者文件**：`README.md` 支援表 6 列（M12b）；外掛名稱與 `package.json` 的 `name` 對得上（quota-status 例外：資料夾 `antigravity-quota-status`、`name` 是 `ai-quota-status`，README 需標明）。
 - [ ] **4.6 標題與行為一致**：命令標題不得承諾做不到的事。判定＝在宿主開啟該選單逐項點一次，行為與標題相符，寫下畫面結果（人判，但要寫到別人能照著看到同一個畫面）。
 
@@ -87,23 +87,23 @@
 
 > 本節就是可重跑指令與基線；§2、§3 的 M 編號都指回這裡。
 
-所有指令在 repo 根目錄、PowerShell 5.1、Node `v24.18.0` 執行。基線日期 2026-11-16、HEAD `e74d28a6`。
+所有指令在 repo 根目錄、PowerShell 5.1、Node `v24.18.0` 執行。基線日期 2026-11-25、HEAD `a71e11dd`。
 
 ### 5.0 基線快照
 
 | 外掛資料夾 | `name` | version | commands | 設定鍵 | activationEvents |
 | :--- | :--- | :--- | ---: | ---: | ---: |
-| antigravity-toolbox | antigravity-toolbox | 1.8.3 | 11 | 6 | 1 |
+| antigravity-toolbox | antigravity-toolbox | 1.8.4 | 11 | 6 | 1 |
 | antigravity-script-runner | antigravity-script-runner | 1.7.1 | 24 | 3 | 1 |
 | antigravity-quick-access | antigravity-quick-access | 1.2.6 | 60 | 0 | 1 |
-| antigravity-ai-context-inspector | antigravity-ai-context-inspector | 1.3.1 | 4 | 5 | 0 |
+| antigravity-ai-context-inspector | antigravity-ai-context-inspector | 1.3.2 | 4 | 5 | 0 |
 | antigravity-mcp-manager | antigravity-mcp-manager | 1.10.1 | 6 | 0 | 1 |
-| antigravity-quota-status | ai-quota-status | 1.1.0 | 7 | 7 | 1 |
+| antigravity-quota-status | ai-quota-status | 1.2.1 | 7 | 7 | 1 |
 
-其他基線：JS 80 檔、`.ps1` 15 檔、薄殼 12 檔、`*.test.js` 15 檔、command 總數 112。
-i18n：`locales` 鍵數 mcp-manager 132、quick-access 47、quota-status 78、script-runner 5；webview 142（toolbox）、98（inspector）。
+其他基線：JS 86 檔、`.ps1` 15 檔、薄殼 12 檔、`*.test.js` 18 檔、command 總數 112。
+i18n：`locales` 鍵數 mcp-manager 132、quick-access 47、quota-status 81、script-runner 5；webview 142（toolbox）、98（inspector）。
 
-### M1 語法檢查（80 檔）
+### M1 語法檢查（86 檔）
 
 ```powershell
 $bad = 0
@@ -115,7 +115,7 @@ Get-ChildItem -Recurse -Filter *.js |
 
 預期：`SYNTAX_FAIL=0`。
 
-### M2 15 支回歸測試
+### M2 全部回歸測試（18 支）
 
 ```powershell
 $root = (Get-Location).Path
@@ -125,7 +125,7 @@ Get-ChildItem -Recurse -Filter *.test.js | Sort-Object FullName | ForEach-Object
 }
 ```
 
-預期：15 行、每行 `exit=0`；最後一行是 `antigravity-toolbox\tests\workspace-remove.test.js exit=0`。
+預期：行數＝*.test.js 實算數（2026-11-25 為 18），每行 `exit=0`；最後一行是 `antigravity-toolbox\tests\workspace-remove.test.js exit=0`。
 
 ### M3 script-runner 四套件
 
@@ -196,9 +196,11 @@ node -e "const fs=require('fs');const get=(f,sel)=>{const s=fs.readFileSync(f,'u
 ```powershell
 (git ls-files graphify-out | Measure-Object).Count
 Test-Path AGENTS.md
+(Get-Content AGENTS.md -Encoding UTF8).Count
+(Select-String -Path AGENTS.md -Pattern '技能索引|先讀圖|收尾更新|知識落點' | Measure-Object).Count
 ```
 
-預期：`0`、`False`。
+預期：`0`、`True`、`9`（≤12）、`4`。
 
 ### M10 對外契約增刪（base..head）
 
@@ -252,3 +254,11 @@ node -e "const fs=require('fs');const P={'antigravity-toolbox':'antigravity.tool
 > 退回。① §3.4：`zh-CN.json` 缺 `panel_title`（重現：M7 → `cn_only=1`；期望 `cn_only=0`）。② §2.3：R3 應不寫檔，實際寫入 `.code-workspace`（重現：`node antigravity-toolbox/tests/workspace-remove.test.js`，R3 為 `✘`；期望 `✔`）。
 
 **有條件通過**（僅秘書可用）：未過項目屬環境限制且不影響主路徑時使用；列出待補項目與期限，其餘照通過寫法。
+
+---
+
+## 8. 凍結變更記錄
+
+| 日期 | 版本 | 變更 |
+| :--- | :--- | :--- |
+| 2026-11-25 | v1.0 → v1.1 | 依 2026-11-25 實測重算基線（JS 檔數、測試支數、inspector 1.3.2、quota-status 1.2.1、toolbox 1.8.4、quota locales 81）；根 AGENTS.md 由「不存在」改為「存在且為索引式」（§3.6、§4.4、M9）。判定邏輯與門檻未變 |
