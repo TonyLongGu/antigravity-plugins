@@ -4,6 +4,7 @@ const path = require('node:path');
 const os = require('node:os');
 const { execFileSync } = require('node:child_process');
 const McpDetectorService = require('./mcpDetectorService');
+const AntigravityDataRoots = require('./antigravityDataRoots');
 
 class ContextScannerService {
   static getUserHome() {
@@ -226,7 +227,8 @@ class ContextScannerService {
     const isCursor = Boolean(options.isCursor);
     const userHome = this.getUserHome();
     const globalConfigDir = path.join(userHome, '.gemini', 'config');
-    const builtinSkillsDir = path.join(userHome, '.gemini', 'antigravity-ide', 'builtin', 'skills');
+    // 內建技能跟著資料根目錄搬家：新根 ~/.gemini/antigravity + 舊根 ~/.gemini/antigravity-ide 合併
+    const builtinSkillsDirs = AntigravityDataRoots.resolveSubDirs(path.join('builtin', 'skills'), userHome);
 
     const result = {
       mode: 'live',
@@ -344,8 +346,10 @@ class ContextScannerService {
       // Kilo 沒有 IDE 內建技能；專案／全域技能都在 .agents/skills（與 Cline／Codex 共用）
       await this.scanKiloSources(result, options);
     } else if (!isVsCode) {
-      const builtinSkills = await this.scanSkillsInDir(builtinSkillsDir, 'Antigravity 內建', 'builtin', 2000);
-      result.skills.builtin.push(...builtinSkills);
+      for (const builtinDir of builtinSkillsDirs) {
+        const builtinSkills = await this.scanSkillsInDir(builtinDir, 'Antigravity 內建', 'builtin', 2000);
+        this._mergeSkills(result.skills.builtin, builtinSkills);
+      }
     } else if (isCursor) {
       const cursorBuiltinDir = path.join(userHome, '.cursor', 'skills-cursor');
       const builtinSkills = await this.scanSkillsInDir(cursorBuiltinDir, 'Cursor 內建', 'builtin', 2000);

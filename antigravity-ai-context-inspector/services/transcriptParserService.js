@@ -4,20 +4,109 @@ const readline = require('node:readline');
 const path = require('node:path');
 const os = require('node:os');
 const ContextScannerService = require('./contextScannerService');
+const AntigravityDataRoots = require('./antigravityDataRoots');
 
 class TranscriptParserService {
-  static _convCache = new Map(); // convId -> { id, title, workspace, mtime, mtimeStr, dirPath }
+  static _convCache = new Map(); // convDir -> { id, title, workspace, mtime, mtimeStr, dirPath, summaryTitle }
+  static _summariesCache = { key: '', map: new Map() };
 
   static getUserHome() {
     return process.env.USERPROFILE || os.homedir();
   }
 
-  static getBrainDir() {
-    return path.join(this.getUserHome(), '.gemini', 'antigravity-ide', 'brain');
+  /**
+   * Antigravity 於 2026-10-29 把對話資料搬到 `~/.gemini/antigravity`，
+   * 舊的 `~/.gemini/antigravity-ide` 從此凍結。這裡一律「兩邊合併、新根優先」，
+   * 只換路徑會讓 500 筆舊歷史整批消失，只讀舊路徑則看不到搬遷後的新對話。
+   */
+  static getBrainDirs() {
+    return AntigravityDataRoots.resolveBrainDirs(this.getUserHome());
   }
 
+  static getConversationsDirs() {
+    return AntigravityDataRoots.resolveConversationsDirs(this.getUserHome());
+  }
+
+  /** 相容入口：主要 brain 目錄 */
+  static getBrainDir() {
+    return this.getBrainDirs()[0] || path.join(AntigravityDataRoots.getPrimaryRootDir(this.getUserHome()), 'brain');
+  }
+
+  /** 相容入口：主要 conversations 目錄 */
   static getConversationsDir() {
-    return path.join(this.getUserHome(), '.gemini', 'antigravity-ide', 'conversations');
+    return this.getConversationsDirs()[0] || path.join(AntigravityDataRoots.getPrimaryRootDir(this.getUserHome()), 'conversations');
+  }
+
+  static isAvailable() {
+    return this.getBrainDirs().length > 0;
+  }
+
+  /**
+   * 讀取官方對話摘要庫（`conversation_summaries.db`）的標題與最後修改時間。
+   * 新格式對話的 `.db` 已不含標題字串，標題只存在這張表；排序也以它的
+   * `last_modified_time` 為準（brain 資料夾的 mtime 會被空檔案碰觸而失真）。
+   * 只在 node:sqlite 可用時讀；讀不到就整段降級回舊行為（不影響其他來源）。
+   */
+  static _loadConversationSummaries() {
+    const dbPaths = AntigravityDataRoots.resolveFiles('conversation_summaries.db', this.getUserHome());
+    const cacheKey = dbPaths.map((dbPath) => {
+      try {
+        const stat = fs.statSync(dbPath);
+        return `${dbPath}:${stat.mtimeMs}:${stat.size}`;
+      } catch (e) {
+        return `${dbPath}:missing`;
+      }
+    }).join('|');
+    if (cacheKey === this._summariesCache.key) return this._summariesCache.map;
+
+    const map = new Map(); // convId(小寫) -> { title, mtime }
+    let DatabaseSync = null;
+    try {
+      ({ DatabaseSync } = require('node:sqlite'));
+    } catch (e) {
+      DatabaseSync = null;
+    }
+
+    if (DatabaseSync) {
+      for (const dbPath of dbPaths) {
+        let db = null;
+        try {
+          db = new DatabaseSync(dbPath, { readOnly: true });
+          const rows = db.prepare('SELECT conversation_id, title, last_modified_time FROM conversation_summaries').all();
+          for (const row of rows) {
+            const id = String(row.conversation_id || '').trim().toLowerCase();
+            if (!id) continue;
+            const title = typeof row.title === 'string' ? row.title.trim() : '';
+            const mtime = this._parseSummaryTime(row.last_modified_time);
+            const existing = map.get(id);
+            if (!existing) {
+              map.set(id, { title, mtime });
+              continue;
+            }
+            // 新根優先：先到先贏，只補空值與較新的時間
+            if (!existing.title && title) existing.title = title;
+            if (mtime > existing.mtime) existing.mtime = mtime;
+          }
+        } catch (e) {
+          // 資料庫被鎖住或格式不同 ⇒ 靜默降級（不讓清單整個失敗）
+        } finally {
+          if (db) {
+            try { db.close(); } catch (e) {}
+          }
+        }
+      }
+    }
+
+    this._summariesCache = { key: cacheKey, map };
+    return map;
+  }
+
+  /** `last_modified_time` 形如 `2026-11-24 12:02:35.7637336+00:00`（UTC，7 位小數秒） */
+  static _parseSummaryTime(value) {
+    if (!value) return 0;
+    const raw = value instanceof Date ? value.toISOString() : String(value).trim();
+    const parsed = Date.parse(raw.replace(' ', 'T'));
+    return Number.isFinite(parsed) ? parsed : 0;
   }
 
   /**
@@ -25,8 +114,8 @@ class TranscriptParserService {
    * 採輕量分區讀取（首部 64KB 取 Workspace，尾部 256KB 取最新 Session 標題），避免大型 .db 檔案佔用記憶體
    */
   static async _extractOfficialMetadata(convId) {
-    const dbPath = path.join(this.getConversationsDir(), `${convId}.db`);
-    if (!fs.existsSync(dbPath)) return { title: null, workspace: null };
+    const dbPath = this._resolveConversationDbPath(convId);
+    if (!dbPath) return { title: null, workspace: null };
 
     let title = null;
     let fileHandle = null;
@@ -99,9 +188,10 @@ class TranscriptParserService {
   /**
    * 極速解析單一對話的標題與工作區（只讀取前 32KB 輕量前導區塊，避免讀取幾十 MB 日誌）
    */
-  static async _parseSingleConvMetadata(convId, convDir, mtimeMs) {
-    const cached = this._convCache.get(convId);
-    if (cached && cached.mtime === mtimeMs) {
+  static async _parseSingleConvMetadata(convId, convDir, mtimeMs, summary = null) {
+    const summaryTitle = summary && summary.title ? summary.title : '';
+    const cached = this._convCache.get(convDir);
+    if (cached && cached.mtime === mtimeMs && cached.summaryTitle === summaryTitle) {
       return cached;
     }
 
@@ -112,10 +202,17 @@ class TranscriptParserService {
     let title = '';
     let firstCleanedReq = '';
 
-    // 1. 最高優先：讀取 IDE 官方原生命名的會話主題（與 IDE 原生聊天記錄完全同步）
-    const officialMeta = await this._extractOfficialMetadata(convId);
-    if (officialMeta.title) {
-      title = officialMeta.title;
+    // 1. 最高優先：官方摘要庫的標題（新格式對話的 .db 已不含標題字串，只有這張表有）
+    if (summaryTitle) {
+      title = summaryTitle;
+    }
+
+    // 2. 舊格式：從官方對話資料庫 .db 內嵌的 Protobuf 標題還原
+    if (!title) {
+      const officialMeta = await this._extractOfficialMetadata(convId);
+      if (officialMeta.title) {
+        title = officialMeta.title;
+      }
     }
 
     if (targetLog) {
@@ -207,64 +304,113 @@ class TranscriptParserService {
       workspace: '',
       mtime: mtimeMs,
       mtimeStr: new Date(mtimeMs).toLocaleString(),
-      dirPath: convDir
+      dirPath: convDir,
+      summaryTitle
     };
 
-    this._convCache.set(convId, result);
+    this._convCache.set(convDir, result);
     return result;
   }
 
+  /** 對話資料庫 .db 的實際位置（新根優先；兩邊都有時內容相同） */
+  static _resolveConversationDbPath(convId) {
+    for (const conversationsDir of this.getConversationsDirs()) {
+      const candidate = path.join(conversationsDir, `${convId}.db`);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+    return null;
+  }
+
+  /** brain 目錄底下的項目是不是一個對話（排除暫存資料夾與隱藏項目） */
+  static _isConversationDirName(name) {
+    return Boolean(name) && !name.startsWith('.') && name !== 'scratch' && name !== 'tempmediaStorage';
+  }
+
   /**
-   * 取得所有歷史對話任務清單（依修改時間降冪排列，支援記憶體極速快取）
+   * 檢視單一對話資料夾：新根的 brain 目錄可能只有 `.user_uploaded`（搬遷時同步的殘留），
+   * 真正的日誌還留在舊根，所以要逐資料夾判斷「有沒有可用的 transcript」。
+   */
+  static async _inspectConversationDir(convDir) {
+    const info = { convDir, hasTranscript: false, hasFullTranscript: false, transcriptMs: 0, dirMs: 0 };
+    try {
+      const stat = await fsPromises.stat(convDir);
+      info.dirMs = stat.mtimeMs;
+    } catch (e) {
+      return null;
+    }
+
+    const logDir = path.join(convDir, '.system_generated', 'logs');
+    for (const [fileName, key] of [['transcript.jsonl', 'hasTranscript'], ['transcript_full.jsonl', 'hasFullTranscript']]) {
+      if (info.hasTranscript) break; // 輕量版優先
+      try {
+        const logStat = await fsPromises.stat(path.join(logDir, fileName));
+        info[key] = true;
+        if (logStat.mtimeMs > info.transcriptMs) info.transcriptMs = logStat.mtimeMs;
+      } catch (e) {}
+    }
+    return info;
+  }
+
+  /**
+   * 取得所有歷史對話任務清單（依最後活躍時間降冪排列，支援記憶體極速快取）
+   * 新舊兩個資料根合併、同 id 只留一份，並優先選「有 transcript 的那一份」資料夾。
    */
   static async getConversationsList() {
-    const brainDir = this.getBrainDir();
-    if (!fs.existsSync(brainDir)) return [];
+    const brainDirs = this.getBrainDirs();
+    if (brainDirs.length === 0) return [];
 
     try {
-      const entries = await fsPromises.readdir(brainDir, { withFileTypes: true });
+      const summaries = this._loadConversationSummaries();
+      const conversationsDirs = this.getConversationsDirs();
+
+      // 1. 收集所有資料根的對話資料夾（同 id 可能兩邊都有）
+      const grouped = new Map(); // convId(小寫) -> { convId, dirs: [] }
+      for (const brainDir of brainDirs) {
+        let entries = [];
+        try {
+          entries = await fsPromises.readdir(brainDir, { withFileTypes: true });
+        } catch (e) {
+          continue;
+        }
+        for (const entry of entries) {
+          if (!entry.isDirectory() || !this._isConversationDirName(entry.name)) continue;
+          const key = entry.name.toLowerCase();
+          if (!grouped.has(key)) grouped.set(key, { convId: entry.name, dirs: [] });
+          grouped.get(key).dirs.push(path.join(brainDir, entry.name));
+        }
+      }
+
+      // 2. 每個對話只留一份資料夾，並算出真正的最後活躍時間
       const validEntries = [];
+      await Promise.all(Array.from(grouped.values()).map(async ({ convId, dirs }) => {
+        const infos = (await Promise.all(dirs.map(dir => this._inspectConversationDir(dir)))).filter(Boolean);
+        if (infos.length === 0) return;
 
-      await Promise.all(entries.map(async (entry) => {
-        if (entry.isDirectory() && entry.name !== 'scratch' && entry.name !== 'tempmediaStorage' && !entry.name.startsWith('.')) {
-          const convId = entry.name;
-          const convDir = path.join(brainDir, convId);
+        const score = (info) => (info.hasTranscript ? 2 : (info.hasFullTranscript ? 1 : 0));
+        const picked = infos.reduce((best, info) => (score(info) > score(best) ? info : best));
+        const summary = summaries.get(convId.toLowerCase()) || null;
+
+        // 對話資料庫 .db 的最後寫入時間（舊對話被重新啟用時會更新）
+        let dbMtime = 0;
+        for (const conversationsDir of conversationsDirs) {
           try {
-            const stat = await fsPromises.stat(convDir);
-            let lastActiveTime = stat.mtimeMs;
-
-            // 1. 檢查對話資料庫 .db 的最後寫入時間 (舊對話被重新啟用時會更新 .db)
-            const dbPath = path.join(this.getConversationsDir(), `${convId}.db`);
-            if (fs.existsSync(dbPath)) {
-              try {
-                const dbStat = await fsPromises.stat(dbPath);
-                if (dbStat.mtimeMs > lastActiveTime) {
-                  lastActiveTime = dbStat.mtimeMs;
-                }
-              } catch (e) {}
-            }
-
-            // 2. 檢查日誌 transcript.jsonl 的最後修改時間
-            const logPath = path.join(convDir, '.system_generated', 'logs', 'transcript.jsonl');
-            if (fs.existsSync(logPath)) {
-              try {
-                const logStat = await fsPromises.stat(logPath);
-                if (logStat.mtimeMs > lastActiveTime) {
-                  lastActiveTime = logStat.mtimeMs;
-                }
-              } catch (e) {}
-            }
-
-            validEntries.push({ convId, convDir, mtime: lastActiveTime });
+            const dbStat = await fsPromises.stat(path.join(conversationsDir, `${convId}.db`));
+            if (dbStat.mtimeMs > dbMtime) dbMtime = dbStat.mtimeMs;
           } catch (e) {}
         }
+
+        // 官方摘要庫的時間才是真的「最後活躍」；brain 資料夾 mtime 會被零星檔案碰觸而失真，
+        // 只有完全查不到摘要時才退回資料夾 mtime（舊行為）。
+        let lastActiveTime = Math.max(picked.transcriptMs, dbMtime, summary ? summary.mtime : 0);
+        if (!summary || !summary.mtime) lastActiveTime = Math.max(lastActiveTime, picked.dirMs);
+
+        validEntries.push({ convId, convDir: picked.convDir, mtime: lastActiveTime, summary });
       }));
 
-      // 依真正最後活躍時間排序由新到舊
+      // 3. 依真正最後活躍時間排序由新到舊
       validEntries.sort((a, b) => b.mtime - a.mtime);
 
-      const parsedResults = await Promise.all(validEntries.map(e => this._parseSingleConvMetadata(e.convId, e.convDir, e.mtime)));
-      return parsedResults;
+      return await Promise.all(validEntries.map(e => this._parseSingleConvMetadata(e.convId, e.convDir, e.mtime, e.summary)));
     } catch (err) {
       console.error('Error reading conversations list:', err);
       return [];
@@ -275,8 +421,8 @@ class TranscriptParserService {
    * 從對話資料庫 .db 中精準提取該 Session 建立時由 Antigravity IDE 靜態注入的全部常駐規範、條件式規範與可用技能
    */
   static async _extractSessionMetadataFromDb(convId) {
-    const dbPath = path.join(this.getConversationsDir(), `${convId}.db`);
-    if (!fs.existsSync(dbPath)) {
+    const dbPath = this._resolveConversationDbPath(convId);
+    if (!dbPath) {
       return { hasSessionPrompt: false, alwaysActiveRules: [], conditionalRules: [], availableSkills: [], workspaces: [] };
     }
 

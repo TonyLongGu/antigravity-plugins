@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const fsPromises = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
+const AntigravityDataRoots = require('./antigravityDataRoots');
 
 class McpDetectorService {
   /**
@@ -24,43 +25,58 @@ class McpDetectorService {
     return JSON.parse(text);
   }
 
+  /** Antigravity 的 MCP 存放目錄（新根 ~/.gemini/antigravity 優先，舊根當歷史來源） */
+  static getMcpRootDirs() {
+    return AntigravityDataRoots.resolveSubDirs('mcp', this.getUserHome());
+  }
+
+  /** 「開啟 MCP 資料夾」用：優先既有目錄，都沒有才回新根的預設路徑 */
+  static getPrimaryMcpRootDir() {
+    const dirs = this.getMcpRootDirs();
+    return dirs.length > 0 ? dirs[0] : path.join(AntigravityDataRoots.getPrimaryRootDir(this.getUserHome()), 'mcp');
+  }
+
+  /** 掃描單一 MCP 根目錄底下的伺服器資料夾 */
+  static async _scanAntigravityMcpRootDir(mcpRootDir) {
+    const servers = [];
+    try {
+      const entries = await fsPromises.readdir(mcpRootDir, { withFileTypes: true });
+      const dirEntries = entries
+        .filter(e => e.isDirectory())
+        .sort((a, b) => this.naturalCompare(a.name, b.name));
+
+      for (const entry of dirEntries) {
+        const serverName = entry.name;
+        const serverPath = path.join(mcpRootDir, serverName);
+        const tools = await this._scanServerTools(serverPath);
+        const instructionsPath = path.join(serverPath, 'instructions.md');
+        const hasInstructions = fs.existsSync(instructionsPath);
+
+        servers.push({
+          name: serverName,
+          scope: 'Global',
+          path: serverPath,
+          toolCount: tools.length,
+          tools: tools,
+          hasInstructions: hasInstructions,
+          instructionsPath: hasInstructions ? instructionsPath : null
+        });
+      }
+    } catch (err) {
+      console.error('Error scanning MCP root dir:', err);
+    }
+    return servers;
+  }
+
   /**
    * 掃描本機已安裝的 MCP Servers 與工具清單
    */
   static async scanMcpServers(workspaceFolders = []) {
-    const userHome = this.getUserHome();
-    const mcpRootDir = path.join(userHome, '.gemini', 'antigravity-ide', 'mcp');
     const servers = [];
 
-    // 1. 掃描 Antigravity IDE 內建 MCP 目錄
-    if (fs.existsSync(mcpRootDir)) {
-      try {
-        const entries = await fsPromises.readdir(mcpRootDir, { withFileTypes: true });
-        const dirEntries = entries
-          .filter(e => e.isDirectory())
-          .sort((a, b) => this.naturalCompare(a.name, b.name));
-
-        for (const entry of dirEntries) {
-          const serverName = entry.name;
-          const serverPath = path.join(mcpRootDir, serverName);
-          const tools = await this._scanServerTools(serverPath);
-          const instructionsPath = path.join(serverPath, 'instructions.md');
-          const hasInstructions = fs.existsSync(instructionsPath);
-
-          servers.push({
-            name: serverName,
-            scope: 'Global',
-            path: serverPath,
-            toolCount: tools.length,
-            tools: tools,
-            hasInstructions: hasInstructions,
-            instructionsPath: hasInstructions ? instructionsPath : null
-          });
-        }
-      } catch (err) {
-        console.error('Error scanning MCP root dir:', err);
-      }
-    }
+    // 1. 掃描 Antigravity IDE 的 MCP 目錄（資料搬遷後新舊根都有，同名以新根為準）
+    const perRootServers = await Promise.all(this.getMcpRootDirs().map(dir => this._scanAntigravityMcpRootDir(dir)));
+    servers.push(...this._mergeMcpServers(perRootServers));
 
     // 2. 依工作區順序檢查各 Workspace 的 mcp_config.json
     for (let wsIdx = 0; wsIdx < workspaceFolders.length; wsIdx++) {

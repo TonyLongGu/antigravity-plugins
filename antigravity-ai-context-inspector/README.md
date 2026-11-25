@@ -10,6 +10,7 @@
    - 🪐 **Google Antigravity IDE 環境**：
      - **當前環境配置**：直接掃描多專案工作區資料夾與全域目錄，即時確認目前生效設定。
      - **最近對話快照**：精準解析 Antigravity `transcript.jsonl` 日誌與歷史對話資料庫，100% 還原每次對話 AI 實際被注入的記憶上下文。
+     - **對話資料根目錄相容**：Antigravity 2026-10-29 把對話資料從 `~/.gemini/antigravity-ide` 搬到 `~/.gemini/antigravity`。本工具**兩邊合併、新根優先**：搬遷後的新對話看得到，500 筆舊歷史也不會消失；同一個對話只列一次，並自動選「真的有 `transcript.jsonl`」的那一份資料夾。標題與排序改讀官方 `conversation_summaries.db`（`title`／`last_modified_time`）——新格式的對話 `.db` 已不含標題字串，而 brain 資料夾的 mtime 會被零星檔案碰觸而失真。內建技能（`builtin/skills`）與 MCP 目錄（`mcp`）同樣新舊合併、同名以新根為準。`node:sqlite` 不可用時自動降級回舊的 mtime 排序。
      - **歷史對話任務切換**：可下拉選擇歷史對話任務進行復盤與環境對比。
    - 💻 **Cursor / Visual Studio Code 環境**：
      - **智慧收斂**：純 VS Code / Cursor 隱藏 Antigravity 內建技能；Cursor 與 VS Code Copilot 另提供對話足跡快照。
@@ -69,6 +70,7 @@ node tests/mcp-vscode-sources.test.js
 node tests/cline-snapshot.test.js
 node tests/skill-junction-scan.test.js
 node tests/snapshot-source-default.test.js
+node tests/antigravity-data-roots.test.js
 ```
 
 - 離開碼 `0` = 全數通過、`1` = 有失敗（可直接接 CI 或 hook）。
@@ -76,6 +78,7 @@ node tests/snapshot-source-default.test.js
 - `cline-snapshot`：涵蓋 12 項斷言——清單只讀 meta（攔截 `*.messages.json` 讀取）、`clineScope` 工作區過濾、`skills` 工具足跡、`<server>__<tool>` MCP 足跡與只保留實際呼叫的工具、設定檔已移除但確實呼叫過的 MCP 仍會列出、`workspaceState.json` 開關對映（關閉的常駐規範不得出現在快照）、條件式規範只留被讀取者、對話 meta、**常駐規範以對話自己的工作區掃描（不列目前視窗的）**、**常駐規範未被讀取時不得標記 isInvoked**、缺少資料目錄不拋錯，以及 **> 20 MB 走串流降級路徑**。
 - `skill-junction-scan`：涵蓋 6 項斷言——**`~/.agents/skills/<name>` 為 junction／symlink 時必須照樣列出**（J0 先驗夾具前提：`Dirent.isDirectory()` 對 junction 為 `false`，這正是 1.2.7 以前整批漏掉全域技能的原因）、沒有 `SKILL.md` 的資料夾不得列入（負對照）、`scanLiveEnvironment` 的 global 群組含 junction 技能、Cline 快照中被 `skills` 工具呼叫的 junction 技能出現在 `skills.global`、未被呼叫者不得出現。夾具在系統暫存目錄，結束前先拆連結再刪資料夾。
 - `snapshot-source-default`：涵蓋 7 項斷言——**未手動選擇時一律載入宿主原生來源**（Antigravity／Cursor 各驗一次）、Webview 注入空的 `INITIAL_SOURCE_FILTER`、點過 chip 後寫回 `workspaceState` 並沿用（重開視窗仍生效）、取消篩選（`all`）沿用已選對話來源、來源不可用時退回宿主，以及空字串清回「跟隨宿主」。以 `Module._load` 攔截 `require('vscode')`，不需要真實 IDE。
+- `antigravity-data-roots`：涵蓋 9 項斷言——**新舊資料根合併列出**（只讀舊根看不到搬遷後的新對話、只讀新根會掉 500 筆歷史）、同 id 只列一次且選「有 transcript」的那份資料夾、標題優先取 `conversation_summaries.db`（新格式 `.db` 無標題字串）、摘要標題為空時退回日誌首句、排序以 `last_modified_time` 為準（**brain 資料夾 mtime 插隊即失敗**，負對照）、沒有摘要庫時降級不拋錯、內建技能與 MCP 目錄新舊合併且同名取新根、`isAvailable()` 只有舊根也成立。夾具在系統暫存目錄，`node:sqlite` 不可用時自動跳過摘要庫三項。
 
 ---
 

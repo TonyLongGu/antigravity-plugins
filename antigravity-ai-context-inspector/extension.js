@@ -130,7 +130,7 @@ class AiContextViewProvider {
         case 'copilot':
           return fs.existsSync(path.join(McpDetectorService.getVsCodeUserDir(), 'workspaceStorage'));
         case 'antigravity':
-          return fs.existsSync(path.join(userHome, '.gemini', 'antigravity-ide', 'brain'));
+          return TranscriptParserService.isAvailable();
         default:
           return false;
       }
@@ -409,7 +409,7 @@ class AiContextViewProvider {
             }
             break;
           }
-          const mcpDir = path.join(userHome, '.gemini', 'antigravity-ide', 'mcp');
+          const mcpDir = McpDetectorService.getPrimaryMcpRootDir();
           if (!fs.existsSync(mcpDir)) {
             fs.mkdirSync(mcpDir, { recursive: true });
           }
