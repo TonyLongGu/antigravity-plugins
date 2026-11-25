@@ -41,17 +41,17 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 
 ---
 
-## 3. 圖譜常數（2026-11-24 複驗，graphify 0.9.80）
+## 3. 圖譜常數（2026-11-25 複驗，graphify 0.9.80）
 
 | 項目 | 值 |
 | :--- | :--- |
 | 圖譜位置 | `graphify-out/`（根 `.gitignore` 已排除，**勿 commit**） |
-| 規模 | **1973** nodes / **3545** edges / **116** communities（75 顯示、41 thin 省略） |
-| 建圖標記 | `Built from commit` `fa37b072`（本輪改動仍在工作樹，`update` 已反映內容）。再跑 `update` 若回 `No code-graph topology changes detected` ⇒ 內容與工作樹一致 |
-| 語料 | 115 files · ~150,877 words；**86 個 code 檔**被抽取（AST）；30 檔未分類（`.bat` 14、無副檔名 10、`.css` 6） |
+| 規模 | **2026** nodes / **3636** edges / **120** communities（75 顯示、45 thin 省略） |
+| 建圖標記 | `Built from commit` `52657d91`（inspector 1.3.2 的 commit；`update` 已反映內容） |
+| 語料 | 117 files · ~152,556 words；**85 個 code 檔**被抽取（AST）；30 檔未分類（`.bat` 14、無副檔名 10、`.css` 6） |
 | 抽取品質 | 96% EXTRACTED／4% INFERRED（146 邊，平均信心 0.85）；**0 input／0 output token＝0 元** |
-| 產物大小 | `GRAPH_REPORT.md` **20.1 KB**（20,570 B，可整讀）、`graph.json` **2.3 MB**（禁整讀）、`graph.html` 約 1.89 MB |
-| 節點分佈 | script-runner 455／inspector 446／toolbox **433**／mcp-manager 298／quota-status **236**／quick-access 79／根目錄 26（含 `node:sqlite` 1 與 2 支根腳本） |
+| 產物大小 | `GRAPH_REPORT.md` **19.9 KB**（20,372 B，可整讀）、`graph.json` **2.37 MB**（禁整讀）、`graph.html` 約 1.92 MB |
+| 節點分佈 | script-runner 455／**inspector 499**／toolbox 433／mcp-manager 298／quota-status 236／quick-access 79／根目錄 26（含 `node:sqlite` 1 與 2 支根腳本） |
 | 不進圖 | `*.css`、`*.html`、`locales/*.json`、`*.md`（`.graphifyignore` 已排除 `*.md`） |
 
 > ⚠️ 上表是**快照**。用前先驗（三行）：
@@ -68,10 +68,10 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 
 ## 4. 讀取紀律（本 repo 參數）
 
-1. 報告 **17.2 KB** ⇒ 先讀 `## Summary`（整份讀也划算）。
+1. 報告 **19.9 KB** ⇒ 先讀 `## Summary`（整份讀也划算）。
 2. 社群名是 `Community N`（建圖用 `--no-label`，未付 LLM 費用）→ 導航靠 `god-nodes`，不要期待語意化社群名。
 3. 同名節點要加路徑：`explain "antigravity-mcp-manager/services/mcpConfigService.js::McpConfigService"`（不帶路徑會回 `Ambiguous`，3 個節點）。
-4. 其餘（查詢指令與預算、`graph.json` 2.0 MB ⛔ 永不整讀、`$LASTEXITCODE` 對查詢類不可靠、`TRUNCATED`）→ skill `graphify-knowledge-graph` §5、§6 坑 14／16；通用工作守則 → skill `graphify-repo-workflow` §2。
+4. 其餘（查詢指令與預算、`graph.json` 2.37 MB ⛔ 永不整讀、`$LASTEXITCODE` 對查詢類不可靠、`TRUNCATED`）→ skill `graphify-knowledge-graph` §5、§6 坑 14／16；通用工作守則 → skill `graphify-repo-workflow` §2。
 
 ---
 
@@ -272,7 +272,7 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 
 | 日期 | 變更 | 來源 |
 | :--- | :--- | :--- |
-| 2026-11-25 | inspector `1.3.1 → 1.3.2`＝**Antigravity 對話資料根目錄相容**：新增 `services/antigravityDataRoots.js`（新 `~/.gemini/antigravity` 優先、舊 `~/.gemini/antigravity-ide` 當歷史來源），`transcriptParserService` 改為兩邊 brain/conversations 合併、convId 去重並優先選有 transcript 的資料夾；標題與排序改讀 `conversation_summaries.db`（`title`／`last_modified_time`），`node:sqlite` 不可用時降級回舊 mtime；`contextScannerService` 的 `builtin/skills`、`mcpDetectorService` 的 `mcp` 目錄與 `extension.js` 的可用性／開資料夾同步改成新舊合併。新增 `antigravity-data-roots`（D1–D9）測試，測試總數 16→17 支 | 使用者回報：最近對話快照的 Antigravity 選項找不到最新對話「Update AGENTS.md Rules File」，但前一篇「Cline Account Logout Assistance」找得到。實測 Antigravity 2026-10-29 遷移資料根目錄，新對話只在 `~/.gemini/antigravity`，標題只在 `conversation_summaries.db` |
+| 2026-11-25 | inspector `1.3.1 → 1.3.2`＝**Antigravity 對話資料根目錄相容**：新增 `services/antigravityDataRoots.js`（新 `~/.gemini/antigravity` 優先、舊 `~/.gemini/antigravity-ide` 當歷史來源），`transcriptParserService` 改為兩邊 brain/conversations 合併、convId 去重並優先選有 transcript 的資料夾；標題與排序改讀 `conversation_summaries.db`（`title`／`last_modified_time`），`node:sqlite` 不可用時降級回舊 mtime；`contextScannerService` 的 `builtin/skills`、`mcpDetectorService` 的 `mcp` 目錄與 `extension.js` 的可用性／開資料夾同步改成新舊合併。新增 `antigravity-data-roots`（D1–D9）測試，測試總數 16→17 支；圖譜 1973→**2026** 節點／3545→**3636** 邊／116→**120** 社群（commit `52657d91`） | 使用者回報：最近對話快照的 Antigravity 選項找不到最新對話「Update AGENTS.md Rules File」，但前一篇「Cline Account Logout Assistance」找得到。實測 Antigravity 2026-10-29 遷移資料根目錄，新對話只在 `~/.gemini/antigravity`，標題只在 `conversation_summaries.db` |
 | 2026-11-25 | 重建根 `AGENTS.md` 為索引式（技能索引／先讀圖／收尾更新授權／知識落點 4 條）；本技能改標為「知識正本」，移除「勿重建」的舊禁令 | 使用者指示：專案用圖譜管理，執行前要先讀圖、改完要更新圖 |
 | 2026-11-24 | quota-status `1.2.0 → 1.2.1`＝**額度改回與 IDE 面板同源**：`agy.exe`（語言伺服器）把 `pid`／`httpPort`／`httpsPort`／`csrfToken` 寫在 `~/.gemini/antigravity/daemon/hub_*.json`，`antigravityQuotaService` 新增 hub 探測（死 pid 略過、優先 https）＋可注入的官方 RPC client（`vscode.extensions.getExtension('google.antigravity').exports.getRpcClient()`，讓 IDE 按需啟動伺服器）；**本機語言伺服器重新成為第一優先**，Cloud Code API 退為備援。雲端路徑不再用 `fetchAvailableModels` 的 Gemini 配額冒充 Antigravity 額度（只補 Claude）。語言伺服器休眠時沿用最後成功值快照（`globalStorage/quota-last-good.json`，24 小時過期，tooltip 標示讀取時間）；compact 模式缺一邊顯示 `--`。新增 Q11–Q15（hub／真實回應／client／快照），測試 16 支全過；圖譜 1956→**1973** 節點／3511→**3545** 邊／119→**116** 社群（commit `fa37b072`） | 使用者回報：Antigravity IDE 面板顯示 Gemini 週額度剩 91%，擴充套件仍顯示 100%。實測 IDE 面板資料來自本機 `agy.exe`（`hub_9819.json`，https 9821），回 `gemini-weekly: 0.911068`；1.2.0 走的 Cloud Code API 對 `aicode-consumers` 只回 Claude 群組、Gemini 一律 1.0，兩者是不同產品配額 |
 | 2026-11-24 | quota-status `1.1.0 → 1.2.0`＝**額度資料源改接 Google Cloud Code API**：新增 `services/antigravityApiService.js`（讀 `~/.gemini/antigravity-acp/antigravity-oauth-token` ＋ `acp_token.json`，過期以 refresh token 換新、只快取記憶體，呼叫 `v1internal:retrieveUserQuotaSummary`／`fetchAvailableModels`），`quotaService` 門面改為「雲端 API 優先、本機 language server 才退回」；本機 LS 路徑放寬進程名（`language_server%`）與 `--csrf_token=` 寫法、`netstat` 不再只查 IPv4；**移除所有「抓不到就顯示 100%」的假資料**（fallback／缺 bucket／`?? 100` 全部改 null，狀態列改顯示「無法取得」），tooltip 只列出真的有資料的群組；新增 `tests/antigravity-quota-source.test.js`（Q1–Q10，測試總數 15→16 支）；圖譜 1911→**1956** 節點／3437→**3511** 邊／119 社群（commit `fa37b072`） | 使用者回報：Antigravity IDE 登入 sx785878、額度約 90%，擴充套件卻固定顯示 100%。實測 Antigravity IDE 1.12（`~/.antigravity-ide`）已無 `language_server_windows_x64.exe` 進程，IDE 自己直呼 `cloudcode-pa.googleapis.com/v1internal:*`（`cloudcode.log` 每 5 分鐘一次），舊的 LS RPC 永遠抓不到資料而落到假 100% |
