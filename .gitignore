@@ -31,3 +31,6 @@ secrets.json
 *.db-wal
 # Graphify 產物不進版控
 graphify-out/
+
+# 內部驗收證據，含本機路徑與對話標題，不進版控
+docs/evidence/
