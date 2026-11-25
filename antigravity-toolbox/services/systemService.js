@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const fsPromises = require('node:fs/promises');
+const antigravityRoots = require('./antigravityRoots');
 
 /** @type {vscode.ExtensionContext | null} */
 let extensionContext = null;
@@ -553,7 +554,12 @@ function getGlobalPaths(flavor = resolveFlavor()) {
   }
 
   const globalConfigRoot = path.join(homeDir, '.gemini', 'config');
-  const globalAppRoot = path.join(homeDir, '.gemini', 'antigravity-ide');
+  // Antigravity 2026-10-29 遷移：新根 ~/.gemini/antigravity 優先，舊根 antigravity-ide 保留為歷史來源
+  const roots = antigravityRoots.resolveAntigravityRoots(homeDir);
+  // 新舊根的 brain 都掃（實際存在的），新根在前；只改路徑會讓遷移後的舊歷史整批消失
+  const brainScanRoots = roots.scanRoots.length > 0
+    ? roots.scanRoots.map((root) => path.join(root, 'brain'))
+    : [path.join(roots.primaryRoot, 'brain')];
 
   return {
     globalConfig: globalConfigRoot,
@@ -561,9 +567,10 @@ function getGlobalPaths(flavor = resolveFlavor()) {
     rules: path.join(globalConfigRoot, 'rules'),
     plugins: path.join(globalConfigRoot, 'plugins'),
     mcpConfig: path.join(globalConfigRoot, 'mcp_config.json'),
-    appData: globalAppRoot,
-    brain: path.join(globalAppRoot, 'brain'),
-    brainScanRoot: path.join(globalAppRoot, 'brain'),
+    appData: roots.activeRoot,
+    brain: path.join(roots.activeRoot, 'brain'),
+    brainScanRoot: path.join(roots.activeRoot, 'brain'),
+    brainScanRoots,
     userSettingsDir: host.userSettingsDir,
     userSettingsPath: host.userSettingsPath,
     ideExtensions: host.ideExtensionsDir,
@@ -574,9 +581,10 @@ function getGlobalPaths(flavor = resolveFlavor()) {
  * 收集對話紀錄資料夾
  * （Antigravity：brain；Cursor：各專案 agent-transcripts；Cline：data/sessions；Kilo：舊版 tasks）
  * @param {'antigravity'|'cursor'|'copilot'|'cline'|'kilo'} [flavor] 省略時依 antigravity.uiFlavor / 宿主自動判定
+ * @param {{dedupe?:boolean}} [options] dedupe=false 時回傳新舊根全部實體資料夾（清理用，避免同 id 只刪一邊）；預設 true
  * @returns {string[]}
  */
-function collectBrainSessionDirs(flavor = resolveFlavor()) {
+function collectBrainSessionDirs(flavor = resolveFlavor(), options = {}) {
   const paths = getGlobalPaths(flavor);
   const sessions = [];
 
@@ -623,6 +631,16 @@ function collectBrainSessionDirs(flavor = resolveFlavor()) {
     return sessions;
   }
 
+  // Antigravity：新舊資料根（~/.gemini/antigravity、~/.gemini/antigravity-ide）都要掃。
+  // 預設同 convId 去重（統計用）；清理時傳 dedupe=false，兩邊真的存在的資料夾
+  // 都要能被列為目標，避免去重造成漏刪。
+  if (flavor === 'antigravity') {
+    const homeDir = getHomeDir();
+    if (options.dedupe === false) return antigravityRoots.listAntigravityBrainSessionDirs(homeDir);
+    return antigravityRoots.collectAntigravityBrainSessionDirs(homeDir);
+  }
+
+  // Cline：data/sessions/<id>（新版）或舊版 globalStorage/**/tasks
   const brainDir = paths.brain;
   if (!brainDir || !fs.existsSync(brainDir)) return sessions;
   try {
@@ -646,10 +664,11 @@ function getEnvironmentInfo() {
   const isAntigravityIDE = host.isAntigravityIDE;
 
   const globalConfigRoot = path.join(homeDir, '.gemini', 'config');
-  const globalAppRoot = path.join(homeDir, '.gemini', 'antigravity-ide');
+  const antigravityRootsInfo = antigravityRoots.resolveAntigravityRoots(homeDir);
+  const globalAppRoot = antigravityRootsInfo.activeRoot;
   const antigravityAppData = path.join(appData, 'Antigravity IDE');
 
-  const geminiExists = fs.existsSync(globalConfigRoot) || fs.existsSync(globalAppRoot) || fs.existsSync(antigravityAppData);
+  const geminiExists = fs.existsSync(globalConfigRoot) || antigravityRootsInfo.exists || fs.existsSync(antigravityAppData);
   const hasAntigravity = isAntigravityIDE || geminiExists;
   const cursorHomeExists = fs.existsSync(getCursorHome());
   // Cline 是外掛而非 IDE：只要本機有 ~/.cline（IDE／CLI／SDK 共用）或其對話目錄即視為可用
@@ -882,6 +901,7 @@ module.exports = {
   resolveFlavor,
   isCopilotEnvironment,
   resetCopilotEnvironmentCache,
+  resolveAntigravityRoots: antigravityRoots.resolveAntigravityRoots,
   collectBrainSessionDirs,
   ensureDirectory,
   safeJsonParse,

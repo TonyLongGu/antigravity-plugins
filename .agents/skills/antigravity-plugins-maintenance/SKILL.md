@@ -32,8 +32,8 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 - **沒有程式碼共用**：2026-10-27 實測 2,974 條邊只有 **1 條**「跨外掛」（且是 `node:sqlite` builtin 的誤判）。真正的耦合是 **VS Code command id 字串**，見 §7。
 - **安裝邏輯只在根目錄 2 支腳本**：各外掛的 `install-extension.ps1`／`uninstall-extension.ps1`（共 12 支）自 2026-10-26 起是**薄殼**（各約 47 行、只剩語句沒有函式），只把自己的資料夾名稱當 `-Plugin` 轉呼叫根腳本。⇒ 改一次 6 個外掛同時生效。
 - **安裝政策＝一鍵全裝**（2026-10-26 起）：根 `install-all.ps1` 的 `-Target` 預設 `All`、`-Plugin` 省略＝全部外掛（可給資料夾名稱或 `package.json` 的 `name`，例：`-Plugin antigravity-quota-status` 或 `-Plugin ai-quota-status`）。`-Target Prompt` 在根腳本是互動選單，在 install 薄殼回溯相容為 `All`；uninstall 薄殼仍是選單。目標 IDE 由腳本自動偵測，使用者改用面板頂部「類別切換鈕」決定看哪一套 IDE 資料；不相容組合由 `$environmentExclusions` 自動略過。
-- **測試＝零相依、直接 `node <檔案>`**（無框架）。2026-11-25 實測 **17 支**：
-  `antigravity-toolbox/tests/`（`environment-flavor`／`kilo-brain-stats`／`mcp-label`／`skill-junction-sync`／`skill-sync-service`／`workspace-dedupe`／`workspace-remove`）、
+- **測試＝零相依、直接 `node <檔案>`**（無框架）。2026-11-25 實測 **18 支**：
+  `antigravity-toolbox/tests/`（`antigravity-roots`／`environment-flavor`／`kilo-brain-stats`／`mcp-label`／`skill-junction-sync`／`skill-sync-service`／`workspace-dedupe`／`workspace-remove`）、
   `antigravity-ai-context-inspector/tests/`（`antigravity-data-roots`／`cline-snapshot`／`cline-conditional-rules`／`kilo-snapshot`／`mcp-vscode-sources`／`skill-junction-scan`／`snapshot-source-default`）、
   `antigravity-mcp-manager/tests/`（`agent-host-enablement`／`kilo-mcp-service`）、
   `antigravity-quota-status/tests/`（`antigravity-quota-source`）。
@@ -46,12 +46,12 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 | 項目 | 值 |
 | :--- | :--- |
 | 圖譜位置 | `graphify-out/`（根 `.gitignore` 已排除，**勿 commit**） |
-| 規模 | **2026** nodes / **3636** edges / **120** communities（75 顯示、45 thin 省略） |
-| 建圖標記 | `Built from commit` `52657d91`（inspector 1.3.2 的 commit；`update` 已反映內容） |
-| 語料 | 117 files · ~152,556 words；**85 個 code 檔**被抽取（AST）；30 檔未分類（`.bat` 14、無副檔名 10、`.css` 6） |
-| 抽取品質 | 96% EXTRACTED／4% INFERRED（146 邊，平均信心 0.85）；**0 input／0 output token＝0 元** |
-| 產物大小 | `GRAPH_REPORT.md` **19.9 KB**（20,372 B，可整讀）、`graph.json` **2.37 MB**（禁整讀）、`graph.html` 約 1.92 MB |
-| 節點分佈 | script-runner 455／**inspector 499**／toolbox 433／mcp-manager 298／quota-status 236／quick-access 79／根目錄 26（含 `node:sqlite` 1 與 2 支根腳本） |
+| 規模 | **2055** nodes / **3682** edges / **129** communities（79 顯示、50 thin 省略） |
+| 建圖標記 | `Built from commit` 與 HEAD 相同（toolbox 1.8.4 改完後已重跑 `graphify update .`；短碼以實跑輸出為準，不寫死在此避免自我指涉） |
+| 語料 | 119 files · ~153,813 words；**87 個 code 檔**被抽取（AST）；30 檔未分類（`.bat` 14、無副檔名 10、`.css` 6） |
+| 抽取品質 | 96% EXTRACTED／4% INFERRED（151 邊，平均信心 0.85）；**0 input／0 output token＝0 元** |
+| 產物大小 | `GRAPH_REPORT.md` **20.8 KB**（可整讀）、`graph.json` **2.40 MB**（禁整讀）、`graph.html` 約 1.94 MB |
+| 節點分佈 | script-runner 455／**inspector 499**／toolbox 462／mcp-manager 298／quota-status 236／quick-access 79／根目錄 26（含 `node:sqlite` 1 與 2 支根腳本） |
 | 不進圖 | `*.css`、`*.html`、`locales/*.json`、`*.md`（`.graphifyignore` 已排除 `*.md`） |
 
 > ⚠️ 上表是**快照**。用前先驗（三行）：
@@ -125,7 +125,7 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 | :--- | :--- | ---: | :--- | :--- | :--- |
 | `antigravity-script-runner` | 1.7.1 | 455 | `scriptRunner.*`（8 個 id × `.en`／`.cn`＝24） | 無 view（右鍵選單＋媒體檢視） | `extension.js`／6 services（audio／video／image／stream） |
 | `antigravity-ai-context-inspector` | 1.3.2 | 446 | `antigravity.aiContext.*`（3 ＋ `.en`） | `antigravity.aiContextView`／`antigravity-ai-context-container` | `extension.js`／8 services（cline·cursor·kilo·vscode chat／contextScanner／mcpDetector／antigravityDataRoots） |
-| `antigravity-toolbox` | 1.8.1 | 406 | `antigravity.toolbox.*`（7 ＋ 4 `.en`） | `antigravity.toolboxView`／`antigravity-toolbox-container` | `extension.js`／6 services（brain／copilotChat／skillSync／workspace…） |
+| `antigravity-toolbox` | 1.8.4 | 406 | `antigravity.toolbox.*`（7 ＋ 4 `.en`） | `antigravity.toolboxView`／`antigravity-toolbox-container` | `extension.js`／7 services（brain／copilotChat／skillSync／workspace／antigravityRoots…） |
 | `antigravity-mcp-manager` | 1.10.1 | 298 | `antigravity.mcp.*`（6 ＋ `.en`） | `antigravity.mcpManagerView`／`mcp-manager-container` | `extension.js`／9 services |
 | `antigravity-quota-status` | 1.2.1（`name`＝`ai-quota-status`） | 236 | `aiQuota.*`（7，無變體） | 無 view（狀態列） | `extension.js`／5 services（cloud api／quota／cursorAuth…） |
 | `antigravity-quick-access` | 1.2.6 | 79 | `antigravity.quickAccess.*`（20 × 3＝60） | `antigravity.quickAccessView` | `extension.js`／無 `services/` 目錄 |
@@ -216,6 +216,16 @@ description: 維護 antigravity-plugins（6 個 VS Code 擴充套件同一個 re
 - **⛔ 反模式**：只把路徑換成新根（500 筆歷史與舊 transcript 整批消失）；只讀摘要庫不保留舊 `.db` protobuf 掃描（舊格式對話標題全掉）；用 `brain` 資料夾 mtime 排序（被碰觸的舊對話插隊）。
 - **回歸測試**：`node antigravity-ai-context-inspector/tests/antigravity-data-roots.test.js`（D1–D9，含「沒有摘要庫」的降級，以及「brain mtime 不得插隊」的負對照）。
 
+### 8.7 toolbox 的 Antigravity 對話資料根目錄（1.8.4 起）
+
+- **背景同上**（§8.6）：Antigravity 2026-10-29 把資料從 `~/.gemini/antigravity-ide` 搬到 `~/.gemini/antigravity`；toolbox 原本只掃舊根，於是「對話記憶庫」的筆數／容量與「清理指定月份前」的範圍都漏掉遷移後的新對話。inspector 在 1.3.2 修好，toolbox 到 1.8.4 才跟上。
+- **解析集中在 `services/antigravityRoots.js`**：`resolveAntigravityRoots()` 回 `primaryRoot`／`legacyRoot`／`activeRoot`（新根存在就用新根，尚未遷移的機器才退回舊根）／`scanRoots`（實際存在的根，新根在前）。⛔ 不 require inspector 的 `antigravityDataRoots.js`（六個外掛沒有程式碼共用，§2）；也不把它寫進 `brainService`（`systemService` 是路徑對照的唯一入口）。
+- **`getGlobalPaths('antigravity')`**：`appData`／`brain` 指 `activeRoot`，另給 `brainScanRoots`（新＋舊實際存在的 brain）。`getEnvironmentInfo()` 的 Antigravity 存在判定改成「新舊根任一存在」。
+- **`collectBrainSessionDirs('antigravity')`**：兩邊 brain 合併、convId 去重，同 id 依可讀性選：有 `transcript.jsonl`（2）＞只有 `transcript_full.jsonl`（1）＞都沒有（0），同分保留新根。⚠️ 新根的 `8f96e462…` 只有 `.user_uploaded`，選錯會拿到空的對話。
+- **清理範圍**：`brainService.cleanBrainHistory()` 以 `collectBrainSessionDirs(undefined, { dedupe: false })` 取兩邊**實體**資料夾，避免去重後漏刪舊根那份；仍逐一 `stat` 後才刪。
+- **⛔ 反模式**：只把 `antigravity-ide` 換成 `antigravity`（舊歷史整批消失）；只掃新根（10/29 前對話看不到）；統計去重但清理也去重（舊根資料永遠刪不掉）。
+- **回歸測試**：`node antigravity-toolbox/tests/antigravity-roots.test.js`（R0–R5：只有新根／只有舊根／兩邊同 id 去重與 `dedupe:false` 實體數／兩邊都沒有／新根只剩標記時選舊根／`transcript_full` 與 `transcript` 的分數差）。
+
 ---
 
 ## 9. 首次建圖／重建（`graphify-out/` 不存在時）
@@ -272,6 +282,7 @@ graphify cluster-only . --no-label # 產生 GRAPH_REPORT.md；--no-label 不呼�
 
 | 日期 | 變更 | 來源 |
 | :--- | :--- | :--- |
+| 2026-11-25 | toolbox `1.8.3 → 1.8.4`＝**對話記憶庫接上 Antigravity 新舊資料根**：新增 `services/antigravityRoots.js`（新根 `~/.gemini/antigravity` 優先、舊根 `antigravity-ide` 當歷史來源；`activeRoot` 供 `getGlobalPaths` 的 `appData`／`brain`，另給 `brainScanRoots` 全部掃描根）；`collectBrainSessionDirs('antigravity')` 合併兩邊 brain、convId 去重，同 id 依 `transcript.jsonl`（2）＞`transcript_full.jsonl`（1）＞無（0）選、同分留新根；`brainService.cleanBrainHistory()` 改走 `{ dedupe: false }` 的實體清單，避免去重後漏刪舊根；`getEnvironmentInfo()` 的 Antigravity 判定改「新舊根任一存在」。新增 `antigravity-roots`（R0–R5）測試，測試總數 17→**18 支**；圖譜 2026→**2055** 節點／3636→**3682** 邊／120→**129** 社群 | 秘書房外工單：inspector 1.3.2 已修好資料根，toolbox「對話記憶庫」仍只算舊根，統計與清理範圍看不到 10/29 後的對話 |
 | 2026-11-25 | inspector `1.3.1 → 1.3.2`＝**Antigravity 對話資料根目錄相容**：新增 `services/antigravityDataRoots.js`（新 `~/.gemini/antigravity` 優先、舊 `~/.gemini/antigravity-ide` 當歷史來源），`transcriptParserService` 改為兩邊 brain/conversations 合併、convId 去重並優先選有 transcript 的資料夾；標題與排序改讀 `conversation_summaries.db`（`title`／`last_modified_time`），`node:sqlite` 不可用時降級回舊 mtime；`contextScannerService` 的 `builtin/skills`、`mcpDetectorService` 的 `mcp` 目錄與 `extension.js` 的可用性／開資料夾同步改成新舊合併。新增 `antigravity-data-roots`（D1–D9）測試，測試總數 16→17 支；圖譜 1973→**2026** 節點／3545→**3636** 邊／116→**120** 社群（commit `52657d91`） | 使用者回報：最近對話快照的 Antigravity 選項找不到最新對話「Update AGENTS.md Rules File」，但前一篇「Cline Account Logout Assistance」找得到。實測 Antigravity 2026-10-29 遷移資料根目錄，新對話只在 `~/.gemini/antigravity`，標題只在 `conversation_summaries.db` |
 | 2026-11-25 | 重建根 `AGENTS.md` 為索引式（技能索引／先讀圖／收尾更新授權／知識落點 4 條）；本技能改標為「知識正本」，移除「勿重建」的舊禁令 | 使用者指示：專案用圖譜管理，執行前要先讀圖、改完要更新圖 |
 | 2026-11-24 | quota-status `1.2.0 → 1.2.1`＝**額度改回與 IDE 面板同源**：`agy.exe`（語言伺服器）把 `pid`／`httpPort`／`httpsPort`／`csrfToken` 寫在 `~/.gemini/antigravity/daemon/hub_*.json`，`antigravityQuotaService` 新增 hub 探測（死 pid 略過、優先 https）＋可注入的官方 RPC client（`vscode.extensions.getExtension('google.antigravity').exports.getRpcClient()`，讓 IDE 按需啟動伺服器）；**本機語言伺服器重新成為第一優先**，Cloud Code API 退為備援。雲端路徑不再用 `fetchAvailableModels` 的 Gemini 配額冒充 Antigravity 額度（只補 Claude）。語言伺服器休眠時沿用最後成功值快照（`globalStorage/quota-last-good.json`，24 小時過期，tooltip 標示讀取時間）；compact 模式缺一邊顯示 `--`。新增 Q11–Q15（hub／真實回應／client／快照），測試 16 支全過；圖譜 1956→**1973** 節點／3511→**3545** 邊／119→**116** 社群（commit `fa37b072`） | 使用者回報：Antigravity IDE 面板顯示 Gemini 週額度剩 91%，擴充套件仍顯示 100%。實測 IDE 面板資料來自本機 `agy.exe`（`hub_9819.json`，https 9821），回 `gemini-weekly: 0.911068`；1.2.0 走的 Cloud Code API 對 `aicode-consumers` 只回 Claude 群組、Gemini 一律 1.0，兩者是不同產品配額 |

@@ -32,7 +32,7 @@ VS Code 相容 IDE 原生側邊欄擴充套件（Cursor、VS Code、VS Code Insi
 
 3. **全域自訂目錄捷徑（依目前 IDE 自動切換）**：
    - **Cursor**：`~/.cursor` 根目錄、`mcp.json`、個人 Skills（`~/.cursor/skills`）、專案 Rules（`.cursor/rules`）、Plugins、`%APPDATA%\Cursor\User`
-   - **Antigravity**：`~/.gemini/config`、`mcp_config.json`、Skills / Rules / Plugins、`~/.gemini/antigravity-ide`
+   - **Antigravity**：`~/.gemini/config`、`mcp_config.json`、Skills / Rules / Plugins、`~/.gemini/antigravity`（2026-10-29 前的歷史資料仍在 `~/.gemini/antigravity-ide`）
    - **VS Code + Copilot**：`%APPDATA%\Code\User`、`mcp.json`、Skills（`~/.agents/skills`）、個人規範（`User\prompts`）、Plugins（`~/.copilot/installed-plugins`）、`globalStorage`
    - 🖱️ **按鈕 tooltip 顯示實際目標路徑**：點擊前即可確認會開啟哪個目錄。
    - 🏷️ **MCP 按鈕名稱統一為 `mcp.json`**：各宿主實際檔名不同（Cursor／Copilot `mcp.json`、Antigravity `mcp_config.json`、Cline `cline_mcp_settings.json`），卡片按鈕一律顯示 `mcp.json`，避免長檔名擠壓版面；實際開啟哪個檔案仍以 tooltip 的完整路徑為準（磁碟上的檔名不可改，改了宿主就讀不到設定）。
@@ -48,7 +48,7 @@ VS Code 相容 IDE 原生側邊欄擴充套件（Cursor、VS Code、VS Code Insi
 
 5. **對話記憶庫管理與清理**：
    - **Cursor**：統計並清理 `~/.cursor/projects/*/agent-transcripts` 各對話資料夾；開啟按鈕會進目前專案的 transcripts 目錄。
-   - **Antigravity**：統計並清理 `~/.gemini/antigravity-ide/brain`。
+   - **Antigravity**：統計並清理 `~/.gemini/antigravity/brain`（新根）與 `~/.gemini/antigravity-ide/brain`（歷史來源）——兩邊合併、同一對話只算一次；容量與筆數以新舊根合計為準。
    - **VS Code + Copilot**：統計並清理 Copilot Chat 對話紀錄，跨所有工作區聚合：
      - 對話本體：`workspaceStorage/<hash>/chatSessions/<sessionId>.jsonl`（各專案獨立）＋ `globalStorage/emptyWindowChatSessions`（無工作區視窗）。
      - 單筆對話數與空間會依專案分組，滑鼠移至「對話紀錄數」可看分佈明細。
@@ -141,6 +141,7 @@ Kilo 類別的路徑對照（Kilo Code 7.x 採 opencode 架構，與 Cline 不�
 extension.js                        擴充套件進入點（Webview 訊息路由、命令註冊、事件監聽）
 services/
   systemService.js                  IDE 偵測、全域路徑對照、環境特徵、檔案總管過濾
+  antigravityRoots.js               Antigravity 新舊資料根解析（brain 合併與同 id 去重）
   workspaceService.js               多專案工作區分析、重複登記自癒與同名修正
   scriptService.js                  專案腳本執行器
   brainService.js                   對話記憶庫分派層（依環境轉派 Cursor / Antigravity / Copilot）

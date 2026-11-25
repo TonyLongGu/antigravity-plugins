@@ -162,7 +162,8 @@ async function cleanBrainHistory(months = 3, provider = null) {
   const safeMonths = Math.max(2, Math.min(4, parseInt(months, 10) || 3));
   const days = safeMonths * 30;
   const cutoffMs = Date.now() - days * 24 * 60 * 60 * 1000;
-  const sessions = collectBrainSessionDirs();
+  // 清理要走「實體資料夾」清單：新舊根同 convId 可能各存一份，去重會漏刪舊根那份。
+  const sessions = collectBrainSessionDirs(undefined, { dedupe: false });
 
   if (sessions.length === 0) {
     const msg = isCursorHost()
