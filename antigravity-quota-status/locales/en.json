@@ -30,6 +30,8 @@
   "tooltip_requests": "- Used / Limit: `{used} / {max}`\n",
   "tooltip_unofficial": "\n*Cursor uses an unofficial API; it may break after updates.*\n",
   "unlimited": "Unlimited",
+  "label_weekly_short": "wk",
+  "label_five_hour_short": "5h",
   "plenty": "Sufficient",
   "calculating": "Calculating",
   "just_now": "Just now",

@@ -30,6 +30,8 @@
   "tooltip_requests": "- 已用 / 上限: `{used} / {max}`\n",
   "tooltip_unofficial": "\n*Cursor 使用非官方 API，更新後可能失效。*\n",
   "unlimited": "無限制",
+  "label_weekly_short": "週",
+  "label_five_hour_short": "5h",
   "plenty": "額度充足",
   "calculating": "計算中",
   "just_now": "剛剛",

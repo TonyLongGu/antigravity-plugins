@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const I18n = require('./i18n');
+const { formatStandardGroup } = require('./services/statusText');
 
 const UNLIMITED = -1; // -1 代表無限制或尚未初始化標記
 const STATUS_ICON = '$(sparkle)'; // 狀態列前綴圖示，可自由改為 $(flame)、$(zap)、$(sparkle)、$(plug)、$(chip) 等
@@ -449,14 +450,36 @@ async function updateStatusBar(forceRefresh = false) {
     const cHas5h = !!(cHas && c5hObj?.exists && c5hObj.percent !== null && c5hObj.percent !== undefined);
     const g5h = gHas5h ? g5hObj.percent : null;
     const c5h = cHas5h ? c5hObj.percent : null;
+    // weekly 是否真的有資料（gWk 在缺 weekly 時會退回 primary，不能拿來判斷週期種類）
+    const gWkExists = !!(data?.gemini?.weekly?.exists && gWk !== null && gWk !== undefined);
+    const cWkExists = !!(data?.claude?.weekly?.exists && cWk !== null && cWk !== undefined);
 
     let text = '';
 
     if (displayMode === 'standard') {
-      // standard 標準模式：只顯示真的有配額資料的群組
+      // standard 標準模式：只顯示真的有配額資料的群組，每個數字標明週期（週／5h），
+      // 避免一組只有週配額、另一組同時有週與 5 小時時無法分辨。
+      const labels = {
+        weekly: i18n.t('label_weekly_short'),
+        fiveHour: i18n.t('label_five_hour_short')
+      };
       const parts = [];
-      if (gHas) parts.push(`Gemini: ${gHas5h ? `${fmtPct(gWk)}, ${fmtPct(g5h)}` : fmtPct(gWk)}`);
-      if (cHas) parts.push(`Claude: ${cHas5h ? `${fmtPct(cWk)}, ${fmtPct(c5h)}` : fmtPct(cWk)}`);
+      if (gHas) {
+        const gText = formatStandardGroup(
+          { weeklyPct: gWk, weeklyExists: gWkExists, fiveHourPct: g5h, fiveHourExists: gHas5h },
+          labels,
+          fmtPct
+        );
+        parts.push(`Gemini: ${gText}`);
+      }
+      if (cHas) {
+        const cText = formatStandardGroup(
+          { weeklyPct: cWk, weeklyExists: cWkExists, fiveHourPct: c5h, fiveHourExists: cHas5h },
+          labels,
+          fmtPct
+        );
+        parts.push(`Claude: ${cText}`);
+      }
       text = parts.join(' | ');
     } else {
       // compact 極簡雙欄模式 (預設)：有 5h 配額就雙欄；缺一邊用 -- 表示「這組沒有資料」

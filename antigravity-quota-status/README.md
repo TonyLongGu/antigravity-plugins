@@ -14,7 +14,7 @@
 1. **極致乾淨狀態列**：
    - **Antigravity compact**：`$(sparkle) 59%, 53% | 7%, 100%`
    - **Cursor compact**：`$(sparkle) 45% | 0%`
-   - **標準模式 (`standard`)**：帶模型家族或 Auto / API 標籤
+   - **標準模式 (`standard`)**：帶模型家族或 Auto / API 標籤；Antigravity 每個數字標明週期，例如 `Gemini: 96% (週) | Claude: 100% (週), 100% (5h)`
    - **原生無干擾**：搭配 IDE 原生向量圖示與主題色彩，完美融合 IDE 底部狀態列。
 
 2. **懸浮詳細資訊 (Tooltip)**：
